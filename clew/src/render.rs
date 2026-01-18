@@ -320,9 +320,9 @@ fn sort_segment(commands: &mut [RenderCommandUnsorted], start: usize, end: usize
     }
 }
 
-pub fn render(
+pub fn layout_and_render(
     state: &mut UiState,
-    text: &mut TextsResources,
+    text_resources: &mut TextsResources,
     fonts: &mut FontResources,
     assets: &Assets,
     string_interner: &mut StringInterner,
@@ -341,16 +341,18 @@ pub fn render(
             &state.layout_commands,
             &mut state.layout_items,
             &mut state.widgets_states.layout_measures,
-            text,
+            text_resources,
             assets,
         );
 
         for layout_text in &state.layout_state.texts {
-            let text = text.get_mut(layout_text.text_id);
+            let text = text_resources.get_mut(layout_text.text_id);
 
             text.with_buffer_mut(|buffer| {
                 buffer.set_size(&mut fonts.font_system, Some(layout_text.width), None);
             });
+
+            text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);
         }
 
         layout(
@@ -359,7 +361,7 @@ pub fn render(
             &state.layout_commands,
             &mut state.layout_items,
             &mut state.widgets_states.layout_measures,
-            text,
+            text_resources,
             assets,
         );
     }
@@ -377,9 +379,8 @@ pub fn render(
                 &mut state.user_input,
                 &mut state.interaction_state,
                 &state.non_interactable,
-                // &mut state.widgets_states,
                 &state.view,
-                text,
+                text_resources,
                 fonts,
                 &state.layout_items,
             );
@@ -398,7 +399,7 @@ pub fn render(
                 interaction: &state.interaction_state,
                 input: &state.user_input,
                 view: &state.view,
-                text,
+                text: text_resources,
                 fonts,
                 string_interner,
                 strings,
@@ -467,8 +468,10 @@ pub fn render(
                             state
                                 .widgets_states
                                 .editable_text
-                                .get(placement.widget_ref.id)
+                                .get_mut(placement.widget_ref.id)
                                 .unwrap(),
+                            &mut state.view_config,
+                            true,
                         );
                     }
 

@@ -1,10 +1,19 @@
 use std::{any::Any, sync::Arc};
 
+#[cfg(feature = "clipboard")]
+use arboard::Clipboard;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 
 use crate::{
-    LayoutDirection, Rect, ShortcutsRegistry, View, WidgetId, WidgetRef, editable_text, interaction::InteractionState, io::UserInput, layout::{LayoutCommand, LayoutItem, LayoutMeasure, LayoutState, WidgetPlacement}, render::RenderState, shortcuts::ShortcutsManager, widgets::{decorated_box, gesture_detector, scroll_area, svg, text}
+    LayoutDirection, Rect, ShortcutsRegistry, View, WidgetId, WidgetRef,
+    editable_text::{self, OsEvent},
+    interaction::InteractionState,
+    io::UserInput,
+    layout::{LayoutCommand, LayoutItem, LayoutMeasure, LayoutState, WidgetPlacement},
+    render::RenderState,
+    shortcuts::ShortcutsManager,
+    widgets::{decorated_box, gesture_detector, scroll_area, svg, text},
 };
 
 pub trait WidgetState: Any + Send + 'static {
@@ -39,6 +48,10 @@ pub struct UiState {
     pub async_rx: tokio::sync::mpsc::UnboundedReceiver<Box<dyn Any + Send>>,
     pub(crate) shortcuts_manager: ShortcutsManager,
     pub(crate) shortcuts_registry: ShortcutsRegistry,
+    pub os_events: SmallVec<[OsEvent; 4]>,
+    pub view_config: ViewConfig,
+    #[cfg(feature = "clipboard")]
+    pub(crate) clipboard: Option<Clipboard>,
 }
 
 #[derive(Default)]
@@ -177,6 +190,22 @@ impl UiState {
 
         let phase_allocator = bumpalo::Bump::with_capacity(16 * 1024 * 1024);
 
+        #[cfg(feature = "clipboard")]
+        let clipboard = {
+            let clipboard = Clipboard::new();
+
+            match clipboard {
+                Ok(clipboard) => {
+                    log::info!("Successfully initialized clipboard");
+                    Some(clipboard)
+                }
+                Err(err) => {
+                    log::error!("Failed to initialize clipboard: {err}");
+                    None
+                }
+            }
+        };
+
         Self {
             view,
             render_state: Default::default(),
@@ -200,6 +229,9 @@ impl UiState {
             async_rx,
             shortcuts_manager: ShortcutsManager::default(),
             shortcuts_registry: ShortcutsRegistry::default(),
+            os_events: SmallVec::new(),
+            view_config: ViewConfig::default(),
+            clipboard,
         }
     }
 }

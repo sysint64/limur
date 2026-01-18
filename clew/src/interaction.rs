@@ -13,7 +13,7 @@ pub struct InteractionState {
     pub(crate) hover: FxHashSet<WidgetId>,
     pub(crate) hot: Option<WidgetId>,
     pub(crate) active: Option<WidgetId>,
-    pub(crate) focused: Option<WidgetId>,
+    focused: Option<WidgetId>,
     pub(crate) was_focused: Option<WidgetId>,
     pub(crate) block_hover: bool,
 }
@@ -30,6 +30,24 @@ pub struct WidgetInteractionState {
 impl InteractionState {
     pub fn is_hover(&self, id: &WidgetId) -> bool {
         self.hover.contains(id)
+    }
+
+    pub(crate) fn clear_focused(&mut self) {
+        if let Some(was_focused_id) = self.focused {
+            self.was_focused = Some(was_focused_id);
+        }
+
+        self.focused = None;
+    }
+
+    pub(crate) fn set_focused(&mut self, id: WidgetId) {
+        if let Some(was_focused_id) = self.focused {
+            if was_focused_id != id {
+                self.was_focused = Some(was_focused_id);
+            }
+        }
+
+        self.focused = Some(id);
     }
 
     pub(crate) fn is_hot(&self, id: &WidgetId) -> bool {
@@ -60,6 +78,16 @@ impl InteractionState {
     }
 }
 
+pub fn handle_interaction_before_build(user_input: &mut UserInput, view: &View) {
+    if user_input.mouse_left_pressed {
+        user_input.mouse_left_click_count = user_input.mouse_left_click_tracker.on_click(
+            user_input.mouse_x,
+            user_input.mouse_y,
+            view.scale_factor,
+        );
+    }
+}
+
 pub fn handle_interaction(
     user_input: &mut UserInput,
     interaction_state: &mut InteractionState,
@@ -69,14 +97,6 @@ pub fn handle_interaction(
     _fonts: &mut FontResources,
     layout_items: &[LayoutItem],
 ) -> bool {
-    if user_input.mouse_left_pressed {
-        user_input.mouse_left_click_count = user_input.mouse_left_click_tracker.on_click(
-            user_input.mouse_x,
-            user_input.mouse_y,
-            view.scale_factor,
-        );
-    }
-
     let unscaled_mouse_x = user_input.mouse_x / view.scale_factor;
     let unscaled_mouse_y = user_input.mouse_y / view.scale_factor;
 

@@ -197,7 +197,7 @@ impl<'buffer> Text<'buffer> {
             &mut font_resources.font_system,
             cosmic_text::Metrics::new(
                 font_size * view.scale_factor,
-                line_height,
+                line_height * view.scale_factor,
             ),
         );
 
@@ -221,7 +221,7 @@ impl<'buffer> Text<'buffer> {
             &mut font_resources.font_system,
             cosmic_text::Metrics::new(
                 font_size * view.scale_factor,
-                line_height,
+                line_height * view.scale_factor,
             ),
         );
 
@@ -248,7 +248,7 @@ impl<'buffer> Text<'buffer> {
                 &mut font_resources.font_system,
                 cosmic_text::Metrics::new(
                     font_size * view.scale_factor,
-                    line_height,
+                    line_height * view.scale_factor,
                 ),
             );
         });
@@ -263,7 +263,7 @@ impl<'buffer> Text<'buffer> {
                 &mut font_resources.font_system,
                 cosmic_text::Metrics::new(
                     font_size * view.scale_factor,
-                    line_height,
+                    line_height * view.scale_factor,
                 ),
             );
         });
@@ -294,7 +294,7 @@ impl<'buffer> Text<'buffer> {
         });
     }
 
-    pub fn layout(&mut self) -> Vec2 {
+    pub fn calculate_size(&mut self) -> Vec2 {
         let mut max_width = 0.;
         let mut height = 0.;
 

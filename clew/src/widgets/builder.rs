@@ -4,14 +4,26 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "clipboard")]
+use arboard::Clipboard;
+
 use rustc_hash::{FxHashSet, FxHasher};
 use smallvec::SmallVec;
 
 use crate::{
-    Animation, Constraints, ShortcutId, ShortcutModifierId, ShortcutsManager, ShortcutsRegistry, Size, Value, View, ViewId, WidgetId, WidgetRef, interaction::InteractionState, io::UserInput, layout::LayoutCommand, state::{UiState, WidgetsStates}, text::{FontResources, TextsResources}
+    Animation, Constraints, ShortcutId, ShortcutModifierId, ShortcutsManager, ShortcutsRegistry,
+    Size, Value, View, ViewId, WidgetId, WidgetRef,
+    interaction::InteractionState,
+    io::UserInput,
+    layout::LayoutCommand,
+    state::{UiState, ViewConfig, WidgetsStates},
+    text::{FontResources, TextsResources},
 };
 
-use super::{FrameBuilder, decorated_box::DecorationBuilder, frame::FrameBuilderFlags};
+use super::{
+    FrameBuilder, decorated_box::DecorationBuilder, editable_text::OsEvent,
+    frame::FrameBuilderFlags,
+};
 
 pub struct PositionedChildMeta {
     pub index: u32,
@@ -73,6 +85,10 @@ pub struct BuildContext<'a, 'b> {
     pub(crate) decoration_defer_start_stack: Vec<usize>,
     pub(crate) shortcuts_manager: &'a mut ShortcutsManager,
     pub(crate) shortcuts_registry: &'a mut ShortcutsRegistry,
+    pub(crate) os_events: &'a mut SmallVec<[OsEvent; 4]>,
+    #[cfg(feature = "clipboard")]
+    pub(crate) clipboard: &'a mut Option<Clipboard>,
+    pub(crate) view_config: &'a mut ViewConfig,
 }
 
 pub trait Resolve<V> {
@@ -138,8 +154,13 @@ impl<'a, 'b> BuildContext<'a, 'b> {
             decoration_defer_start_stack: Vec::new(),
             shortcuts_manager: &mut ui_state.shortcuts_manager,
             shortcuts_registry: &mut ui_state.shortcuts_registry,
+            os_events: &mut ui_state.os_events,
+            #[cfg(feature = "clipboard")]
+            clipboard: &mut ui_state.clipboard,
+            view_config: &mut ui_state.view_config,
         }
     }
+
     /// Advances an animation by the current frame's delta time.
     ///
     /// This method updates the animation's internal state and status

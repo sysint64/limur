@@ -19,6 +19,7 @@ pub struct State {
     is_active: bool,
     is_hot: bool,
     is_focused: bool,
+    was_focused: bool,
     clickable: bool,
     dragable: bool,
     focusable: bool,
@@ -61,12 +62,13 @@ impl WidgetState for State {
     }
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub struct GestureDetectorResponse {
     pub clicked: bool,
     pub is_active: bool,
     pub is_hot: bool,
     pub is_focused: bool,
+    pub was_focused: bool,
     pub drag_start_x: f32,
     pub drag_start_y: f32,
     pub drag_x: f32,
@@ -95,6 +97,11 @@ impl GestureDetectorResponse {
     #[inline]
     pub fn is_focused(&self) -> bool {
         self.is_focused
+    }
+
+    #[inline]
+    pub fn was_focused(&self) -> bool {
+        self.was_focused
     }
 }
 
@@ -143,6 +150,7 @@ impl GestureDetectorBuilder {
             is_active: state.is_active,
             is_hot: state.is_hot,
             is_focused: state.is_focused,
+            was_focused: state.was_focused,
             drag_start_x: state.drag_start_x,
             drag_start_y: state.drag_start_y,
             drag_x: state.drag_x,
@@ -201,7 +209,7 @@ pub fn handle_interaction(
                     widget_state.clicked = widget_state.clickable;
 
                     if widget_state.focusable {
-                        interaction.focused = Some(id);
+                        interaction.set_focused(id);
                     }
                 } else {
                     interaction.set_inactive(&id);
@@ -220,7 +228,7 @@ pub fn handle_interaction(
             }
 
             if widget_state.focusable {
-                interaction.focused = Some(id);
+                interaction.set_focused(id);
             }
 
             interaction.set_active(&id);
@@ -268,4 +276,5 @@ pub fn handle_interaction(
     widget_state.is_active = interaction.is_active(&id);
     widget_state.is_hot = interaction.is_hot(&id);
     widget_state.is_focused = interaction.is_focused(&id);
+    widget_state.was_focused = interaction.was_focused(&id);
 }

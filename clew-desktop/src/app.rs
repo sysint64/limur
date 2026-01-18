@@ -3,11 +3,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use clew::assets::Assets;
+use clew::editable_text::OsEvent;
+use clew::interaction::handle_interaction_before_build;
 use clew::io::{Cursor, TextInputAction};
 use clew::keyboard::{KeyCode, KeyModifiers};
 use clew::lifecycle::{finalize_cycle, init_cycle};
 use clew::render::Renderer;
 use clew::shortcuts::ShortcutsManager;
+use clew::state::UiState;
 use clew::text::{FontResources, StringInterner};
 use clew::widgets::builder::{ApplicationEvent, ApplicationEventLoopProxy, BuildContext};
 use clew::{PhysicalSize, Rect, ShortcutsRegistry};
@@ -46,9 +49,6 @@ pub struct Application<'a, T: ApplicationDelegate<Event>, Event = ()> {
     assets: Assets<'a>,
     string_interner: StringInterner,
     last_cursor: Cursor,
-    last_ime_rect: Rect,
-    ime_activated: bool,
-    ime_reset_needed: bool,
     modifiers: Option<KeyModifiers>,
     key_code: Option<KeyCode>,
     key_code_repeat: Option<KeyCode>,
@@ -105,6 +105,11 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
 
     broadcast_event_queue.clear();
 
+    handle_interaction_before_build(
+        &mut window_state.ui_state.user_input,
+        &window_state.ui_state.view,
+    );
+
     let mut build_context = BuildContext::new(
         &mut window_state.ui_state,
         &mut window_state.texts,
@@ -119,7 +124,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
 
     window_state.window.build(app, &mut build_context);
 
-    let redraw = clew::render(
+    let redraw = clew::layout_and_render(
         &mut window_state.ui_state,
         &mut window_state.texts,
         fonts,
@@ -173,6 +178,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
         for (_, window) in self.window_manager.windows.iter_mut() {
             // if self.needs_redraw {
             window.winit_window.request_redraw();
+            handle_os_events(window);
             // }
         }
     }
@@ -268,8 +274,6 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 self.key_code_repeat = None;
                 self.key_event_handled = true;
                 self.key_code = None;
-
-                // println!("{:?}", window.ui_state.user_input.key_pressed);
 
                 let need_to_redraw = build(
                     &mut self.app,
@@ -421,11 +425,11 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                     }
                     winit::keyboard::Key::Named(winit::keyboard::NamedKey::Space) => {
                         if state.is_pressed() {
-                            // if ui_state.parameters.should_use_wide_space {
-                            // ui_state.input.text_input.push('\u{3000}');
-                            // } else {
-                            // ui_state.input.text_input.push(' ');
-                            // }
+                            if window.ui_state.view_config.should_use_wide_space {
+                                window.ui_state.user_input.text_input.push('\u{3000}');
+                            } else {
+                                window.ui_state.user_input.text_input.push(' ');
+                            }
 
                             window
                                 .ui_state
@@ -456,8 +460,156 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                     .key_pressed_repeat
                     .push((self.modifiers, self.key_code_repeat));
             }
+            // Text input events (handles regular text and IME composition)
+            winit::event::WindowEvent::Ime(ime_event) => {
+                use winit::event::Ime;
+
+                match ime_event {
+                    // IME composition events
+                    Ime::Preedit(text, cursor_range) => {
+                        window.ui_state.user_input.ime_preedit = text;
+                        window.ui_state.user_input.ime_cursor_range = cursor_range;
+                        window
+                            .ui_state
+                            .user_input
+                            .text_input_actions
+                            .push(TextInputAction::ImePreedit);
+                    }
+
+                    // Final committed text from IME
+                    Ime::Commit(text) => {
+                        window.ui_state.user_input.text_input.push_str(&text);
+                        window.ui_state.user_input.ime_preedit.clear();
+                        window.ui_state.user_input.ime_cursor_range = None;
+
+                        window.ui_state
+                            .user_input
+                            .text_input_actions
+                            .push(TextInputAction::ImeCommit);
+                        window.ui_state
+                            .user_input
+                            .text_input_actions
+                            .push(TextInputAction::Insert);
+
+                        window.ime_reset_needed = true;
+                    }
+
+                    // IME enabled/disabled
+                    Ime::Enabled => {
+                        window.ui_state
+                            .user_input
+                            .text_input_actions
+                            .push(TextInputAction::ImeEnable);
+                    }
+                    Ime::Disabled => {
+                        window.ui_state.user_input.ime_preedit.clear();
+                        window.ui_state.user_input.ime_cursor_range = None;
+
+                        window.ui_state
+                            .user_input
+                            .text_input_actions
+                            .push(TextInputAction::ImeDisable);
+                    }
+                }
+            }
             _ => (),
         }
+    }
+}
+
+fn handle_os_events<App, Event>(window: &mut WindowState<App, Event>) {
+    let ime_widget_rect = window.ui_state.view_config.ime_cursor_rect;
+
+    if window.ime_reset_needed {
+        window.winit_window.set_ime_cursor_area(
+            winit::dpi::PhysicalPosition::new(ime_widget_rect.x, ime_widget_rect.y),
+            winit::dpi::PhysicalSize::new(ime_widget_rect.width, ime_widget_rect.height),
+        );
+        window.ime_reset_needed = false;
+
+        // #[cfg(target_os = "macos")]
+        // macos_invalidate_ime_coordinates(&state.window);
+    }
+
+    if window.ime_activated && window.last_ime_rect != ime_widget_rect {
+        window.last_ime_rect = ime_widget_rect;
+
+        window.winit_window.set_ime_cursor_area(
+            winit::dpi::PhysicalPosition::new(ime_widget_rect.x, ime_widget_rect.y),
+            winit::dpi::PhysicalSize::new(ime_widget_rect.width, ime_widget_rect.height),
+        );
+
+        // #[cfg(target_os = "macos")]
+        // macos_invalidate_ime_coordinates(&state.window);
+    }
+
+    let mut clear_ime = false;
+    let mut commit_ime = false;
+
+    for event in window.ui_state.os_events.drain(..) {
+        match event {
+            OsEvent::FocusWindow => window.winit_window.focus_window(),
+            OsEvent::CommitIme => {
+                // #[cfg(target_os = "macos")]
+                // {
+                //     macos_cancel_ime_for_winit(&state.window);
+                //     commit_ime = true;
+                // }
+
+                window.ime_reset_needed = true;
+            }
+            OsEvent::ActivateIme => {
+                if window.ime_activated {
+                    return;
+                }
+
+                clear_ime = true;
+
+                window.ime_activated = true;
+                window.last_ime_rect = ime_widget_rect;
+
+                window.winit_window.set_ime_allowed(true);
+                window.winit_window.set_ime_cursor_area(
+                    winit::dpi::PhysicalPosition::new(ime_widget_rect.x, ime_widget_rect.y),
+                    winit::dpi::PhysicalSize::new(ime_widget_rect.width, ime_widget_rect.height),
+                );
+            }
+            OsEvent::DeactivateIme => {
+                if !window.ime_activated {
+                    return;
+                }
+
+                clear_ime = true;
+
+                window.ime_activated = false;
+                window.winit_window.set_ime_allowed(false);
+                println!("DEACTIVATE");
+            }
+        }
+    }
+
+    if commit_ime {
+        let preedit = window.ui_state.user_input.ime_preedit.clone();
+
+        window.ui_state.user_input.text_input.push_str(&preedit);
+        window.ui_state.user_input.ime_preedit.clear();
+        window.ui_state.user_input.ime_cursor_range = None;
+
+        window
+            .ui_state
+            .user_input
+            .text_input_actions
+            .push(TextInputAction::ImeCommit);
+        window
+            .ui_state
+            .user_input
+            .text_input_actions
+            .push(TextInputAction::Insert);
+    }
+
+    if clear_ime {
+        window.ui_state.user_input.ime_preedit.clear();
+        window.ui_state.user_input.ime_cursor_range = None;
     }
 }
 
@@ -496,9 +648,6 @@ impl<T: ApplicationDelegate<Event>, Event: 'static> Application<'_, T, Event> {
             assets,
             shortcuts_manager: ShortcutsManager::default(),
             shortcuts_registry: ShortcutsRegistry::default(),
-            last_ime_rect: Rect::default(),
-            ime_activated: false,
-            ime_reset_needed: false,
             modifiers: None,
             key_code: None,
             key_code_repeat: None,

@@ -189,7 +189,7 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
     let position = placement.rect.position().px(ctx);
 
     let text = ctx.text.get_mut(state.text_id);
-    let text_size = text.layout();
+    let text_size = text.calculate_size();
     let text_position = position
         + Vec2::new(
             state

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use clew::{
-    ColorRgb, EdgeInsets, PhysicalSize, View, ViewId,
+    ColorRgb, EdgeInsets, PhysicalSize, Rect, View, ViewId,
     render::Renderer,
     state::UiState,
     text::{StringId, TextId, TextsResources},
@@ -39,6 +39,9 @@ pub(crate) struct WindowState<'a, App, Event> {
     pub(crate) renderer: Box<dyn Renderer>,
     pub(crate) fill_color: ColorRgb,
     pub(crate) delta_time_timer: Instant,
+    pub(crate) last_ime_rect: Rect,
+    pub(crate) ime_activated: bool,
+    pub(crate) ime_reset_needed: bool,
 }
 
 pub struct WindowManager<'a, App, Event> {
@@ -115,6 +118,9 @@ impl<'a, App, Event> WindowManager<'a, App, Event> {
                             renderer,
                             fill_color: descriptor.fill_color,
                             delta_time_timer: Instant::now(),
+                            last_ime_rect: Rect::default(),
+                            ime_activated: false,
+                            ime_reset_needed: false,
                         },
                     );
 

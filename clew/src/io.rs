@@ -101,6 +101,12 @@ impl ClickTracker {
         self.last_click_position = Some((mouse_x, mouse_y));
         self.click_count
     }
+
+    pub(crate) fn reset(&mut self) {
+        self.click_count = 0;
+        self.last_click_time = None;
+        self.last_click_position = None;
+    }
 }
 
 impl UserInput {

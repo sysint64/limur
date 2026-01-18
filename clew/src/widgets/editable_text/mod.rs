@@ -9,14 +9,15 @@ use clew_derive::{ShortcutId, ShortcutModifierId, ShortcutScopeId, WidgetBuilder
 use cosmic_text::Edit;
 
 use crate::{
-    AlignY, ColorRgba, TextAlign, Vec2, WidgetId, WidgetInteractionState, WidgetRef, WidgetType,
+    AlignY, ColorRgba, Rect, TextAlign, Vec2, WidgetId, WidgetInteractionState, WidgetRef,
+    WidgetType,
     layout::{DeriveWrapSize, LayoutCommand},
     text::{Text, TextId},
     text_data::TextData,
     text_history::{TextEditDelta, TextEditHistoryManager},
 };
 
-use super::{BuildContext, FrameBuilder};
+use super::{BuildContext, FrameBuilder, GestureDetectorResponse};
 
 pub struct EditableTextWidget;
 
@@ -27,9 +28,10 @@ pub struct EditableTextBuilder<'a> {
     text_align: TextAlign,
     vertical_align: AlignY,
     text: &'a mut TextData,
+    gesture_response: Option<GestureDetectorResponse>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum EditableTextDelta {
     Undo(TextEditDelta),
     Apply(TextEditDelta),
@@ -67,7 +69,14 @@ pub(crate) struct State {
     pub(crate) mouse_path_y: f32,
     pub(crate) last_drag: Option<Instant>,
     pub(crate) color: ColorRgba,
+    pub(crate) cursor_color: ColorRgba,
+    pub(crate) selection_color: ColorRgba,
+    pub(crate) selected_text_color: ColorRgba,
+    pub(crate) ime_highlight_color: ColorRgba,
+    pub(crate) ime_underline_color: ColorRgba,
     pub(crate) vertical_align: AlignY,
+    pub(crate) gesture_detector_response: GestureDetectorResponse,
+    pub(crate) boundary: Rect,
 }
 
 impl State {
@@ -95,7 +104,14 @@ impl State {
             last_drag: None,
             deltas: vec![],
             color: ColorRgba::from_hex(0xFFFFFFFF),
+            cursor_color: ColorRgba::from_hex(0xFF3366CC),
+            selection_color: ColorRgba::from_hex(0xFF3366CC),
+            selected_text_color: ColorRgba::from_hex(0xFF000000),
+            ime_highlight_color: ColorRgba::from_hex(0x803366CC),
+            ime_underline_color: ColorRgba::from_hex(0xFFFFFFFF),
             vertical_align: AlignY::Top,
+            gesture_detector_response: GestureDetectorResponse::default(),
+            boundary: Rect::ZERO,
         }
     }
 }
@@ -146,6 +162,12 @@ impl<'a> EditableTextBuilder<'a> {
         self
     }
 
+    pub fn gesture_response(mut self, response: GestureDetectorResponse) -> Self {
+        self.gesture_response = Some(response);
+
+        self
+    }
+
     pub fn text_align(mut self, text_align: TextAlign) -> Self {
         self.text_align = text_align;
 
@@ -158,35 +180,16 @@ impl<'a> EditableTextBuilder<'a> {
         self
     }
 
-    pub fn build_with_frame<F>(mut self, context: &mut BuildContext, callback: F)
-    where
-        F: FnOnce(&mut BuildContext, WidgetInteractionState, FrameBuilder) -> FrameBuilder,
-    {
-        let id = self.frame.id.with_seed(context.id_seed);
-
-        let interaction = WidgetInteractionState {
-            is_hover: context.interaction.is_hover(&id),
-            is_hot: context.interaction.is_hot(&id),
-            is_active: context.interaction.is_active(&id),
-            is_focused: context.interaction.is_focused(&id),
-            was_focused: context.interaction.was_focused(&id),
-        };
-        self.frame = callback(context, interaction, self.frame);
-
-        self.build_with_id(context, id);
-    }
-
     #[profiling::function]
-    pub fn build(self, context: &mut BuildContext) {
-        let id = self.frame.id.with_seed(context.id_seed);
-        self.build_with_id(context, id);
-    }
+    pub fn build(mut self, context: &mut BuildContext) {
+        context
+            .shortcuts_manager
+            .push_scope(ShortcutScopes::TextEditing);
 
-    #[inline(always)]
-    fn build_with_id(mut self, context: &mut BuildContext, id: WidgetId) {
+        let id = self.frame.id.with_seed(context.id_seed);
         let widget_ref = WidgetRef::new(WidgetType::of::<EditableTextWidget>(), id);
 
-        let state = context
+        let mut state = context
             .widgets_states
             .editable_text
             .get_or_insert(id, || State::new());
@@ -211,9 +214,57 @@ impl<'a> EditableTextBuilder<'a> {
         state.color = self.color;
         state.vertical_align = self.vertical_align;
 
+        if let Some(gesture_response) = self.gesture_response {
+            state.gesture_detector_response = gesture_response.clone();
+
+            interaction::handle_interaction(
+                id,
+                context.input,
+                context.view,
+                &gesture_response,
+                state,
+                context.os_events,
+                context.text,
+                context.fonts,
+                context.view_config,
+                context.shortcuts_manager,
+                #[cfg(feature = "clipboard")]
+                context.clipboard.as_mut(),
+                state.boundary,
+            );
+
+            context
+                .widgets_states
+                .editable_text
+                .accessed_this_frame
+                .insert(id);
+        } else {
+        }
+
+        let mut state = context
+            .widgets_states
+            .editable_text
+            .get_or_insert(id, || State::new());
+
+        context
+            .text
+            .shape_as_needed(text_id, &mut context.fonts.font_system, false);
+
         if !state.deltas.is_empty() {
             for delta in state.deltas.drain(..) {
                 self.text.apply_delta(context.text, id, &delta);
+            }
+
+            if !self.frame.size.width.constrained() {
+                let text = context.text.get_mut(text_id);
+
+                text.with_buffer_mut(|buffer| {
+                    buffer.set_size(&mut context.fonts.font_system, None, None);
+                });
+
+                context
+                    .text
+                    .shape_as_needed(text_id, &mut context.fonts.font_system, false);
             }
         } else if self.text.replace_buffer.contains(&id) {
             state.recompose_text_content = true;
@@ -226,6 +277,12 @@ impl<'a> EditableTextBuilder<'a> {
 
             text.set_text(context.fonts, &data);
 
+            if !self.frame.size.width.constrained() {
+                text.with_buffer_mut(|buffer| {
+                    buffer.set_size(&mut context.fonts.font_system, None, None);
+                });
+            }
+
             let editor = match text {
                 Text::Buffer { .. } => panic!("Provided text id is not editor"),
                 Text::Editor { editor, .. } => editor,
@@ -233,33 +290,17 @@ impl<'a> EditableTextBuilder<'a> {
 
             editor.set_cursor(cosmic_text::Cursor::default());
 
-            // on_cursor_moved(
-            //     &mut state,
-            //     &mut context.state.parameters,
-            //     editor,
-            // );
+            interaction::on_editable_text_cursor_moved(
+                &mut state,
+                &mut context.view_config,
+                editor,
+            );
         }
 
         if self.text.dirty.contains(&id) {
             state.recompose_text_content = true;
             self.text.mark_as_not_dirty(&id);
         }
-
-        // interaction::handle_interaction(
-        //     id,
-        //     context.input,
-        //     context.view,
-        //     context.interaction,
-        //     state,
-        //     context.text,
-        //     context.fonts,
-        // );
-
-        context
-            .widgets_states
-            .editable_text
-            .accessed_this_frame
-            .insert(id);
 
         let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
 
@@ -275,6 +316,10 @@ impl<'a> EditableTextBuilder<'a> {
             derive_wrap_size: DeriveWrapSize::Text(text_id),
             clip: self.frame.clip,
         });
+
+        context
+            .shortcuts_manager
+            .pop_scope(context.input, context.shortcuts_registry);
     }
 }
 
@@ -286,5 +331,6 @@ pub fn editable_text(text: &mut TextData) -> EditableTextBuilder<'_> {
         color: ColorRgba::from_hex(0xFFFFFFFF),
         vertical_align: AlignY::Top,
         text_align: TextAlign::Left,
+        gesture_response: None,
     }
 }

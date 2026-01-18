@@ -1,13 +1,15 @@
 use std::time::Instant;
 
+#[cfg(feature = "clipboard")]
 use arboard::Clipboard;
+
 use cosmic_text::Edit;
 use smallvec::SmallVec;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    LayoutDirection, Rect, ShortcutId, ShortcutsManager, View, WidgetId,
+    GestureDetectorResponse, LayoutDirection, Rect, ShortcutId, ShortcutsManager, View, WidgetId,
     interaction::InteractionState,
     io::{Cursor, TextInputAction, UserInput},
     state::ViewConfig,
@@ -19,89 +21,41 @@ use super::{
     CommonShortcut, EditableTextDelta, OsEvent, State, TextEditingShortcut, TextInputModifier,
 };
 
-#[derive(Copy, Clone)]
-enum ParagraphMotionDirection {
-    Up,
-    Down,
-}
-
-fn move_paragraph(
-    fonts: &mut FontResources,
-    editor: &mut cosmic_text::Editor,
-    direction: ParagraphMotionDirection,
-) {
-    let mut reached_boundary = true;
-    let delta: i32 = match direction {
-        ParagraphMotionDirection::Up => -1,
-        ParagraphMotionDirection::Down => 1,
-    };
-    let mut cursor_line = editor.cursor().line as i32 + delta;
-
-    editor.with_buffer(|buffer| {
-        let mut line = buffer.lines.get(i32::max(0, cursor_line) as usize);
-
-        while line.is_some() && cursor_line >= 0 {
-            if line.unwrap().text().trim().is_empty() {
-                reached_boundary = false;
-                break;
-            } else {
-                cursor_line += delta;
-                line = buffer.lines.get(i32::max(0, cursor_line) as usize);
-            }
-        }
-    });
-
-    editor.set_cursor(cosmic_text::Cursor::new(
-        i32::max(0, cursor_line) as usize,
-        0,
-    ));
-
-    if reached_boundary {
-        editor.action(
-            &mut fonts.font_system,
-            cosmic_text::Action::Motion(match direction {
-                ParagraphMotionDirection::Up => cosmic_text::Motion::BufferStart,
-                ParagraphMotionDirection::Down => cosmic_text::Motion::BufferEnd,
-            }),
-        );
-    }
-}
-
 pub(crate) fn handle_interaction(
     id: WidgetId,
     user_input: &mut UserInput,
     view: &View,
-    interaction: &mut InteractionState,
+    gesture_response: &GestureDetectorResponse,
     state: &mut State,
     os_events: &mut SmallVec<[OsEvent; 4]>,
     text: &mut TextsResources,
     fonts: &mut FontResources,
     view_config: &mut ViewConfig,
     shortcuts_manager: &mut ShortcutsManager,
-    clipboard: Option<&mut Clipboard>,
+    #[cfg(feature = "clipboard")] clipboard: Option<&mut Clipboard>,
     boundary: Rect,
 ) {
-    if interaction.is_hot(&id) || interaction.is_active(&id) {
+    if gesture_response.is_hot() || gesture_response.is_active() {
         user_input.cursor = Cursor::Text;
     }
 
-    if interaction.is_active(&id) {
+    if gesture_response.is_active() {
         if user_input.mouse_released {
-            if interaction.is_hot(&id) {
-                interaction.set_inactive(&id);
-                interaction.focused = Some(id);
+            if gesture_response.is_hot() {
+                // interaction.set_inactive(&id);
+                // interaction.focused = Some(id);
                 os_events.push(OsEvent::FocusWindow);
             } else {
-                interaction.set_inactive(&id);
+                // interaction.set_inactive(&id);
             }
         }
-    } else if user_input.mouse_left_pressed && interaction.is_hot(&id) {
-        interaction.set_active(&id);
-        interaction.focused = Some(id);
+    } else if user_input.mouse_left_pressed && gesture_response.is_hot() {
+        // interaction.set_active(&id);
+        // interaction.focused = Some(id);
         os_events.push(OsEvent::FocusWindow);
     }
 
-    if interaction.is_focused(&id) {
+    if gesture_response.is_focused() {
         // Important to do this when mouse released just for convinience so we
         // can properly handle was_focused branch without conflicting with
         // other text editing widgets.
@@ -212,6 +166,76 @@ pub(crate) fn handle_interaction(
                         end,
                         deleted_text,
                         direction: TextDeletionDirection::Forward,
+                    }),
+                );
+            }
+        }
+
+        if shortcuts_manager.is_shortcut(TextEditingShortcut::Backspace) {
+            if let Some(id) = state.text_id {
+                let editor = text.editor_mut(id);
+
+                let (deleted_text, start, end) = if word_modifier && !has_selection {
+                    editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
+                    editor.action(
+                        &mut fonts.font_system,
+                        cosmic_text::Action::Motion(cosmic_text::Motion::PreviousWord),
+                    );
+
+                    let (start, end) = editor
+                        .selection_bounds()
+                        .expect("Selection should be available");
+                    let text = editor
+                        .copy_selection()
+                        .expect("Selection should be available");
+
+                    editor.action(&mut fonts.font_system, cosmic_text::Action::Backspace);
+                    editor.set_selection(cosmic_text::Selection::None);
+
+                    (text, start, end)
+                } else if !has_selection {
+                    editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
+                    editor.action(
+                        &mut fonts.font_system,
+                        cosmic_text::Action::Motion(cosmic_text::Motion::Previous),
+                    );
+
+                    let (start, end) = editor
+                        .selection_bounds()
+                        .expect("Selection should be available");
+                    let text = editor
+                        .copy_selection()
+                        .expect("Selection should be available");
+
+                    editor.action(&mut fonts.font_system, cosmic_text::Action::Backspace);
+                    editor.set_selection(cosmic_text::Selection::None);
+
+                    (text, start, end)
+                } else {
+                    debug_assert!(has_selection);
+
+                    let (start, end) = editor
+                        .selection_bounds()
+                        .expect("Selection should be available");
+                    let text = editor
+                        .copy_selection()
+                        .expect("Selection should be available");
+
+                    editor.action(&mut fonts.font_system, cosmic_text::Action::Backspace);
+                    editor.set_selection(cosmic_text::Selection::None);
+
+                    (text, start, end)
+                };
+
+                on_editable_text_updated(
+                    state,
+                    view_config,
+                    editor,
+                    Some(TextEditDelta::Delete {
+                        start,
+                        end,
+                        deleted_text,
+                        direction: TextDeletionDirection::Backward,
                     }),
                 );
             }
@@ -516,6 +540,7 @@ pub(crate) fn handle_interaction(
             }
         }
 
+        #[cfg(feature = "clipboard")]
         if let Some(clipboard) = clipboard {
             if shortcuts_manager.is_shortcut(CommonShortcut::Copy) {
                 if let Some(id) = state.text_id {
@@ -718,7 +743,7 @@ pub(crate) fn handle_interaction(
 
         let drag_trigger = 4.0 * view.scale_factor;
 
-        if interaction.is_active(&id) {
+        if gesture_response.is_active() {
             state.mouse_path_x += mouse_dx.abs();
             state.mouse_path_y += mouse_dy.abs();
 
@@ -867,7 +892,7 @@ pub(crate) fn handle_interaction(
                 normalize_editable_text_selection(state, view_config, editor);
             }
         }
-    } else if interaction.was_focused(&id) {
+    } else if gesture_response.was_focused() {
         user_input.ime_preedit.clear();
         os_events.push(OsEvent::CommitIme);
         view_config.should_update_cursor_each_frame = false;
@@ -887,6 +912,54 @@ pub(crate) fn handle_interaction(
 
             on_editable_text_cursor_moved(state, view_config, editor);
         }
+    }
+}
+
+#[derive(Copy, Clone)]
+enum ParagraphMotionDirection {
+    Up,
+    Down,
+}
+
+fn move_paragraph(
+    fonts: &mut FontResources,
+    editor: &mut cosmic_text::Editor,
+    direction: ParagraphMotionDirection,
+) {
+    let mut reached_boundary = true;
+    let delta: i32 = match direction {
+        ParagraphMotionDirection::Up => -1,
+        ParagraphMotionDirection::Down => 1,
+    };
+    let mut cursor_line = editor.cursor().line as i32 + delta;
+
+    editor.with_buffer(|buffer| {
+        let mut line = buffer.lines.get(i32::max(0, cursor_line) as usize);
+
+        while line.is_some() && cursor_line >= 0 {
+            if line.unwrap().text().trim().is_empty() {
+                reached_boundary = false;
+                break;
+            } else {
+                cursor_line += delta;
+                line = buffer.lines.get(i32::max(0, cursor_line) as usize);
+            }
+        }
+    });
+
+    editor.set_cursor(cosmic_text::Cursor::new(
+        i32::max(0, cursor_line) as usize,
+        0,
+    ));
+
+    if reached_boundary {
+        editor.action(
+            &mut fonts.font_system,
+            cosmic_text::Action::Motion(match direction {
+                ParagraphMotionDirection::Up => cosmic_text::Motion::BufferStart,
+                ParagraphMotionDirection::Down => cosmic_text::Motion::BufferEnd,
+            }),
+        );
     }
 }
 
