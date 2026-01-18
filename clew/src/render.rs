@@ -349,7 +349,11 @@ pub fn layout_and_render(
             let text = text_resources.get_mut(layout_text.text_id);
 
             text.with_buffer_mut(|buffer| {
-                buffer.set_size(&mut fonts.font_system, Some(layout_text.width), None);
+                buffer.set_size(
+                    &mut fonts.font_system,
+                    layout_text.width,
+                    layout_text.height,
+                );
             });
 
             text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);

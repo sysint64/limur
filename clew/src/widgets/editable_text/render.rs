@@ -31,16 +31,15 @@ pub fn render(
 
     let text = ctx.text.get_mut(text_id);
     let text_size = text.calculate_size();
-    let text_position =
-        position + Vec2::new(0., state.vertical_align.position(size.y, text_size.y));
 
+    let truncate_lines = state.truncate_lines;
     let is_focused = state.gesture_detector_response.is_focused();
 
     let (need_shape, is_empty, wrap, editor_cursor_position, cursor, selection_bounds) = {
         let mut need_shape = false;
         let editor = ctx.text.editor_mut(text_id);
         let need_relayout = state.last_boundary_size != size;
-        let wrap = editor.with_buffer(|buffer| buffer.wrap() != cosmic_text::Wrap::None);
+        let wrap = !truncate_lines && state.multi_line;
 
         if state.recompose_text_content || need_relayout || editor.redraw() {
             if need_relayout || editor.redraw() {
@@ -80,6 +79,11 @@ pub fn render(
         )
     };
 
+    if need_shape {
+        ctx.text
+            .shape_as_needed(text_id, &mut ctx.fonts.font_system, false);
+    }
+
     let top = state.vertical_align.position(size.y, text_size.y);
     let mut text_direction = if state.multi_line {
         LayoutDirection::LTR
@@ -107,13 +111,11 @@ pub fn render(
     let text_position = position + state.text_offset;
     let mut cursor_ime_position = Vec2::ZERO;
 
-    let clip_rect = Rect::from_pos_size(position, size).expand(10.0.px(ctx));
-
     if !calculate_scroll || !is_focused {
         ctx.push_command(
             placement.zindex,
             RenderCommand::PushClip {
-                rect: clip_rect,
+                rect: placement.boundary.px(ctx),
                 shape: ClipShape::Rect,
             },
         );
@@ -335,6 +337,15 @@ pub fn render(
                 }
             }
 
+            state.scroll_x = match text_direction {
+                LayoutDirection::LTR => state
+                    .scroll_x
+                    .clamp(f32::min(-(text_size.x - inner_width), 0.0), 0.0),
+                LayoutDirection::RTL => state
+                    .scroll_x
+                    .clamp(0.0, f32::max(0.0, text_size.x - inner_width)),
+            };
+
             // Another way of implementing vertical scrolling
             // If current approach will be too fast we can adjust using
             // this code.
@@ -404,15 +415,6 @@ fn editable_text_horizontal_scroll(
     text_direction: LayoutDirection,
 ) {
     state.scroll_x += delta;
-    state.scroll_x = match text_direction {
-        LayoutDirection::LTR => state
-            .scroll_x
-            .clamp(f32::min(-(text_width - inner_width), 0.0), 0.0),
-        LayoutDirection::RTL => state
-            .scroll_x
-            .clamp(0.0, f32::max(0.0, text_width - inner_width)),
-    };
-
     state.recompose_text_content = false;
 }
 

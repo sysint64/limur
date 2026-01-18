@@ -29,6 +29,8 @@ pub struct EditableTextBuilder<'a> {
     vertical_align: AlignY,
     text: &'a mut TextData,
     gesture_response: Option<GestureDetectorResponse>,
+    truncate_lines: bool,
+    multi_line: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,6 +79,7 @@ pub(crate) struct State {
     pub(crate) vertical_align: AlignY,
     pub(crate) gesture_detector_response: GestureDetectorResponse,
     pub(crate) boundary: Rect,
+    pub(crate) truncate_lines: bool,
 }
 
 impl State {
@@ -104,7 +107,7 @@ impl State {
             last_drag: None,
             deltas: vec![],
             color: ColorRgba::from_hex(0xFFFFFFFF),
-            cursor_color: ColorRgba::from_hex(0xFF3366CC),
+            cursor_color: ColorRgba::from_hex(0xFFFFFFFF),
             selection_color: ColorRgba::from_hex(0xFF3366CC),
             selected_text_color: ColorRgba::from_hex(0xFF000000),
             ime_highlight_color: ColorRgba::from_hex(0x803366CC),
@@ -112,6 +115,7 @@ impl State {
             vertical_align: AlignY::Top,
             gesture_detector_response: GestureDetectorResponse::default(),
             boundary: Rect::ZERO,
+            truncate_lines: false,
         }
     }
 }
@@ -158,6 +162,18 @@ pub enum TextInputModifier {
 impl<'a> EditableTextBuilder<'a> {
     pub fn color(mut self, color: ColorRgba) -> Self {
         self.color = color;
+
+        self
+    }
+
+    pub fn truncate_lines(mut self, value: bool) -> Self {
+        self.truncate_lines = value;
+
+        self
+    }
+
+    pub fn multi_line(mut self, value: bool) -> Self {
+        self.multi_line = value;
 
         self
     }
@@ -210,9 +226,27 @@ impl<'a> EditableTextBuilder<'a> {
             }
         };
 
+        if state.truncate_lines != self.truncate_lines {
+            state.truncate_lines = self.truncate_lines;
+
+            let text = context.text.get_mut(text_id);
+
+            text.with_buffer_mut(|buffer| {
+                buffer.set_wrap(
+                    &mut context.fonts.font_system,
+                    if self.truncate_lines {
+                        cosmic_text::Wrap::None
+                    } else {
+                        cosmic_text::Wrap::WordOrGlyph
+                    },
+                );
+            });
+        }
+
         state.text_id = self.text.text_id(id);
         state.color = self.color;
         state.vertical_align = self.vertical_align;
+        state.multi_line = self.multi_line;
 
         if let Some(gesture_response) = self.gesture_response {
             state.gesture_detector_response = gesture_response.clone();
@@ -258,9 +292,9 @@ impl<'a> EditableTextBuilder<'a> {
             if !self.frame.size.width.constrained() {
                 let text = context.text.get_mut(text_id);
 
-                text.with_buffer_mut(|buffer| {
-                    buffer.set_size(&mut context.fonts.font_system, None, None);
-                });
+                // text.with_buffer_mut(|buffer| {
+                // buffer.set_size(&mut context.fonts.font_system, None, None);
+                // });
 
                 context
                     .text
@@ -278,9 +312,9 @@ impl<'a> EditableTextBuilder<'a> {
             text.set_text(context.fonts, &data);
 
             if !self.frame.size.width.constrained() {
-                text.with_buffer_mut(|buffer| {
-                    buffer.set_size(&mut context.fonts.font_system, None, None);
-                });
+                // text.with_buffer_mut(|buffer| {
+                // buffer.set_size(&mut context.fonts.font_system, None, None);
+                // });
             }
 
             let editor = match text {
@@ -332,5 +366,7 @@ pub fn editable_text(text: &mut TextData) -> EditableTextBuilder<'_> {
         vertical_align: AlignY::Top,
         text_align: TextAlign::Left,
         gesture_response: None,
+        truncate_lines: false,
+        multi_line: true,
     }
 }

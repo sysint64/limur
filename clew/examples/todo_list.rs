@@ -90,6 +90,31 @@ impl ApplicationDelegate<()> for TodoApplication {
                 ui::keyboard::KeyModifiers::super_key(),
             );
 
+        shortcuts_registry
+            .scope(SHORTCUTS_ROOT_SCOPE_ID)
+            .add(
+                ui::CommonShortcut::Copy,
+                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyC).with_super(),
+            )
+            .add(
+                ui::CommonShortcut::Cut,
+                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyX).with_super(),
+            )
+            .add_repeat(
+                ui::CommonShortcut::Paste,
+                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyV).with_super(),
+            )
+            .add_repeat(
+                ui::CommonShortcut::Undo,
+                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyZ).with_super(),
+            )
+            .add_repeat(
+                ui::CommonShortcut::Redo,
+                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyZ)
+                    .with_super()
+                    .with_shift(),
+            );
+
         window_manager.spawn_window(
             MainWindow {
                 task_name: ui::TextData::from("Test"),
@@ -154,8 +179,10 @@ impl Window<TodoApplication, ()> for MainWindow {
 
                         ui::editable_text(&mut self.task_name)
                             .gesture_response(response.clone())
-                            .text_vertical_align(ui::AlignY::Center)
+                            // .text_vertical_align(ui::AlignY::Center)
                             .padding(ui::EdgeInsets::symmetric(8., 4.))
+                            .truncate_lines(false)
+                            .multi_line(false)
                             .background(
                                 ui::decoration()
                                     .border_radius(ui::BorderRadius::all(3.))
@@ -170,39 +197,15 @@ impl Window<TodoApplication, ()> for MainWindow {
                                     )))
                                     .build(ctx),
                             )
-                            // .min_height(20.)
+                            .width(200.)
+                            // .height(200.)
+                            .min_width(50.)
+                            .min_height(20.)
+                            .max_height(12. * 4.)
+                            .max_width(200.)
                             .build(ctx);
                     });
             });
-
-        // ui::shortcut_scope(clew_widgets::ShortcutScopeButton).build(ctx, |ctx| {
-        //     ui::zstack()
-        //         .fill_max_size()
-        //         .align_x(ui::AlignX::Center)
-        //         .align_y(ui::AlignY::Center)
-        //         .build(ctx, |ctx| {
-        // ui::editable_text(&mut self.task_name)
-        //     .text_vertical_align(ui::AlignY::Center)
-        //     .padding(ui::EdgeInsets::symmetric(8., 0.))
-        //     .height(20.)
-        //     .build_with_frame(ctx, |ctx, interaction_state, frame| {
-        //         frame.background(
-        //             ui::decoration()
-        //                 .border_radius(ui::BorderRadius::all(3.))
-        //                 .color(ui::ColorRgba::from_hex(0xFF000000))
-        //                 .border(ui::Border::all(ui::BorderSide::new(
-        //                     1.,
-        //                     if interaction_state.is_focused {
-        //                         ui::ColorRgba::from_hex(0xFF357CCE)
-        //                     } else {
-        //                         ui::ColorRgba::from_hex(0xFF414141)
-        //                     },
-        //                 )))
-        //                 .build(ctx),
-        //         )
-        //     });
-        //         });
-        // });
     }
 }
 

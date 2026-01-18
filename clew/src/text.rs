@@ -301,7 +301,7 @@ impl<'buffer> Text<'buffer> {
         self.with_buffer(|buffer| {
             for layout in buffer.layout_runs() {
                 max_width = f32::max(max_width, layout.line_w);
-                height = layout.line_y;
+                height = layout.line_top + layout.line_height;
             }
         });
 

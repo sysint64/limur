@@ -169,7 +169,8 @@ struct Pass2LayoutContainer {
 }
 
 pub(crate) struct TextLayout {
-    pub(crate) width: f32,
+    pub(crate) width: Option<f32>,
+    pub(crate) height: Option<f32>,
     pub(crate) text_id: TextId,
 }
 
@@ -1331,6 +1332,7 @@ pub fn layout(
                 derive_wrap_size,
                 clip,
                 size,
+                constraints,
                 ..
             } => {
                 let align_x = match layout_state.pass2_parent_container.axis {
@@ -1454,12 +1456,33 @@ pub fn layout(
                 }
 
                 if let DeriveWrapSize::Text(text_id) = derive_wrap_size {
-                    if size.width.constrained() {
-                        layout_state.texts.push(TextLayout {
-                            width: rect.width * view.scale_factor,
-                            text_id: *text_id,
-                        });
-                    }
+                    layout_state.texts.push(TextLayout {
+                        width: if size.width.constrained() {
+                            Some(rect.width * view.scale_factor)
+                        } else {
+                            if constraints.max_width != f32::INFINITY {
+                                Some(
+                                    (constraints.max_width - padding.horizontal())
+                                        * view.scale_factor,
+                                )
+                            } else {
+                                None
+                            }
+                        },
+                        height: if size.height.constrained() {
+                            Some(rect.height * view.scale_factor)
+                        } else {
+                            if constraints.max_height != f32::INFINITY {
+                                Some(
+                                    (constraints.max_height - padding.vertical())
+                                        * view.scale_factor,
+                                )
+                            } else {
+                                None
+                            }
+                        },
+                        text_id: *text_id,
+                    });
                 };
 
                 if RENDER_CHILD_DEBUG_BOUNDARIES {
