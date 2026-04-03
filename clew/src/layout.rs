@@ -621,8 +621,7 @@ pub fn layout(
     // Pass 1 - Calculate fixed sizes and flex sum -------------------------------------------------
     // Root container
     layout_state.push_boundary();
-    let view_size = view.size.to_vec2();
-    let root_size = view_size / view.scale_factor;
+    let root_size = view.size();
     layout_state.actual_sizes[0] = root_size;
 
     for command in commands {

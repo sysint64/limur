@@ -422,8 +422,8 @@ impl Renderer for VelloRenderer {
     ) {
         profiling::scope!("clew :: Vello - Render");
 
-        let width = view.size.width;
-        let height = view.size.height;
+        let width = view.physical_size.width;
+        let height = view.physical_size.height;
 
         self.resize(width, height);
         self.begin_frame();

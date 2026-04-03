@@ -236,7 +236,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 }
             }
             winit::event::WindowEvent::Resized(size) => {
-                window.ui_state.view.size = PhysicalSize::new(size.width, size.height);
+                window.ui_state.view.physical_size = PhysicalSize::new(size.width, size.height);
                 self.force_redraw = true;
 
                 window.ui_state.user_input.mouse_left_pressed = false;

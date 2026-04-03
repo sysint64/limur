@@ -44,8 +44,8 @@ impl<D: HasDisplayHandle, W: HasWindowHandle> Renderer for TinySkiaRenderer<D, W
         let surface_buffer = {
             profiling::scope!("clew :: Tiny Skia - Render");
 
-            let width = view.size.width;
-            let height = view.size.height;
+            let width = view.physical_size.width;
+            let height = view.physical_size.height;
 
             if self.current_width != width || self.current_height != height {
                 self.surface

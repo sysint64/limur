@@ -96,7 +96,7 @@ impl<'a, App, Event> WindowManager<'a, App, Event> {
                     let renderer = (self.renderer_factory)(winit_window.clone());
                     let mut ui_state = UiState::new(View {
                         id: ViewId(self.next_view_id),
-                        size: PhysicalSize::new(inner_size.width, inner_size.height),
+                        physical_size: PhysicalSize::new(inner_size.width, inner_size.height),
                         scale_factor: scale_factor as f32,
                         safe_area: EdgeInsets::ZERO,
                     });

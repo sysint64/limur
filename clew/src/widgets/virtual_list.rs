@@ -133,7 +133,7 @@ impl VirtualListBuilder {
         match self.axis {
             Axis::Horizontal => {
                 let viewport_width = if response.width == 0. {
-                    context.view.size.width as f32
+                    context.view.physical_size.width as f32
                 } else {
                     response.width as f32
                 };
@@ -163,7 +163,7 @@ impl VirtualListBuilder {
             }
             Axis::Vertical => {
                 let viewport_height = if response.height == 0. {
-                    context.view.size.height as f32
+                    context.view.physical_size.height as f32
                 } else {
                     response.height as f32
                 };

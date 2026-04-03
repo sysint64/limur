@@ -30,6 +30,7 @@ pub struct State {
     pub(crate) color: ColorRgba,
     pub(crate) text_align: TextAlign,
     pub(crate) vertical_align: AlignY,
+    pub(crate) scale_factor: f32,
 }
 
 impl WidgetState for State {
@@ -83,7 +84,7 @@ impl<'a> TextBuilder<'a> {
         let mut last_text_align = state.map(|it| it.text_align).unwrap_or(TextAlign::Auto);
 
         let (text_data, text_id) = if let Some(state) = state {
-            if state.text_data != self.text {
+            if state.text_data != self.text || context.view.scale_factor != state.scale_factor {
                 context.text.update_text(state.text_id, |text| {
                     text.set_text(context.fonts, self.text);
                 });
@@ -158,6 +159,7 @@ impl<'a> TextBuilder<'a> {
             color: self.color,
             text_align: self.text_align,
             vertical_align: self.vertical_align,
+            scale_factor: context.view.scale_factor,
         });
 
         if let Some(text_data) = text_data {

@@ -628,9 +628,15 @@ pub struct ViewId(pub usize);
 #[derive(Debug, Clone)]
 pub struct View {
     pub id: ViewId,
-    pub size: PhysicalSize,
+    pub physical_size: PhysicalSize,
     pub scale_factor: f32,
     pub safe_area: EdgeInsets,
+}
+
+impl View {
+    pub fn size(&self) -> Vec2 {
+        self.physical_size.to_vec2() / self.scale_factor
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
