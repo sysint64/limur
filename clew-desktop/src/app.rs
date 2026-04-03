@@ -146,6 +146,11 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
             });
 
         for window in self.window_manager.windows.values_mut() {
+            let scale = window.winit_window.scale_factor() as f32;
+            window.ui_state.view.scale_factor = scale;
+            window
+                .texts
+                .update_view(&window.ui_state.view, &mut self.fonts);
             window
                 .ui_state
                 .shortcuts_registry()
@@ -197,7 +202,10 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
             self.broadcast_event_queue.clear();
         }
 
-        let window = self.window_manager.get_mut_window(window_id).unwrap();
+        let Some(window) = self.window_manager.get_mut_window(window_id) else {
+            return;
+        };
+
         let input_cursor = window.ui_state.user_input.cursor;
 
         if self.last_cursor != input_cursor
@@ -221,7 +229,11 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
 
         match event {
             winit::event::WindowEvent::CloseRequested => {
-                event_loop.exit();
+                self.window_manager.windows.remove(&window_id);
+
+                if self.window_manager.windows.is_empty() {
+                    event_loop.exit();
+                }
             }
             winit::event::WindowEvent::Resized(size) => {
                 window.ui_state.view.size = PhysicalSize::new(size.width, size.height);
