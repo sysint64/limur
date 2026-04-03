@@ -10,7 +10,6 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     GestureDetectorResponse, LayoutDirection, Rect, ShortcutId, ShortcutsManager, View, WidgetId,
-    interaction::InteractionState,
     io::{Cursor, TextInputAction, UserInput},
     state::ViewConfig,
     text::{FontResources, TextsResources},
@@ -751,10 +750,10 @@ pub(crate) fn handle_interaction(
                 let editor = text.editor_mut(id);
 
                 let relative_mouse_x = user_input.mouse_x as f32
-                    - boundary.x * view.scale_factor.ceil()
+                    - boundary.x * view.scale_factor
                     - state.text_offset.x;
                 let relative_mouse_y = user_input.mouse_y as f32
-                    - boundary.y * view.scale_factor.ceil()
+                    - boundary.y * view.scale_factor
                     - state.text_offset.y;
 
                 let relative_mouse_x = relative_mouse_x.floor() as i32;
@@ -817,8 +816,8 @@ pub(crate) fn handle_interaction(
                     && last_click_time.elapsed().as_millis() > 17
                     && (state.mouse_path_x > drag_trigger || state.mouse_path_y > drag_trigger)
                 {
-                    let height = boundary.height * view.scale_factor.ceil();
-                    let scroll_area_size = 8.0 * view.scale_factor.ceil();
+                    let height = boundary.height * view.scale_factor;
+                    let scroll_area_size = 8.0 * view.scale_factor;
                     let relative_mouse_y_f32 = relative_mouse_y as f32;
                     let at_top = relative_mouse_y_f32 <= scroll_area_size;
                     let at_bottom = relative_mouse_y_f32 >= height - scroll_area_size;

@@ -147,7 +147,11 @@ impl<'a> TextBuilder<'a> {
             constraints: self.frame.constraints,
             size: self.frame.size,
             zindex: self.frame.zindex,
-            derive_wrap_size: DeriveWrapSize::Text(text_id),
+            derive_wrap_size: DeriveWrapSize::Text {
+                text_id,
+                derive_width: true,
+                derive_height: true,
+            },
             clip: self.frame.clip,
         });
 

@@ -31,6 +31,7 @@ pub struct EditableTextBuilder<'a> {
     gesture_response: Option<GestureDetectorResponse>,
     truncate_lines: bool,
     multi_line: bool,
+    virtualize: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,6 +54,7 @@ pub(crate) struct State {
     pub(crate) deltas: Vec<EditableTextDelta>,
     pub(crate) save_history: bool,
     pub(crate) scroll_x: f32,
+    pub(crate) scroll_y: f32,
     pub(crate) auto_scroll_to_cursor: bool,
     pub(crate) reached_end: bool,
     pub(crate) was_relayout: bool,
@@ -80,6 +82,7 @@ pub(crate) struct State {
     pub(crate) gesture_detector_response: GestureDetectorResponse,
     pub(crate) boundary: Rect,
     pub(crate) truncate_lines: bool,
+    pub(crate) virtualize: bool,
 }
 
 impl State {
@@ -92,6 +95,7 @@ impl State {
             was_relayout: false,
             visible_view_updated: false,
             scroll_x: 0.0,
+            scroll_y: 0.0,
             recompose_text_content: true,
             ime_cursor_end: cosmic_text::Cursor::default(),
             direction_decided: false,
@@ -116,6 +120,7 @@ impl State {
             gesture_detector_response: GestureDetectorResponse::default(),
             boundary: Rect::ZERO,
             truncate_lines: false,
+            virtualize: true,
         }
     }
 }
@@ -168,6 +173,12 @@ impl<'a> EditableTextBuilder<'a> {
 
     pub fn truncate_lines(mut self, value: bool) -> Self {
         self.truncate_lines = value;
+
+        self
+    }
+
+    pub fn virtualize(mut self, value: bool) -> Self {
+        self.virtualize = value;
 
         self
     }
@@ -247,6 +258,7 @@ impl<'a> EditableTextBuilder<'a> {
         state.color = self.color;
         state.vertical_align = self.vertical_align;
         state.multi_line = self.multi_line;
+        state.virtualize = self.virtualize;
 
         if let Some(gesture_response) = self.gesture_response {
             state.gesture_detector_response = gesture_response.clone();
@@ -347,7 +359,11 @@ impl<'a> EditableTextBuilder<'a> {
             constraints: self.frame.constraints,
             size: self.frame.size,
             zindex: self.frame.zindex,
-            derive_wrap_size: DeriveWrapSize::Text(text_id),
+            derive_wrap_size: DeriveWrapSize::Text {
+                text_id,
+                derive_width: true,
+                derive_height: self.virtualize,
+            },
             clip: self.frame.clip,
         });
 
@@ -368,5 +384,6 @@ pub fn editable_text(text: &mut TextData) -> EditableTextBuilder<'_> {
         gesture_response: None,
         truncate_lines: false,
         multi_line: true,
+        virtualize: true,
     }
 }

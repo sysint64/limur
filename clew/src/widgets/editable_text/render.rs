@@ -100,11 +100,13 @@ pub fn render(
         text_direction = LayoutDirection::RTL;
     }
 
+    let scroll_y = if state.virtualize { 0. } else { state.scroll_y };
+
     state.text_offset = match text_direction {
-        LayoutDirection::LTR => Vec2::new(state.scroll_x, top),
+        LayoutDirection::LTR => Vec2::new(state.scroll_x, scroll_y + top),
         LayoutDirection::RTL => Vec2::new(
             state.scroll_x + AlignX::Right.position(text_direction, size.x, text_size.x),
-            top,
+            scroll_y + top,
         ),
     };
 
@@ -305,7 +307,10 @@ pub fn render(
         let placement_rect = placement.rect.px(ctx);
         let left = placement_rect.left();
         let right = placement_rect.right();
+        let top = placement_rect.top();
+        let bottom = placement_rect.bottom();
         let inner_width = right - left;
+        let inner_height = bottom - top;
 
         if calculate_scroll {
             if state.auto_scroll_to_cursor && editor_cursor_position.is_some() {
@@ -335,6 +340,21 @@ pub fn render(
                         );
                     }
                 }
+
+                // Vertical ------------------------------------------------------------------------
+                if !state.virtualize {
+                    if cursor_position.y + cursor_size.y > bottom {
+                        let delta = bottom - cursor_position.y - cursor_size.y;
+
+                        editable_text_vertical_scroll(state, delta);
+                    }
+
+                    if cursor_position.y < top {
+                        let delta = top - cursor_position.y;
+
+                        editable_text_vertical_scroll(state, delta);
+                    }
+                }
             }
 
             state.scroll_x = match text_direction {
@@ -345,6 +365,14 @@ pub fn render(
                     .scroll_x
                     .clamp(0.0, f32::max(0.0, text_size.x - inner_width)),
             };
+
+            if !state.virtualize {
+                state.scroll_y = state
+                    .scroll_y
+                    .clamp(f32::min(-(text_size.y - inner_height), 0.0), 0.0);
+            } else {
+                state.scroll_y = 0.;
+            }
 
             // Another way of implementing vertical scrolling
             // If current approach will be too fast we can adjust using
@@ -378,14 +406,18 @@ pub fn render(
 
             let editor = ctx.text.editor_mut(text_id);
             if ctx.input.mouse_wheel_delta_y != 0. {
-                editable_text_vertical_scroll(
-                    ctx.fonts,
-                    editor,
-                    state,
-                    -ctx.input.mouse_wheel_delta_y as f32,
-                );
-                ctx.text
-                    .shape_as_needed(text_id, &mut ctx.fonts.font_system, false);
+                if state.virtualize {
+                    editable_text_virtual_vertical_scroll(
+                        ctx.fonts,
+                        editor,
+                        state,
+                        -ctx.input.mouse_wheel_delta_y as f32,
+                    );
+                    ctx.text
+                        .shape_as_needed(text_id, &mut ctx.fonts.font_system, false);
+                } else {
+                    editable_text_vertical_scroll(state, ctx.input.mouse_wheel_delta_y as f32);
+                }
             }
 
             if !wrap && ctx.input.mouse_wheel_delta_x != 0. {
@@ -418,7 +450,12 @@ fn editable_text_horizontal_scroll(
     state.recompose_text_content = false;
 }
 
-fn editable_text_vertical_scroll(
+fn editable_text_vertical_scroll(state: &mut State, delta: f32) {
+    state.scroll_y += delta;
+    state.recompose_text_content = false;
+}
+
+fn editable_text_virtual_vertical_scroll(
     fonts: &mut FontResources,
     editor: &mut cosmic_text::Editor,
     state: &mut State,

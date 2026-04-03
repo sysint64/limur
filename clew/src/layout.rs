@@ -69,7 +69,11 @@ pub enum LayoutCommand {
 #[derive(Debug, Clone, Copy)]
 pub enum DeriveWrapSize {
     Constraints,
-    Text(TextId),
+    Text {
+        text_id: TextId,
+        derive_width: bool,
+        derive_height: bool,
+    },
     Svg(&'static str),
 }
 
@@ -807,7 +811,7 @@ pub fn layout(
                     DeriveWrapSize::Constraints => {
                         Vec2::new(constraints.min_width, constraints.min_height)
                     }
-                    DeriveWrapSize::Text(text_id) => {
+                    DeriveWrapSize::Text { text_id, .. } => {
                         let text_size = text.get_mut(*text_id).calculate_size();
 
                         Vec2::new(
@@ -1455,11 +1459,16 @@ pub fn layout(
                     }
                 }
 
-                if let DeriveWrapSize::Text(text_id) = derive_wrap_size {
+                if let DeriveWrapSize::Text {
+                    text_id,
+                    derive_width,
+                    derive_height,
+                } = derive_wrap_size
+                {
                     layout_state.texts.push(TextLayout {
-                        width: if size.width.constrained() {
+                        width: if size.width.constrained() && *derive_width {
                             Some(rect.width * view.scale_factor)
-                        } else {
+                        } else if *derive_width {
                             if constraints.max_width != f32::INFINITY {
                                 Some(
                                     (constraints.max_width - padding.horizontal())
@@ -1468,10 +1477,12 @@ pub fn layout(
                             } else {
                                 None
                             }
-                        },
-                        height: if size.height.constrained() {
-                            Some(rect.height * view.scale_factor)
                         } else {
+                            None
+                        },
+                        height: if size.height.constrained() && *derive_height {
+                            Some(rect.height * view.scale_factor)
+                        } else if *derive_height {
                             if constraints.max_height != f32::INFINITY {
                                 Some(
                                     (constraints.max_height - padding.vertical())
@@ -1480,6 +1491,8 @@ pub fn layout(
                             } else {
                                 None
                             }
+                        } else {
+                            None
                         },
                         text_id: *text_id,
                     });
