@@ -812,7 +812,10 @@ pub fn layout(
                     DeriveWrapSize::Text(text_id) => {
                         let text_size = text.get_mut(*text_id).layout();
 
-                        text_size / view.scale_factor
+                        Vec2::new(
+                            (text_size.x / view.scale_factor).ceil(),
+                            (text_size.y / view.scale_factor).ceil(),
+                        )
                     }
                     DeriveWrapSize::Svg(asset_id) => {
                         let tree = assets
