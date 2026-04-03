@@ -123,7 +123,7 @@ pub trait PixelExtension<T> {
 
 impl PixelExtension<f32> for f32 {
     fn px(self, ctx: &RenderContext) -> f32 {
-        self * ctx.view.scale_factor.ceil()
+        self * ctx.view.scale_factor
     }
 }
 
@@ -135,7 +135,8 @@ impl PixelExtension<Vec2> for Vec2 {
 
 impl PixelExtension<Rect> for Rect {
     fn px(self, ctx: &RenderContext) -> Rect {
-        self * ctx.view.scale_factor.ceil()
+        self * ctx.view.scale_factor
+        // (self * ctx.view.scale_factor).ceil()
     }
 }
 
