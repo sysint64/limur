@@ -166,6 +166,7 @@ impl<'a> TextBuilder<'a> {
             state.text_data = text_data;
         }
 
+        state.scale_factor = context.view.scale_factor;
         state.color = self.color;
         state.text_align = self.text_align;
     }
