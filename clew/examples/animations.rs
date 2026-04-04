@@ -24,6 +24,7 @@ impl ApplicationDelegate<()> for AnimationsApplication {
             MainWindow::new(),
             WindowDescriptor {
                 title: "Animations".to_string(),
+                name: Some("clew-example".to_string()),
                 width: 800,
                 height: 600,
                 resizable: true,

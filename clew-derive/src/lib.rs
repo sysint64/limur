@@ -95,11 +95,7 @@ pub fn widget_builder_derive(input: TokenStream) -> TokenStream {
 /// Derive macro for ShortcutScopeId
 #[proc_macro_derive(ShortcutScopeId, attributes(scope_prefix))]
 pub fn derive_shortcut_scope_id(input: TokenStream) -> TokenStream {
-    let stream = derive_id_impl(input, "ShortcutScopeId");
-
-    // eprintln!("EXPANDED:\n{}", stream.to_string());
-
-    stream
+    derive_id_impl(input, "ShortcutScopeId")
 }
 
 /// Derive macro for ShortcutModifierId

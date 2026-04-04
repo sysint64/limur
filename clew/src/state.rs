@@ -231,6 +231,7 @@ impl UiState {
             shortcuts_registry: ShortcutsRegistry::default(),
             os_events: SmallVec::new(),
             view_config: ViewConfig::default(),
+            #[cfg(feature = "clipboard")]
             clipboard,
         }
     }

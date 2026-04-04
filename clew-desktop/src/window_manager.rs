@@ -6,12 +6,14 @@ use clew::{
     state::UiState,
     text::{StringId, TextId, TextsResources},
 };
+use winit::platform::{wayland::ActiveEventLoopExtWayland, x11::ActiveEventLoopExtX11};
 
 use crate::window::Window;
 
 #[derive(Debug, Clone)]
 pub struct WindowDescriptor {
     pub title: String,
+    pub name: Option<String>,
     pub width: u32,
     pub height: u32,
     pub resizable: bool,
@@ -22,6 +24,7 @@ impl Default for WindowDescriptor {
     fn default() -> Self {
         Self {
             title: "Window".to_string(),
+            name: None,
             width: 800,
             height: 600,
             resizable: true,
@@ -81,7 +84,9 @@ impl<'a, App, Event> WindowManager<'a, App, Event> {
         descriptor: WindowDescriptor,
     ) {
         if let Some(event_loop) = self.event_loop {
-            let attributes = winit::window::WindowAttributes::default()
+            let event_loop = unsafe { &*event_loop };
+
+            let mut attributes = winit::window::WindowAttributes::default()
                 .with_title(descriptor.title)
                 .with_inner_size(winit::dpi::LogicalSize::new(
                     descriptor.width,
@@ -89,7 +94,18 @@ impl<'a, App, Event> WindowManager<'a, App, Event> {
                 ))
                 .with_resizable(descriptor.resizable);
 
-            let event_loop = unsafe { &*event_loop };
+            if let Some(name) = descriptor.name {
+                if event_loop.is_wayland() {
+                    use winit::platform::wayland::WindowAttributesExtWayland;
+
+                    attributes = attributes.with_name(&name, &name);
+                } else if event_loop.is_x11() {
+                    use winit::platform::x11::WindowAttributesExtX11;
+
+                    attributes = attributes.with_name(&name, &name);
+                }
+            }
+
             match event_loop.create_window(attributes) {
                 Ok(winit_window) => {
                     let winit_window = Arc::new(winit_window);

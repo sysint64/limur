@@ -7,6 +7,9 @@ use clew::{
 use clew::{TextAlign, prelude::*};
 use clew_derive::{ShortcutId, ShortcutScopeId, WidgetBuilder, WidgetState};
 
+mod shortcuts;
+pub use shortcuts::*;
+
 #[derive(WidgetBuilder)]
 pub struct ButtonBuilder<'a> {
     frame: FrameBuilder,
