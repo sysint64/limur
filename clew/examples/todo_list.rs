@@ -1,5 +1,5 @@
 use clew::prelude::*;
-use clew::{self as ui, SHORTCUTS_ROOT_SCOPE_ID};
+use clew::{self as ui};
 use clew_derive::{ShortcutId, ShortcutScopeId};
 use clew_desktop::{
     app::{Application, ApplicationDelegate},
@@ -19,101 +19,7 @@ impl ApplicationDelegate<()> for TodoApplication {
     ) where
         Self: std::marker::Sized,
     {
-        shortcuts_registry
-            .scope(ui::ShortcutScopes::TextEditing)
-            .add_repeat(
-                ui::TextEditingShortcut::Delete,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Delete),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::Backspace,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Backspace),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MoveNext,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowRight),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MovePrev,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowLeft),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MoveUp,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowUp),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MoveDown,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowDown),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::NextLine,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Enter),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MoveStart,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Home),
-            )
-            .add(
-                ui::TextEditingShortcut::MoveEnd,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::End),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::BufferStart,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Home).with_super(),
-            )
-            .add(
-                ui::TextEditingShortcut::BufferEnd,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::End).with_super(),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::PageUp,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::PageUp),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::PageDown,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::PageDown),
-            )
-            .add(
-                ui::TextEditingShortcut::SelectAll,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyA).with_super(),
-            )
-            .add_modifier(
-                ui::TextInputModifier::Select,
-                ui::keyboard::KeyModifiers::shift(),
-            )
-            .add_modifier(
-                ui::TextInputModifier::Word,
-                ui::keyboard::KeyModifiers::super_key(),
-            )
-            .add_modifier(
-                ui::TextInputModifier::Paragraph,
-                ui::keyboard::KeyModifiers::super_key(),
-            );
-
-        shortcuts_registry
-            .scope(SHORTCUTS_ROOT_SCOPE_ID)
-            .add(
-                ui::CommonShortcut::Copy,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyC).with_super(),
-            )
-            .add(
-                ui::CommonShortcut::Cut,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyX).with_super(),
-            )
-            .add_repeat(
-                ui::CommonShortcut::Paste,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyV).with_super(),
-            )
-            .add_repeat(
-                ui::CommonShortcut::Undo,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyZ).with_super(),
-            )
-            .add_repeat(
-                ui::CommonShortcut::Redo,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyZ)
-                    .with_super()
-                    .with_shift(),
-            );
+        clew_widgets::init_shortcuts(shortcuts_registry);
 
         window_manager.spawn_window(
             MainWindow {
@@ -121,6 +27,7 @@ impl ApplicationDelegate<()> for TodoApplication {
             },
             WindowDescriptor {
                 title: "Todo List".to_string(),
+                name: Some("clew-example".to_string()),
                 width: 800,
                 height: 600,
                 resizable: true,
@@ -182,7 +89,8 @@ impl Window<TodoApplication, ()> for MainWindow {
                             // .text_vertical_align(ui::AlignY::Center)
                             .padding(ui::EdgeInsets::symmetric(8., 4.))
                             .truncate_lines(false)
-                            .multi_line(false)
+                            .multi_line(true)
+                            .virtualize(false)
                             .background(
                                 ui::decoration()
                                     .border_radius(ui::BorderRadius::all(3.))
@@ -197,7 +105,7 @@ impl Window<TodoApplication, ()> for MainWindow {
                                     )))
                                     .build(ctx),
                             )
-                            .width(200.)
+                            // .width(200.)
                             // .height(200.)
                             .min_width(50.)
                             .min_height(20.)

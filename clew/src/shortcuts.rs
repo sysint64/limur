@@ -408,6 +408,7 @@ impl ShortcutsManager {
             }
         }
 
+
         let mut active_path = scopes.clone();
 
         // Resolve keybinding
