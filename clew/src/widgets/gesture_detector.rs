@@ -143,7 +143,9 @@ impl GestureDetectorBuilder {
         state.dragable = self.dragable;
         state.focusable = self.focusable;
 
-        handle_interaction(id, context.input, context.view, context.interaction, state);
+        if !context.pre_layout {
+            handle_interaction(id, context.input, context.view, context.interaction, state);
+        }
 
         let response = GestureDetectorResponse {
             clicked: state.clicked,

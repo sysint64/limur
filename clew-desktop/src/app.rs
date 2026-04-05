@@ -114,11 +114,34 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         fonts,
         broadcast_event_queue,
         broadcast_async_tx,
-        event_loop_proxy,
+        event_loop_proxy.clone(),
         window_state.delta_time_timer.elapsed().as_secs_f64(),
+        true,
     );
 
     window_state.delta_time_timer = Instant::now();
+
+    window_state.window.build(app, &mut build_context);
+
+    clew::pre_layout(
+        &mut window_state.ui_state,
+        &mut window_state.texts,
+        fonts,
+        assets,
+    );
+
+    window_state.ui_state.layout_commands.clear();
+
+    let mut build_context = BuildContext::new(
+        &mut window_state.ui_state,
+        &mut window_state.texts,
+        fonts,
+        broadcast_event_queue,
+        broadcast_async_tx,
+        event_loop_proxy,
+        window_state.delta_time_timer.elapsed().as_secs_f64(),
+        false,
+    );
 
     window_state.window.build(app, &mut build_context);
 
@@ -346,8 +369,8 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 match delta {
                     winit::event::MouseScrollDelta::LineDelta(x, y) => {
                         // Scale line delta
-                        window.ui_state.user_input.mouse_wheel_delta_x = x * 20.0;
-                        window.ui_state.user_input.mouse_wheel_delta_y = y * 20.0;
+                        window.ui_state.user_input.mouse_wheel_delta_x = x;
+                        window.ui_state.user_input.mouse_wheel_delta_y = y;
                     }
                     winit::event::MouseScrollDelta::PixelDelta(pos) => {
                         window.ui_state.user_input.mouse_wheel_delta_x = pos.x as f32;

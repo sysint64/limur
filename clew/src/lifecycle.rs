@@ -1,6 +1,7 @@
 use crate::{io::Cursor, state::UiState};
 
 pub fn init_cycle(state: &mut UiState) {
+    state.animations_stepped_this_frame.clear();
     state.layout_commands.clear();
     state.render_state.commands.clear();
     state.widget_placements.clear();

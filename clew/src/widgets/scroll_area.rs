@@ -3,14 +3,17 @@ use std::any::Any;
 use clew_derive::WidgetBuilder;
 
 use crate::{
-    ScrollDirection, WidgetId, WidgetRef, WidgetType,
+    Clip, ScrollDirection, WidgetId, WidgetRef, WidgetType,
     interaction::InteractionState,
     io::UserInput,
     layout::{ContainerKind, LayoutCommand, LayoutMeasure},
     state::WidgetState,
 };
 
-use super::{FrameBuilder, builder::BuildContext};
+use super::{
+    FrameBuilder,
+    builder::{BuildContext, WidgetBuilder},
+};
 
 pub struct ScrollAreaWidget;
 
@@ -186,7 +189,7 @@ impl ScrollAreaBuilder {
 #[track_caller]
 pub fn scroll_area() -> ScrollAreaBuilder {
     ScrollAreaBuilder {
-        frame: FrameBuilder::new(),
+        frame: FrameBuilder::new().clip(Clip::Rect),
         scroll_direction: ScrollDirection::Vertical,
     }
 }
@@ -258,17 +261,15 @@ pub fn handle_interaction(
             widget_state.offset_x += input.mouse_wheel_delta_x as f64;
         }
 
-        widget_state.offset_x = widget_state.offset_x.clamp(
-            f64::min(0., -(wrap_width - layout_measure.width)),
-            0.,
-        );
+        widget_state.offset_x = widget_state
+            .offset_x
+            .clamp(f64::min(0., -(wrap_width - layout_measure.width)), 0.);
 
         widget_state.overflow_x = layout_measure.width - wrap_width <= 0.;
         widget_state.fraction_x = layout_measure.width / wrap_width;
         widget_state.width = layout_measure.width;
         widget_state.content_width = wrap_width;
-        widget_state.progress_x =
-            -widget_state.offset_x / (wrap_width - layout_measure.width);
+        widget_state.progress_x = -widget_state.offset_x / (wrap_width - layout_measure.width);
         widget_state.progress_x = widget_state.progress_x.clamp(0., 1.);
     }
 }

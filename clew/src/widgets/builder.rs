@@ -55,6 +55,7 @@ pub struct MutUserDataStack<'a> {
 }
 
 pub struct BuildContext<'a, 'b> {
+    pub(crate) pre_layout: bool,
     pub(crate) ignore_pointer: bool,
     pub(crate) layout_commands: &'a mut Vec<LayoutCommand>,
     pub(crate) widgets_states: &'a mut WidgetsStates,
@@ -121,10 +122,10 @@ impl<'a, 'b> BuildContext<'a, 'b> {
         broadcast_async_tx: &'a mut tokio::sync::mpsc::UnboundedSender<Box<dyn Any + Send>>,
         event_loop_proxy: Arc<dyn ApplicationEventLoopProxy>,
         delta_time: f64,
+        should_update: bool,
     ) -> BuildContext<'a, 'b> {
-        ui_state.animations_stepped_this_frame.clear();
-
         BuildContext {
+            pre_layout: should_update,
             child_index: 0,
             ignore_pointer: false,
             layout_commands: &mut ui_state.layout_commands,
@@ -180,6 +181,10 @@ impl<'a, 'b> BuildContext<'a, 'b> {
                 animation.step(self.delta_time)
             }
         }
+    }
+
+    pub fn should_update(&self) -> bool {
+        self.pre_layout
     }
 
     pub fn child_index(&self) -> u32 {

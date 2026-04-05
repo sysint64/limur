@@ -1094,9 +1094,14 @@ pub fn layout(
                 };
 
                 current_position += Vec2::new(
-                    align_x.position_f64(layout_state.layout_direction, boundary.width, widget_size.x),
+                    align_x.position_f64(
+                        layout_state.layout_direction,
+                        boundary.width,
+                        widget_size.x,
+                    ),
                     align_y.position_f64(boundary.height, widget_size.y),
                 );
+
 
                 let current_container_position = current_position + offset;
 

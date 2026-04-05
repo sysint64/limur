@@ -139,10 +139,73 @@ impl PixelExtension<Vec2<f32>> for Vec2<f64> {
     }
 }
 
+// impl PixelExtension<Rect<f32>> for Rect<f64> {
+//     fn px(self, ctx: &RenderContext) -> Rect<f32> {
+//         let scaled = self * ctx.view.scale_factor;
+
+//         Rect {
+//             x: scaled.x.clamp(-ctx.view.size().x, ctx.view.size().x * 2.) as f32,
+//             y: scaled.y.clamp(-ctx.view.size().y, ctx.view.size().y * 2.) as f32,
+//             width: scaled
+//                 .width
+//                 .clamp(-ctx.view.size().x, ctx.view.size().x * 4.) as f32,
+//             height: scaled
+//                 .height
+//                 .clamp(-ctx.view.size().y, ctx.view.size().y * 4.) as f32,
+//         }
+//     }
+// }
+
 impl PixelExtension<Rect<f32>> for Rect<f64> {
     fn px(self, ctx: &RenderContext) -> Rect<f32> {
-        (self * ctx.view.scale_factor).as_f32()
-        // (self * ctx.view.scale_factor).ceil()
+        let scaled = self * ctx.view.scale_factor;
+        let vw = ctx.view.physical_size.width as f64;
+        let vh = ctx.view.physical_size.height as f64;
+
+        let pad = ctx.view.scale_factor.ceil();
+
+        let left = scaled.x.max(-pad);
+        let top = scaled.y.max(-pad);
+        let right = (scaled.x + scaled.width).min(vw + pad);
+        let bottom = (scaled.y + scaled.height).min(vh + pad);
+
+        Rect {
+            x: left as f32,
+            y: top as f32,
+            width: (right - left).max(0.0) as f32,
+            height: (bottom - top).max(0.0) as f32,
+        }
+    }
+}
+
+impl Rect<f64> {
+    pub fn px_with_radius(
+        self,
+        ctx: &RenderContext,
+        border_radius: Option<&BorderRadius>,
+    ) -> Rect<f32> {
+        let scaled = self * ctx.view.scale_factor;
+        let vw = ctx.view.physical_size.width as f64;
+        let vh = ctx.view.physical_size.height as f64;
+
+        let pad = border_radius.map_or(0.0, |br| {
+            br.top_left
+                .max(br.top_right)
+                .max(br.bottom_left)
+                .max(br.bottom_right) as f64
+        }) + ctx.view.scale_factor.ceil();
+
+        let left = scaled.x.max(-pad);
+        let top = scaled.y.max(-pad);
+        let right = (scaled.x + scaled.width).min(vw + pad);
+        let bottom = (scaled.y + scaled.height).min(vh + pad);
+
+        Rect {
+            x: left as f32,
+            y: top as f32,
+            width: (right - left).max(0.0) as f32,
+            height: (bottom - top).max(0.0) as f32,
+        }
     }
 }
 
@@ -263,7 +326,11 @@ fn sort_segment(commands: &mut [RenderCommandUnsorted], start: usize, end: usize
         return;
     }
 
-    let mut items: Vec<(usize, usize, i32)> = Vec::new();
+    // First pass: identify items and groups
+    let mut items: Vec<(usize, usize, i32, bool)> = Vec::new();
+    //                  ^^^^^  ^^^^^  ^^^  ^^^^
+    //                  start  end    z    is_group)
+
     let mut i = start;
 
     while i < end {
@@ -282,54 +349,163 @@ fn sort_segment(commands: &mut [RenderCommandUnsorted], start: usize, end: usize
                 i += 1;
             }
 
-            items.push((group_start_idx, i, group_zindex));
+            items.push((group_start_idx, i, group_zindex, true));
         } else if group_end(&commands[i]).is_some() {
             break;
         } else {
-            items.push((i, i + 1, get_zindex(&commands[i])));
+            items.push((i, i + 1, get_zindex(&commands[i]), false));
             i += 1;
         }
     }
 
-    items.sort_by_key(|&(start, _, z)| (z, start));
+    items.sort_by_key(|&(start, _, z, _)| (z, start));
 
+    // Rearrange and track new positions
     let original: Vec<RenderCommandUnsorted> = commands[start..end].to_vec();
     let base = start;
 
     let mut write_pos = start;
-    for (item_start, item_end, _) in &items {
+    // Store the new positions of each group for recursion
+    let mut group_ranges: Vec<(usize, usize)> = Vec::new();
+
+    for &(item_start, item_end, _, is_group) in &items {
         let src_start = item_start - base;
         let src_end = item_end - base;
         let len = src_end - src_start;
 
+        let new_start = write_pos;
         commands[write_pos..write_pos + len].clone_from_slice(&original[src_start..src_end]);
         write_pos += len;
-    }
 
-    // Recursively sort inside each group
-    let mut i = start;
-    while i < end {
-        if let Some(kind) = group_start(&commands[i]) {
-            let content_start = i + 1;
-            let mut depth = 1;
-            i += 1;
-
-            while i < end && depth > 0 {
-                if group_start(&commands[i]).is_some() {
-                    depth += 1;
-                } else if kind.matches_end(&commands[i]) {
-                    depth -= 1;
-                }
-                i += 1;
+        if is_group {
+            // Content is between the group_start marker and the group_end marker
+            let content_start = new_start + 1;
+            let content_end = new_start + len - 1;
+            if content_start < content_end {
+                group_ranges.push((content_start, content_end));
             }
-
-            if content_start < i.saturating_sub(1) {
-                sort_segment(commands, content_start, i - 1);
-            }
-        } else {
-            i += 1;
         }
     }
+
+    // Recurse using the tracked positions, not a re-scan
+    for (content_start, content_end) in group_ranges {
+        sort_segment(commands, content_start, content_end);
+    }
+}
+
+// fn sort_segment(commands: &mut [RenderCommandUnsorted], start: usize, end: usize) {
+//     if start >= end {
+//         return;
+//     }
+
+//     let mut items: Vec<(usize, usize, i32)> = Vec::new();
+//     let mut i = start;
+
+//     while i < end {
+//         if let Some(kind) = group_start(&commands[i]) {
+//             let group_start_idx = i;
+//             let group_zindex = get_zindex(&commands[i]);
+//             let mut depth = 1;
+//             i += 1;
+
+//             while i < end && depth > 0 {
+//                 if group_start(&commands[i]).is_some() {
+//                     depth += 1;
+//                 } else if kind.matches_end(&commands[i]) {
+//                     depth -= 1;
+//                 }
+//                 i += 1;
+//             }
+
+//             items.push((group_start_idx, i, group_zindex));
+//         } else if group_end(&commands[i]).is_some() {
+//             break;
+//         } else {
+//             items.push((i, i + 1, get_zindex(&commands[i])));
+//             i += 1;
+//         }
+//     }
+
+//     items.sort_by_key(|&(start, _, z)| (z, start));
+
+//     let original: Vec<RenderCommandUnsorted> = commands[start..end].to_vec();
+//     let base = start;
+
+//     let mut write_pos = start;
+//     for (item_start, item_end, _) in &items {
+//         let src_start = item_start - base;
+//         let src_end = item_end - base;
+//         let len = src_end - src_start;
+
+//         commands[write_pos..write_pos + len].clone_from_slice(&original[src_start..src_end]);
+//         write_pos += len;
+//     }
+
+//     // Recursively sort inside each group
+//     let mut i = start;
+//     while i < end {
+//         if let Some(kind) = group_start(&commands[i]) {
+//             let content_start = i + 1;
+//             let mut depth = 1;
+//             i += 1;
+
+//             while i < end && depth > 0 {
+//                 if group_start(&commands[i]).is_some() {
+//                     depth += 1;
+//                 } else if kind.matches_end(&commands[i]) {
+//                     depth -= 1;
+//                 }
+//                 i += 1;
+//             }
+
+//             sort_segment(commands, content_start, i - 1);
+//         } else {
+//             i += 1;
+//         }
+//     }
+// }
+
+pub fn pre_layout(
+    state: &mut UiState,
+    text_resources: &mut TextsResources,
+    fonts: &mut FontResources,
+    assets: &Assets,
+) {
+    profiling::scope!("clew :: PreLayout");
+
+    layout(
+        &mut state.layout_state,
+        &state.view,
+        &state.layout_commands,
+        &mut state.layout_items,
+        &mut state.widgets_states.layout_measures,
+        text_resources,
+        assets,
+    );
+
+    for layout_text in &state.layout_state.texts {
+        let text = text_resources.get_mut(layout_text.text_id);
+
+        text.with_buffer_mut(|buffer| {
+            buffer.set_size(
+                &mut fonts.font_system,
+                layout_text.width.map(|it| it as f32),
+                layout_text.height.map(|it| it as f32),
+            );
+        });
+
+        text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);
+    }
+
+    layout(
+        &mut state.layout_state,
+        &state.view,
+        &state.layout_commands,
+        &mut state.layout_items,
+        &mut state.widgets_states.layout_measures,
+        text_resources,
+        assets,
+    );
 }
 
 pub fn layout_and_render(

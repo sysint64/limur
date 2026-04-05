@@ -265,7 +265,9 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
                 ctx.push_command(
                     placement.zindex,
                     RenderCommand::Rect {
-                        boundary: placement.rect.px(ctx),
+                        boundary: placement
+                            .rect
+                            .px_with_radius(ctx, state.border_radius.as_ref()),
                         fill: Some(Fill::Color(color)),
                         border_radius: state.border_radius.map(|it| it.px(ctx)),
                         border: state.border.map(|it| it.px(ctx)),
@@ -277,7 +279,9 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
                 ctx.push_command(
                     placement.zindex,
                     RenderCommand::Rect {
-                        boundary: placement.rect.px(ctx),
+                        boundary: placement
+                            .rect
+                            .px_with_radius(ctx, state.border_radius.as_ref()),
                         fill: Some(Fill::Gradient(gradient.clone())),
                         border_radius: state.border_radius.map(|it| it.px(ctx)),
                         border: state.border.map(|it| it.px(ctx)),
