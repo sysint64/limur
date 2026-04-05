@@ -511,19 +511,19 @@ mod tests {
 
                     for (i, byte) in line.text().bytes().enumerate() {
                         if cursor.index == i {
-                            bytes.push('|' as u8);
+                            bytes.push(b'|');
                         }
 
                         bytes.push(byte);
                     }
 
-                    if cursor.index == line.text().bytes().len() {
-                        bytes.push('|' as u8);
+                    if cursor.index == line.text().len() {
+                        bytes.push(b'|');
                     }
 
                     full_text.push_str(std::str::from_utf8(&bytes).unwrap());
                 } else {
-                    full_text.push_str(&line.text());
+                    full_text.push_str(line.text());
                 }
                 full_text.push('\n');
             }
@@ -537,7 +537,7 @@ mod tests {
     }
 
     // Helper function to create a test editor with initial text
-    fn create_editor_with_text(text: &str) -> Editor {
+    fn create_editor_with_text(text: &str) -> Editor<'_> {
         let mut font_system = FontSystem::new();
         let mut editor = Editor::new(cosmic_text::Buffer::new(
             &mut font_system,

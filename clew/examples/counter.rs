@@ -22,6 +22,7 @@ impl ApplicationDelegate<()> for CounterApplication {
             MainWindow { counter: 0 },
             WindowDescriptor {
                 title: "Counter".to_string(),
+                name: Some("clew-example".to_string()),
                 width: 800,
                 height: 600,
                 resizable: true,

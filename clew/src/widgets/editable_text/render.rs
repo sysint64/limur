@@ -7,10 +7,11 @@ use crate::{
     layout::WidgetPlacement,
     render::{Fill, PixelExtension, RenderCommand, RenderContext},
     state::ViewConfig,
-    text::{FontResources, TextId},
+    text::TextId,
 };
 
-use super::State;
+use super::{SelectionLineExtension, State};
+
 
 pub fn render(
     ctx: &mut RenderContext,
@@ -319,25 +320,13 @@ pub fn render(
                     if cursor_position.x > right {
                         let delta = right - cursor_position.x;
 
-                        editable_text_horizontal_scroll(
-                            state,
-                            delta,
-                            inner_width,
-                            text_size.x,
-                            text_direction,
-                        );
+                        editable_text_horizontal_scroll(state, delta);
                     }
 
                     if cursor_position.x < left {
                         let delta = left - cursor_position.x;
 
-                        editable_text_horizontal_scroll(
-                            state,
-                            delta,
-                            inner_width,
-                            text_size.x,
-                            text_direction,
-                        );
+                        editable_text_horizontal_scroll(state, delta);
                     }
                 }
 
@@ -408,26 +397,19 @@ pub fn render(
             if ctx.input.mouse_wheel_delta_y != 0. {
                 if state.virtualize {
                     editable_text_virtual_vertical_scroll(
-                        ctx.fonts,
                         editor,
                         state,
-                        -ctx.input.mouse_wheel_delta_y as f32,
+                        -ctx.input.mouse_wheel_delta_y,
                     );
                     ctx.text
                         .shape_as_needed(text_id, &mut ctx.fonts.font_system, false);
                 } else {
-                    editable_text_vertical_scroll(state, ctx.input.mouse_wheel_delta_y as f32);
+                    editable_text_vertical_scroll(state, ctx.input.mouse_wheel_delta_y);
                 }
             }
 
             if !wrap && ctx.input.mouse_wheel_delta_x != 0. {
-                editable_text_horizontal_scroll(
-                    state,
-                    ctx.input.mouse_wheel_delta_x as f32,
-                    inner_width,
-                    text_size.x,
-                    text_direction,
-                );
+                editable_text_horizontal_scroll(state, ctx.input.mouse_wheel_delta_x);
             }
 
             render(ctx, placement, state, view_config, false);
@@ -439,13 +421,7 @@ pub fn render(
     }
 }
 
-fn editable_text_horizontal_scroll(
-    state: &mut State,
-    delta: f32,
-    inner_width: f32,
-    text_width: f32,
-    text_direction: LayoutDirection,
-) {
+fn editable_text_horizontal_scroll(state: &mut State, delta: f32) {
     state.scroll_x += delta;
     state.recompose_text_content = false;
 }
@@ -456,7 +432,6 @@ fn editable_text_vertical_scroll(state: &mut State, delta: f32) {
 }
 
 fn editable_text_virtual_vertical_scroll(
-    fonts: &mut FontResources,
     editor: &mut cosmic_text::Editor,
     state: &mut State,
     delta: f32,
@@ -470,13 +445,6 @@ fn editable_text_virtual_vertical_scroll(
 
         buffer.set_scroll(scroll);
     });
-}
-
-#[derive(Copy, Clone)]
-enum SelectionLineExtension {
-    None,
-    FillWidth { max_width: f32 },
-    Padded { padding: f32 },
 }
 
 struct SelectionFragment {

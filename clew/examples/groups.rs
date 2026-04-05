@@ -22,6 +22,7 @@ impl ApplicationDelegate<()> for DemoApplication {
             MainWindow,
             WindowDescriptor {
                 title: "Demo".to_string(),
+                name: Some("clew-example".to_string()),
                 width: 800,
                 height: 600,
                 resizable: true,

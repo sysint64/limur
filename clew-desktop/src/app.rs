@@ -10,10 +10,9 @@ use clew::keyboard::{KeyCode, KeyModifiers};
 use clew::lifecycle::{finalize_cycle, init_cycle};
 use clew::render::Renderer;
 use clew::shortcuts::ShortcutsManager;
-use clew::state::UiState;
 use clew::text::{FontResources, StringInterner};
 use clew::widgets::builder::{ApplicationEvent, ApplicationEventLoopProxy, BuildContext};
-use clew::{PhysicalSize, Rect, ShortcutsRegistry};
+use clew::{PhysicalSize, ShortcutsRegistry};
 
 use crate::keyboard::{from_winit_key_code, from_winit_modifiers};
 use crate::window_manager::WindowManager;
@@ -59,7 +58,6 @@ pub struct Application<'a, T: ApplicationDelegate<Event>, Event = ()> {
     event_loop_proxy: Arc<WinitEventLoopProxy>,
     force_redraw: bool,
     needs_redraw: bool,
-    shortcuts_manager: ShortcutsManager,
     shortcuts_registry: ShortcutsRegistry,
 }
 
@@ -544,7 +542,7 @@ fn handle_os_events<App, Event>(window: &mut WindowState<App, Event>) {
     }
 
     let mut clear_ime = false;
-    let mut commit_ime = false;
+    let commit_ime = false;
 
     for event in window.ui_state.os_events.drain(..) {
         match event {
@@ -646,7 +644,6 @@ impl<T: ApplicationDelegate<Event>, Event: 'static> Application<'_, T, Event> {
             needs_redraw: false,
             event_loop_proxy: Arc::new(WinitEventLoopProxy { proxy: event_proxy }),
             assets,
-            shortcuts_manager: ShortcutsManager::default(),
             shortcuts_registry: ShortcutsRegistry::default(),
             modifiers: None,
             key_code: None,

@@ -102,6 +102,7 @@ impl ClickTracker {
         self.click_count
     }
 
+    #[allow(dead_code)]
     pub(crate) fn reset(&mut self) {
         self.click_count = 0;
         self.last_click_time = None;

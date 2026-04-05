@@ -32,6 +32,7 @@ impl InteractionState {
         self.hover.contains(id)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn clear_focused(&mut self) {
         if let Some(was_focused_id) = self.focused {
             self.was_focused = Some(was_focused_id);
@@ -41,10 +42,10 @@ impl InteractionState {
     }
 
     pub(crate) fn set_focused(&mut self, id: WidgetId) {
-        if let Some(was_focused_id) = self.focused {
-            if was_focused_id != id {
-                self.was_focused = Some(was_focused_id);
-            }
+        if let Some(was_focused_id) = self.focused
+            && was_focused_id != id
+        {
+            self.was_focused = Some(was_focused_id);
         }
 
         self.focused = Some(id);

@@ -6,7 +6,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 
 use crate::{
-    LayoutDirection, Rect, ShortcutsRegistry, View, WidgetId, WidgetRef,
     editable_text::{self, OsEvent},
     interaction::InteractionState,
     io::UserInput,
@@ -14,6 +13,7 @@ use crate::{
     render::RenderState,
     shortcuts::ShortcutsManager,
     widgets::{decorated_box, gesture_detector, scroll_area, svg, text},
+    LayoutDirection, Rect, ShortcutsRegistry, View, WidgetId, WidgetRef,
 };
 
 pub trait WidgetState: Any + Send + 'static {
@@ -66,6 +66,7 @@ pub(crate) struct WidgetsStates {
     pub(crate) editable_text: TypedWidgetStates<editable_text::State>,
     pub(crate) gesture_detector: TypedWidgetStates<gesture_detector::State>,
     pub(crate) svg: TypedWidgetStates<svg::State>,
+    #[allow(dead_code)]
     pub(crate) components: TypedWidgetStates<Box<dyn Any>>,
     pub(crate) custom: TypedWidgetStates<Option<Box<dyn WidgetState>>>,
 }

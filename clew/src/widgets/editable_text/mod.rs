@@ -9,8 +9,7 @@ use clew_derive::{ShortcutId, ShortcutModifierId, ShortcutScopeId, WidgetBuilder
 use cosmic_text::Edit;
 
 use crate::{
-    AlignY, ColorRgba, Rect, TextAlign, Vec2, WidgetId, WidgetInteractionState, WidgetRef,
-    WidgetType,
+    AlignY, ColorRgba, Rect, TextAlign, Vec2, WidgetRef, WidgetType,
     layout::{DeriveWrapSize, LayoutCommand},
     text::{Text, TextId},
     text_data::TextData,
@@ -20,6 +19,13 @@ use crate::{
 use super::{BuildContext, FrameBuilder, GestureDetectorResponse};
 
 pub struct EditableTextWidget;
+
+#[derive(Copy, Clone)]
+pub enum SelectionLineExtension {
+    None,
+    FillWidth { max_width: f32 },
+    Padded { padding: f32 },
+}
 
 #[derive(WidgetBuilder)]
 pub struct EditableTextBuilder<'a> {
@@ -216,10 +222,10 @@ impl<'a> EditableTextBuilder<'a> {
         let id = self.frame.id.with_seed(context.id_seed);
         let widget_ref = WidgetRef::new(WidgetType::of::<EditableTextWidget>(), id);
 
-        let mut state = context
+        let state = context
             .widgets_states
             .editable_text
-            .get_or_insert(id, || State::new());
+            .get_or_insert(id, State::new);
 
         let text_id = match self.text.text_id(id) {
             Some(text_id) => text_id,
@@ -284,13 +290,12 @@ impl<'a> EditableTextBuilder<'a> {
                 .editable_text
                 .accessed_this_frame
                 .insert(id);
-        } else {
         }
 
-        let mut state = context
+        let state = context
             .widgets_states
             .editable_text
-            .get_or_insert(id, || State::new());
+            .get_or_insert(id, State::new);
 
         context
             .text
@@ -302,7 +307,7 @@ impl<'a> EditableTextBuilder<'a> {
             }
 
             if !self.frame.size.width.constrained() {
-                let text = context.text.get_mut(text_id);
+                // let text = context.text.get_mut(text_id);
 
                 // text.with_buffer_mut(|buffer| {
                 // buffer.set_size(&mut context.fonts.font_system, None, None);
@@ -336,11 +341,7 @@ impl<'a> EditableTextBuilder<'a> {
 
             editor.set_cursor(cosmic_text::Cursor::default());
 
-            interaction::on_editable_text_cursor_moved(
-                &mut state,
-                &mut context.view_config,
-                editor,
-            );
+            interaction::on_editable_text_cursor_moved(state, context.view_config, editor);
         }
 
         if self.text.dirty.contains(&id) {

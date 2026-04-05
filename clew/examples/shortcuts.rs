@@ -167,6 +167,7 @@ impl ApplicationDelegate<()> for ShortcutsApplication {
             },
             WindowDescriptor {
                 title: "Shortcut System Test".to_string(),
+                name: Some("clew-example".to_string()),
                 width: 1200,
                 height: 800,
                 resizable: true,

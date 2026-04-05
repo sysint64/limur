@@ -4,7 +4,7 @@ use std::{
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 
 use crate::{
     io::UserInput,
@@ -96,9 +96,7 @@ impl ShortcutsRegistry {
     pub fn scope<T: Into<ShortcutScopeId>>(&mut self, key: T) -> &mut ShortcutScope {
         let key = key.into();
 
-        self.scopes
-            .entry(key)
-            .or_insert_with(ShortcutScope::default)
+        self.scopes.entry(key).or_default()
     }
 
     pub fn merge_with(&mut self, shortcuts_registry: &ShortcutsRegistry) {
@@ -407,7 +405,6 @@ impl ShortcutsManager {
                 }
             }
         }
-
 
         let mut active_path = scopes.clone();
 

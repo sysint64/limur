@@ -20,8 +20,9 @@ use super::{
     CommonShortcut, EditableTextDelta, OsEvent, State, TextEditingShortcut, TextInputModifier,
 };
 
+#[allow(clippy::too_many_arguments, clippy::collapsible_else_if)]
 pub(crate) fn handle_interaction(
-    id: WidgetId,
+    _id: WidgetId,
     user_input: &mut UserInput,
     view: &View,
     gesture_response: &GestureDetectorResponse,
@@ -77,12 +78,10 @@ pub(crate) fn handle_interaction(
 
         if let Some(shortcut) = shortcuts_manager.active_shortcut_id()
             && edit_shortcuts.contains(&shortcut)
-        {
-            if let Some(id) = state.text_id {
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
                 normalize_editable_text_selection(state, view_config, editor);
             }
-        }
 
         let has_selection = if let Some(id) = state.text_id {
             let editor = text.editor_mut(id);
@@ -100,8 +99,8 @@ pub(crate) fn handle_interaction(
             }
         };
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::Delete) {
-            if let Some(id) = state.text_id {
+        if shortcuts_manager.is_shortcut(TextEditingShortcut::Delete)
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
 
                 let (deleted_text, start, end) = if word_modifier && !has_selection {
@@ -168,10 +167,9 @@ pub(crate) fn handle_interaction(
                     }),
                 );
             }
-        }
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::Backspace) {
-            if let Some(id) = state.text_id {
+        if shortcuts_manager.is_shortcut(TextEditingShortcut::Backspace)
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
 
                 let (deleted_text, start, end) = if word_modifier && !has_selection {
@@ -238,7 +236,6 @@ pub(crate) fn handle_interaction(
                     }),
                 );
             }
-        }
 
         if shortcuts_manager.is_shortcut(TextEditingShortcut::NextLine) && state.multi_line {
             user_input.text_input.push('\n');
@@ -288,8 +285,8 @@ pub(crate) fn handle_interaction(
             }
         }
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveEnd) {
-            if let Some(id) = state.text_id {
+        if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveEnd)
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
                 editor.action(
                     &mut fonts.font_system,
@@ -302,11 +299,10 @@ pub(crate) fn handle_interaction(
 
                 on_editable_text_cursor_moved(state, view_config, editor);
             }
-        }
 
         if state.multi_line {
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveUp) {
-                if let Some(id) = state.text_id {
+            if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveUp)
+                && let Some(id) = state.text_id {
                     let editor = text.editor_mut(id);
 
                     if !has_selection || select_modifier {
@@ -332,10 +328,9 @@ pub(crate) fn handle_interaction(
 
                     on_editable_text_cursor_moved(state, view_config, editor);
                 }
-            }
 
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveDown) {
-                if let Some(id) = state.text_id {
+            if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveDown)
+                && let Some(id) = state.text_id {
                     let editor = text.editor_mut(id);
 
                     if !has_selection || select_modifier {
@@ -361,10 +356,9 @@ pub(crate) fn handle_interaction(
 
                     on_editable_text_cursor_moved(state, view_config, editor);
                 }
-            }
 
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::PageUp) {
-                if let Some(id) = state.text_id {
+            if shortcuts_manager.is_shortcut(TextEditingShortcut::PageUp)
+                && let Some(id) = state.text_id {
                     let editor = text.editor_mut(id);
 
                     if !select_modifier {
@@ -378,10 +372,9 @@ pub(crate) fn handle_interaction(
 
                     on_editable_text_cursor_moved(state, view_config, editor);
                 }
-            }
 
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::PageDown) {
-                if let Some(id) = state.text_id {
+            if shortcuts_manager.is_shortcut(TextEditingShortcut::PageDown)
+                && let Some(id) = state.text_id {
                     let editor = text.editor_mut(id);
 
                     if !select_modifier {
@@ -395,10 +388,9 @@ pub(crate) fn handle_interaction(
 
                     on_editable_text_cursor_moved(state, view_config, editor);
                 }
-            }
 
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::BufferStart) {
-                if let Some(id) = state.text_id {
+            if shortcuts_manager.is_shortcut(TextEditingShortcut::BufferStart)
+                && let Some(id) = state.text_id {
                     let editor = text.editor_mut(id);
 
                     if !select_modifier {
@@ -412,10 +404,9 @@ pub(crate) fn handle_interaction(
 
                     on_editable_text_cursor_moved(state, view_config, editor);
                 }
-            }
 
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::BufferEnd) {
-                if let Some(id) = state.text_id {
+            if shortcuts_manager.is_shortcut(TextEditingShortcut::BufferEnd)
+                && let Some(id) = state.text_id {
                     let editor = text.editor_mut(id);
 
                     if !select_modifier {
@@ -429,11 +420,10 @@ pub(crate) fn handle_interaction(
 
                     on_editable_text_cursor_moved(state, view_config, editor);
                 }
-            }
         }
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::MovePrev) {
-            if let Some(id) = state.text_id {
+        if shortcuts_manager.is_shortcut(TextEditingShortcut::MovePrev)
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
 
                 if !has_selection || select_modifier {
@@ -475,10 +465,9 @@ pub(crate) fn handle_interaction(
 
                 on_editable_text_cursor_moved(state, view_config, editor);
             }
-        }
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveNext) {
-            if let Some(id) = state.text_id {
+        if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveNext)
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
 
                 if !has_selection || select_modifier {
@@ -520,10 +509,9 @@ pub(crate) fn handle_interaction(
 
                 on_editable_text_cursor_moved(state, view_config, editor);
             }
-        }
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::SelectAll) {
-            if let Some(id) = state.text_id {
+        if shortcuts_manager.is_shortcut(TextEditingShortcut::SelectAll)
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
                 editor.set_selection(cosmic_text::Selection::None);
                 editor.action(
@@ -537,22 +525,19 @@ pub(crate) fn handle_interaction(
                 );
                 on_editable_text_cursor_moved(state, view_config, editor);
             }
-        }
 
         #[cfg(feature = "clipboard")]
         if let Some(clipboard) = clipboard {
-            if shortcuts_manager.is_shortcut(CommonShortcut::Copy) {
-                if let Some(id) = state.text_id {
+            if shortcuts_manager.is_shortcut(CommonShortcut::Copy)
+                && let Some(id) = state.text_id {
                     let editor = text.editor_mut(id);
                     let text = editor.copy_selection();
 
-                    if let Some(text) = text {
-                        if let Err(err) = clipboard.set_text(text) {
+                    if let Some(text) = text
+                        && let Err(err) = clipboard.set_text(text) {
                             log::error!("Failed to copy to clipboard: {err}");
                         }
-                    }
                 }
-            }
 
             if shortcuts_manager.is_shortcut(CommonShortcut::Cut)
                 && let Some(id) = state.text_id
@@ -588,8 +573,8 @@ pub(crate) fn handle_interaction(
                 }
             }
 
-            if shortcuts_manager.is_shortcut(CommonShortcut::Paste) {
-                if let Some(id) = state.text_id {
+            if shortcuts_manager.is_shortcut(CommonShortcut::Paste)
+                && let Some(id) = state.text_id {
                     let editor = text.editor_mut(id);
 
                     match clipboard.get_text() {
@@ -629,11 +614,10 @@ pub(crate) fn handle_interaction(
                         }
                     }
                 }
-            }
         }
 
-        if shortcuts_manager.is_shortcut(CommonShortcut::Undo) {
-            if let Some(id) = state.text_id {
+        if shortcuts_manager.is_shortcut(CommonShortcut::Undo)
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
                 let delta = state.history_manager.undo(editor).cloned();
 
@@ -643,10 +627,9 @@ pub(crate) fn handle_interaction(
                     state.deltas.push(EditableTextDelta::Undo(delta));
                 }
             }
-        }
 
-        if shortcuts_manager.is_shortcut(CommonShortcut::Redo) {
-            if let Some(id) = state.text_id {
+        if shortcuts_manager.is_shortcut(CommonShortcut::Redo)
+            && let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
                 let delta = state.history_manager.redo(editor).cloned();
 
@@ -656,7 +639,6 @@ pub(crate) fn handle_interaction(
                     state.deltas.push(EditableTextDelta::Apply(delta));
                 }
             }
-        }
 
         for text_input_action in &user_input.text_input_actions {
             match text_input_action {
@@ -689,8 +671,7 @@ pub(crate) fn handle_interaction(
                 TextInputAction::Insert => {
                     if !user_input.text_input.is_empty()
                         && shortcuts_manager.active_shortcut_id().is_none()
-                    {
-                        if let Some(id) = state.text_id {
+                        && let Some(id) = state.text_id {
                             let editor = text.editor_mut(id);
                             let text = user_input.text_input.clone();
 
@@ -727,7 +708,6 @@ pub(crate) fn handle_interaction(
                             editor.set_selection(cosmic_text::Selection::None);
                             on_editable_text_updated(state, view_config, editor, Some(delta));
                         }
-                    }
                 }
             }
         }
@@ -749,10 +729,10 @@ pub(crate) fn handle_interaction(
             if let Some(id) = state.text_id {
                 let editor = text.editor_mut(id);
 
-                let relative_mouse_x = user_input.mouse_x as f32
+                let relative_mouse_x = user_input.mouse_x
                     - boundary.x * view.scale_factor
                     - state.text_offset.x;
-                let relative_mouse_y = user_input.mouse_y as f32
+                let relative_mouse_y = user_input.mouse_y
                     - boundary.y * view.scale_factor
                     - state.text_offset.y;
 
@@ -791,7 +771,7 @@ pub(crate) fn handle_interaction(
                                 },
                             );
                         }
-                    } else if user_input.mouse_left_click_count % 2 == 0 {
+                    } else if user_input.mouse_left_click_count.is_multiple_of(2) {
                         editor.action(
                             &mut fonts.font_system,
                             cosmic_text::Action::DoubleClick {
@@ -870,11 +850,10 @@ pub(crate) fn handle_interaction(
 
                     let bounds = editor.selection_bounds();
 
-                    if let Some((start, end)) = bounds {
-                        if start == end {
+                    if let Some((start, end)) = bounds
+                        && start == end {
                             editor.set_selection(cosmic_text::Selection::None);
                         }
-                    }
 
                     state.direction_decided = false;
                     on_editable_text_cursor_moved(state, view_config, editor);
