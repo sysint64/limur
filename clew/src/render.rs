@@ -259,6 +259,10 @@ pub fn sort_render_commands(
 }
 
 fn sort_segment(commands: &mut [RenderCommandUnsorted], start: usize, end: usize) {
+    if start >= end {
+        return;
+    }
+
     let mut items: Vec<(usize, usize, i32)> = Vec::new();
     let mut i = start;
 
@@ -319,7 +323,9 @@ fn sort_segment(commands: &mut [RenderCommandUnsorted], start: usize, end: usize
                 i += 1;
             }
 
-            sort_segment(commands, content_start, i - 1);
+            if content_start < i.saturating_sub(1) {
+                sort_segment(commands, content_start, i - 1);
+            }
         } else {
             i += 1;
         }
