@@ -205,7 +205,7 @@ impl VelloRenderer {
     /// Draw a filled rectangle with optional border
     pub fn draw_rect(
         &mut self,
-        boundary: Rect,
+        boundary: Rect<f32>,
         fill: Option<&Fill>,
         border_radius: Option<&BorderRadius>,
         border: Option<&Border>,
@@ -260,7 +260,7 @@ impl VelloRenderer {
     }
 
     /// Draw an oval/ellipse with optional border
-    pub fn draw_oval(&mut self, boundary: Rect, fill: Option<&Fill>, border: Option<&BorderSide>) {
+    pub fn draw_oval(&mut self, boundary: Rect<f32>, fill: Option<&Fill>, border: Option<&BorderSide>) {
         let ellipse = vello::kurbo::Ellipse::new(
             (
                 (boundary.x + boundary.width / 2.0) as f64,
@@ -343,7 +343,7 @@ impl VelloRenderer {
     }
 
     /// Draw an SVG asset
-    pub fn draw_svg(&mut self, tree: &usvg::Tree, boundary: Rect, tint_color: Option<ColorRgba>) {
+    pub fn draw_svg(&mut self, tree: &usvg::Tree, boundary: Rect<f32>, tint_color: Option<ColorRgba>) {
         let sx = boundary.width / tree.size().width();
         let sy = boundary.height / tree.size().height();
 
@@ -502,7 +502,7 @@ impl Renderer for VelloRenderer {
                                     let font_size = glyphs
                                         .first()
                                         .map(|(_, s)| *s)
-                                        .unwrap_or(12.0 * view.scale_factor);
+                                        .unwrap_or((12.0 * view.scale_factor) as f32);
                                     let glyph_iter = glyphs.into_iter().map(|(g, _)| g);
 
                                     self.scene
@@ -600,7 +600,7 @@ fn convert_rgb_color(color: &ColorRgb) -> Color {
     )
 }
 
-fn create_brush_from_fill(fill: &Fill, rect: Rect) -> Option<Brush> {
+fn create_brush_from_fill(fill: &Fill, rect: Rect<f32>) -> Option<Brush> {
     match fill {
         Fill::None => None,
         Fill::Color(color) => Some(Brush::Solid(convert_rgba_color(color))),
@@ -608,7 +608,7 @@ fn create_brush_from_fill(fill: &Fill, rect: Rect) -> Option<Brush> {
     }
 }
 
-fn create_gradient_brush(gradient: &Gradient, rect: Rect) -> Option<Brush> {
+fn create_gradient_brush(gradient: &Gradient, rect: Rect<f32>) -> Option<Brush> {
     match gradient {
         Gradient::Linear(linear) => {
             let start_x = rect.x + linear.start.0 * rect.width;

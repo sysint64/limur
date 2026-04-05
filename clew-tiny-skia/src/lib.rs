@@ -217,7 +217,7 @@ impl<D: HasDisplayHandle, W: HasWindowHandle> Renderer for TinySkiaRenderer<D, W
 
 fn render_rect(
     pixmap: &mut PixmapMut,
-    boundary: Rect,
+    boundary: Rect<f32>,
     fill: Option<&Fill>,
     border_radius: Option<&BorderRadius>,
     border: Option<&Border>,
@@ -258,7 +258,7 @@ fn render_rect(
 
 fn render_oval(
     pixmap: &mut PixmapMut,
-    boundary: Rect,
+    boundary: Rect<f32>,
     fill: Option<&Fill>,
     border: Option<&BorderSide>,
     clip_mask: Option<&tiny_skia::Mask>,
@@ -325,7 +325,7 @@ fn render_oval(
     }
 }
 
-fn create_rounded_rect_path(rect: Rect, border_radius: &BorderRadius) -> tiny_skia::Path {
+fn create_rounded_rect_path(rect: Rect<f32>, border_radius: &BorderRadius) -> tiny_skia::Path {
     let mut pb = tiny_skia::PathBuilder::new();
 
     let right = rect.x + rect.width;
@@ -385,7 +385,7 @@ fn create_rounded_rect_path(rect: Rect, border_radius: &BorderRadius) -> tiny_sk
     pb.finish().unwrap()
 }
 
-fn create_paint_from_fill(fill: &Fill, rect: Rect) -> Option<tiny_skia::Paint<'static>> {
+fn create_paint_from_fill(fill: &Fill, rect: Rect<f32>) -> Option<tiny_skia::Paint<'static>> {
     match fill {
         Fill::None => None,
         Fill::Color(color) => {
@@ -409,7 +409,7 @@ fn create_paint_from_fill(fill: &Fill, rect: Rect) -> Option<tiny_skia::Paint<'s
     }
 }
 
-fn create_gradient_shader(gradient: &Gradient, rect: Rect) -> Option<tiny_skia::Shader<'static>> {
+fn create_gradient_shader(gradient: &Gradient, rect: Rect<f32>) -> Option<tiny_skia::Shader<'static>> {
     match gradient {
         Gradient::Linear(linear) => {
             let stops: Vec<tiny_skia::GradientStop> = linear

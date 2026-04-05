@@ -154,7 +154,7 @@ impl VirtualListBuilder {
                     let final_x = relative_x - first_item_offset;
 
                     context.push_layout_command(LayoutCommand::BeginOffset {
-                        offset_x: final_x as f32,
+                        offset_x: final_x,
                         offset_y: 0.,
                     });
                     scope(i).build(context, |ctx| item_build(ctx, i));
@@ -185,7 +185,7 @@ impl VirtualListBuilder {
 
                     context.push_layout_command(LayoutCommand::BeginOffset {
                         offset_x: 0.,
-                        offset_y: final_y as f32,
+                        offset_y: final_y,
                     });
                     scope(i).build(context, |ctx| item_build(ctx, i));
                     context.push_layout_command(LayoutCommand::EndOffset);

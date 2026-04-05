@@ -62,13 +62,13 @@ impl RenderContext<'_, '_> {
 #[derive(Debug, Clone)]
 pub enum RenderCommand {
     Rect {
-        boundary: Rect,
+        boundary: Rect<f32>,
         fill: Option<Fill>,
         border_radius: Option<BorderRadius>,
         border: Option<Border>,
     },
     Oval {
-        boundary: Rect,
+        boundary: Rect<f32>,
         fill: Option<Fill>,
         border: Option<BorderSide>,
     },
@@ -79,12 +79,12 @@ pub enum RenderCommand {
         tint_color: Option<ColorRgba>,
     },
     Svg {
-        boundary: Rect,
+        boundary: Rect<f32>,
         asset_id: &'static str,
         tint_color: Option<ColorRgba>,
     },
     PushClip {
-        rect: Rect,
+        rect: Rect<f32>,
         shape: ClipShape,
     },
     PopClip,
@@ -123,19 +123,25 @@ pub trait PixelExtension<T> {
 
 impl PixelExtension<f32> for f32 {
     fn px(self, ctx: &RenderContext) -> f32 {
-        self * ctx.view.scale_factor
+        (self as f64 * ctx.view.scale_factor) as f32
     }
 }
 
-impl PixelExtension<Vec2> for Vec2 {
-    fn px(self, ctx: &RenderContext) -> Vec2 {
+impl PixelExtension<f32> for f64 {
+    fn px(self, ctx: &RenderContext) -> f32 {
+        (self * ctx.view.scale_factor) as f32
+    }
+}
+
+impl PixelExtension<Vec2<f32>> for Vec2<f64> {
+    fn px(self, ctx: &RenderContext) -> Vec2<f32> {
         Vec2::new(self.x.px(ctx), self.y.px(ctx))
     }
 }
 
-impl PixelExtension<Rect> for Rect {
-    fn px(self, ctx: &RenderContext) -> Rect {
-        self * ctx.view.scale_factor
+impl PixelExtension<Rect<f32>> for Rect<f64> {
+    fn px(self, ctx: &RenderContext) -> Rect<f32> {
+        (self * ctx.view.scale_factor).as_f32()
         // (self * ctx.view.scale_factor).ceil()
     }
 }
@@ -143,10 +149,10 @@ impl PixelExtension<Rect> for Rect {
 impl PixelExtension<BorderRadius> for BorderRadius {
     fn px(self, ctx: &RenderContext) -> BorderRadius {
         BorderRadius {
-            top_left: self.top_left * ctx.view.scale_factor,
-            top_right: self.top_right * ctx.view.scale_factor,
-            bottom_left: self.bottom_left * ctx.view.scale_factor,
-            bottom_right: self.bottom_right * ctx.view.scale_factor,
+            top_left: (self.top_left as f64 * ctx.view.scale_factor) as f32,
+            top_right: (self.top_right as f64 * ctx.view.scale_factor) as f32,
+            bottom_left: (self.bottom_left as f64 * ctx.view.scale_factor) as f32,
+            bottom_right: (self.bottom_right as f64 * ctx.view.scale_factor) as f32,
         }
     }
 }
@@ -154,7 +160,7 @@ impl PixelExtension<BorderRadius> for BorderRadius {
 impl PixelExtension<BorderSide> for BorderSide {
     fn px(self, ctx: &RenderContext) -> BorderSide {
         BorderSide {
-            width: self.width * ctx.view.scale_factor,
+            width: (self.width as f64 * ctx.view.scale_factor) as f32,
             color: self.color,
         }
     }
@@ -351,8 +357,8 @@ pub fn layout_and_render(
             text.with_buffer_mut(|buffer| {
                 buffer.set_size(
                     &mut fonts.font_system,
-                    layout_text.width,
-                    layout_text.height,
+                    layout_text.width.map(|it| it as f32),
+                    layout_text.height.map(|it| it as f32),
                 );
             });
 

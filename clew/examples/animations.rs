@@ -46,10 +46,10 @@ impl ApplicationDelegate<()> for AnimationsApplication {
 }
 
 struct MainWindow {
-    offset_y: ui::Tween<f32>,
-    mx: ui::Damp<f32>,
-    my: ui::Damp<f32>,
-    keyframes: ui::Keyframes<f32>,
+    offset_y: ui::Tween<f64>,
+    mx: ui::Damp<f64>,
+    my: ui::Damp<f64>,
+    keyframes: ui::Keyframes<f64>,
     color1: ui::Keyframes<ui::ColorRgba>,
     color2: ui::Keyframes<ui::ColorRgba>,
     gradient_angle: ui::Tween<f32>,
@@ -60,14 +60,14 @@ impl MainWindow {
     fn new() -> Self {
         let mut gradient_angle = ui::Tween::new(0.0)
             .duration(Duration::from_secs(10))
-            .curve(ui::curves::f32::linear)
+            .curve(ui::curves::linear)
             .repeat(ui::Repeat::Loop);
 
         gradient_angle.tween_to(std::f32::consts::TAU);
 
         // First color in gradient - starts at red, offset by 0
         let mut color1 = ui::Keyframes::new(ui::ColorRgba::from_hex(0xFFEF4444))
-            .default_curve(ui::curves::f32::ease_in_out_sine)
+            .default_curve(ui::curves::ease_in_out_sine)
             .repeat(ui::Repeat::Loop)
             .tween(
                 Duration::from_millis(500),
@@ -104,7 +104,7 @@ impl MainWindow {
 
         // Second color - starts at cyan (offset in the rainbow)
         let mut color2 = ui::Keyframes::new(ui::ColorRgba::from_hex(0xFF06B6D4))
-            .default_curve(ui::curves::f32::ease_in_out_sine)
+            .default_curve(ui::curves::ease_in_out_sine)
             .repeat(ui::Repeat::Loop)
             .tween(
                 Duration::from_millis(300),
@@ -145,11 +145,11 @@ impl MainWindow {
         Self {
             offset_y: ui::Tween::new(0.)
                 .duration(Duration::from_secs(1))
-                .curve(ui::curves::f32::ease_out_elastic),
+                .curve(ui::curves::ease_out_elastic),
             mx: ui::Damp::new(0.).speed(10.),
             my: ui::Damp::new(0.).speed(10.),
             keyframes: ui::Keyframes::new(0.0)
-                .default_curve(ui::curves::f32::ease_in_out_quad)
+                .default_curve(ui::curves::ease_in_out_quad)
                 .repeat(ui::Repeat::Once),
             color1,
             color2,
@@ -160,14 +160,14 @@ impl MainWindow {
 
     fn configure_keyframes_once(&mut self) {
         self.keyframes = ui::Keyframes::new(0.)
-            .default_curve(ui::curves::f32::ease_in_out_quad)
+            .default_curve(ui::curves::ease_in_out_quad)
             .repeat(ui::Repeat::Once)
             .tween(Duration::from_millis(220), -120.0)
             .hold(Duration::from_millis(120), -120.0)
             .tween_with_curve(
                 Duration::from_millis(520),
                 80.0,
-                ui::curves::f32::ease_out_bounce,
+                ui::curves::ease_out_bounce,
             )
             .tween(Duration::from_millis(260), 0.0);
 
@@ -176,7 +176,7 @@ impl MainWindow {
 
     fn configure_keyframes_loop(&mut self) {
         self.keyframes = ui::Keyframes::new(0.)
-            .default_curve(ui::curves::f32::smooth_step)
+            .default_curve(ui::curves::smooth_step)
             .repeat(ui::Repeat::Loop)
             .tween(Duration::from_millis(350), -60.0)
             .tween(Duration::from_millis(350), 60.0)
@@ -187,7 +187,7 @@ impl MainWindow {
 
     fn configure_keyframes_pingpong_6(&mut self) {
         self.keyframes = ui::Keyframes::new(0.)
-            .default_curve(ui::curves::f32::ease_in_out_sine)
+            .default_curve(ui::curves::ease_in_out_sine)
             .repeat(ui::Repeat::PingPongNCycles(6))
             .tween(Duration::from_millis(300), -90.0)
             .tween(Duration::from_millis(300), 90.0)

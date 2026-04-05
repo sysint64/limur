@@ -17,8 +17,8 @@ pub struct UserInput {
     pub mouse_middle_released: bool,
     pub mouse_pressed: bool,
     pub mouse_released: bool,
-    pub mouse_x: f32,
-    pub mouse_y: f32,
+    pub mouse_x: f64,
+    pub mouse_y: f64,
     pub mouse_wheel_delta_x: f32,
     pub mouse_wheel_delta_y: f32,
     pub mouse_left_click_count: u32,
@@ -68,11 +68,11 @@ pub enum TextInputAction {
 pub(crate) struct ClickTracker {
     click_count: u32,
     last_click_time: Option<Instant>,
-    last_click_position: Option<(f32, f32)>,
+    last_click_position: Option<(f64, f64)>,
 }
 
 impl ClickTracker {
-    pub(crate) fn on_click(&mut self, mouse_x: f32, mouse_y: f32, scale_factor: f32) -> u32 {
+    pub(crate) fn on_click(&mut self, mouse_x: f64, mouse_y: f64, scale_factor: f64) -> u32 {
         let now = Instant::now();
         let click_time = Duration::from_millis(500);
 

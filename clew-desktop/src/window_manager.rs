@@ -42,7 +42,7 @@ pub(crate) struct WindowState<'a, App, Event> {
     pub(crate) renderer: Box<dyn Renderer>,
     pub(crate) fill_color: ColorRgb,
     pub(crate) delta_time_timer: Instant,
-    pub(crate) last_ime_rect: Rect,
+    pub(crate) last_ime_rect: Rect<f32>,
     pub(crate) ime_activated: bool,
     pub(crate) ime_reset_needed: bool,
 }
@@ -116,8 +116,8 @@ impl<'a, App, Event> WindowManager<'a, App, Event> {
                     let mut ui_state = UiState::new(View {
                         id: ViewId(self.next_view_id),
                         physical_size: PhysicalSize::new(inner_size.width, inner_size.height),
-                        scale_factor: scale_factor as f32,
                         safe_area: EdgeInsets::ZERO,
+                        scale_factor,
                     });
                     self.next_view_id += 1;
 

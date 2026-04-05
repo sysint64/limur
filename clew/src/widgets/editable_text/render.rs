@@ -12,7 +12,6 @@ use crate::{
 
 use super::{SelectionLineExtension, State};
 
-
 pub fn render(
     ctx: &mut RenderContext,
     placement: &WidgetPlacement,
@@ -31,7 +30,7 @@ pub fn render(
         .expect("Should be initialized during build phase");
 
     let text = ctx.text.get_mut(text_id);
-    let text_size = text.calculate_size();
+    let text_size = text.calculate_size().as_f32();
 
     let truncate_lines = state.truncate_lines;
     let is_focused = state.gesture_detector_response.is_focused();
@@ -85,7 +84,7 @@ pub fn render(
             .shape_as_needed(text_id, &mut ctx.fonts.font_system, false);
     }
 
-    let top = state.vertical_align.position(size.y, text_size.y);
+    let top = state.vertical_align.position_f32(size.y, text_size.y);
     let mut text_direction = if state.multi_line {
         LayoutDirection::LTR
     } else {
@@ -106,13 +105,13 @@ pub fn render(
     state.text_offset = match text_direction {
         LayoutDirection::LTR => Vec2::new(state.scroll_x, scroll_y + top),
         LayoutDirection::RTL => Vec2::new(
-            state.scroll_x + AlignX::Right.position(text_direction, size.x, text_size.x),
+            state.scroll_x + AlignX::Right.position_f32(text_direction, size.x, text_size.x),
             scroll_y + top,
         ),
     };
 
     let text_position = position + state.text_offset;
-    let mut cursor_ime_position = Vec2::ZERO;
+    let mut cursor_ime_position: Vec2<f32> = Vec2::ZERO;
 
     if !calculate_scroll || !is_focused {
         ctx.push_command(
@@ -288,7 +287,7 @@ pub fn render(
 
         let cursor_size = Vec2::new(1.0.px(ctx), 16.0.px(ctx));
         let cursor_rect =
-            Rect::from_pos_size(cursor_position + Vec2::new(0., -2.0.px(ctx)), cursor_size);
+            Rect::from_pos_size(cursor_position + Vec2::new(0., (-2.0).px(ctx)), cursor_size);
 
         view_config.ime_cursor_rect =
             Rect::from_pos_size(cursor_ime_position, Vec2::new(1.0.px(ctx), cursor_size.y));
@@ -448,7 +447,7 @@ fn editable_text_virtual_vertical_scroll(
 }
 
 struct SelectionFragment {
-    rect: Rect,
+    rect: Rect<f32>,
     baseline_y: f32,
 }
 
@@ -515,7 +514,8 @@ fn select_range(
                             };
                         } else if let Some((min, max)) = range_opt.take() {
                             let selection_height = run.line_height + 4.0.px(ctx);
-                            let delta = AlignY::Center.position(run.line_height, selection_height);
+                            let delta =
+                                AlignY::Center.position_f32(run.line_height, selection_height);
 
                             ranges.push(SelectionFragment {
                                 rect: Rect::from_pos_size(
@@ -551,7 +551,7 @@ fn select_range(
                     }
 
                     let selection_height = run.line_height + 4.0.px(ctx);
-                    let delta = AlignY::Center.position(run.line_height, selection_height);
+                    let delta = AlignY::Center.position_f32(run.line_height, selection_height);
 
                     ranges.push(SelectionFragment {
                         rect: Rect::from_pos_size(

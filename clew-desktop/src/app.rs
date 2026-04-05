@@ -115,7 +115,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         broadcast_event_queue,
         broadcast_async_tx,
         event_loop_proxy,
-        window_state.delta_time_timer.elapsed().as_secs_f32(),
+        window_state.delta_time_timer.elapsed().as_secs_f64(),
     );
 
     window_state.delta_time_timer = Instant::now();
@@ -149,7 +149,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
             });
 
         for window in self.window_manager.windows.values_mut() {
-            let scale = window.winit_window.scale_factor() as f32;
+            let scale = window.winit_window.scale_factor();
             window.ui_state.view.scale_factor = scale;
             window
                 .texts
@@ -260,7 +260,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 self.window_manager.request_redraw(window_id);
             }
             winit::event::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                window.ui_state.view.scale_factor = scale_factor as f32;
+                window.ui_state.view.scale_factor = scale_factor;
                 window
                     .texts
                     .update_view(&window.ui_state.view, &mut self.fonts);
@@ -361,8 +361,8 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 // window.winit_window.request_redraw();
                 self.needs_redraw = true;
 
-                window.ui_state.user_input.mouse_x = position.x as f32;
-                window.ui_state.user_input.mouse_y = position.y as f32;
+                window.ui_state.user_input.mouse_x = position.x;
+                window.ui_state.user_input.mouse_y = position.y;
             }
 
             // Focus events
@@ -480,11 +480,13 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                         window.ui_state.user_input.ime_preedit.clear();
                         window.ui_state.user_input.ime_cursor_range = None;
 
-                        window.ui_state
+                        window
+                            .ui_state
                             .user_input
                             .text_input_actions
                             .push(TextInputAction::ImeCommit);
-                        window.ui_state
+                        window
+                            .ui_state
                             .user_input
                             .text_input_actions
                             .push(TextInputAction::Insert);
@@ -494,7 +496,8 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
 
                     // IME enabled/disabled
                     Ime::Enabled => {
-                        window.ui_state
+                        window
+                            .ui_state
                             .user_input
                             .text_input_actions
                             .push(TextInputAction::ImeEnable);
@@ -503,7 +506,8 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                         window.ui_state.user_input.ime_preedit.clear();
                         window.ui_state.user_input.ime_cursor_range = None;
 
-                        window.ui_state
+                        window
+                            .ui_state
                             .user_input
                             .text_input_actions
                             .push(TextInputAction::ImeDisable);

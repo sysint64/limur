@@ -44,8 +44,8 @@ pub enum LayoutCommand {
     },
     EndContainer,
     BeginOffset {
-        offset_x: f32,
-        offset_y: f32,
+        offset_x: f64,
+        offset_y: f64,
     },
     EndOffset,
     Leaf {
@@ -83,20 +83,20 @@ pub enum ContainerKind {
     None,
     Passthrough,
     VStack {
-        spacing: f32,
+        spacing: f64,
         main_axis_alignment: MainAxisAlignment,
         cross_axis_alignment: CrossAxisAlignment,
         rtl_aware: bool,
     },
     HStack {
-        spacing: f32,
+        spacing: f64,
         main_axis_alignment: MainAxisAlignment,
         cross_axis_alignment: CrossAxisAlignment,
         rtl_aware: bool,
     },
     Flow {
-        spacing: f32,
-        run_spacing: f32,
+        spacing: f64,
+        run_spacing: f64,
         rtl_aware: bool,
     },
     ZStack {
@@ -114,10 +114,10 @@ enum StackAxis {
     None,
     Horizontal {
         _rtl_aware: bool,
-        spacing: f32,
+        spacing: f64,
     },
     Vertical {
-        spacing: f32,
+        spacing: f64,
     },
 }
 
@@ -134,13 +134,13 @@ enum StackAxisPass2 {
     },
     Horizontal {
         rtl_aware: bool,
-        spacing: f32,
+        spacing: f64,
         _main_axis_alignment: MainAxisAlignment,
         cross_axis_alignment: CrossAxisAlignment,
     },
     Vertical {
         rtl_aware: bool,
-        spacing: f32,
+        spacing: f64,
         _main_axis_alignment: MainAxisAlignment,
         cross_axis_alignment: CrossAxisAlignment,
     },
@@ -173,19 +173,19 @@ struct Pass2LayoutContainer {
 }
 
 pub(crate) struct TextLayout {
-    pub(crate) width: Option<f32>,
-    pub(crate) height: Option<f32>,
+    pub(crate) width: Option<f64>,
+    pub(crate) height: Option<f64>,
     pub(crate) text_id: TextId,
 }
 
 #[derive(Debug, Clone)]
 pub struct LayoutMeasure {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-    pub wrap_width: f32,
-    pub wrap_height: f32,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub wrap_width: f64,
+    pub wrap_height: f64,
 }
 
 #[derive(Default)]
@@ -447,7 +447,7 @@ impl LayoutState {
         size
     }
 
-    fn add_width(&mut self, width: SizeConstraint, wrap_width: f32, insets: f32) -> f32 {
+    fn add_width(&mut self, width: SizeConstraint, wrap_width: f64, insets: f64) -> f64 {
         let wrap_size = self.wrap_sizes.get_mut(self.parent_container.idx).unwrap();
         let flex_sizes = self.flex_sizes.get_mut(self.parent_container.idx).unwrap();
 
@@ -513,7 +513,7 @@ impl LayoutState {
         }
     }
 
-    fn add_height(&mut self, height: SizeConstraint, wrap_height: f32, insets: f32) -> f32 {
+    fn add_height(&mut self, height: SizeConstraint, wrap_height: f64, insets: f64) -> f64 {
         let wrap_size = self.wrap_sizes.get_mut(self.parent_container.idx).unwrap();
         let flex_sizes = self.flex_sizes.get_mut(self.parent_container.idx).unwrap();
 
@@ -581,7 +581,7 @@ impl LayoutState {
 }
 
 #[inline]
-fn apply_constraints_width(width: f32, constraints: Constraints) -> f32 {
+fn apply_constraints_width(width: f64, constraints: Constraints) -> f64 {
     let mut width = width;
 
     width = width.max(constraints.min_width);
@@ -591,7 +591,7 @@ fn apply_constraints_width(width: f32, constraints: Constraints) -> f32 {
 }
 
 #[inline]
-fn apply_constraints_height(height: f32, constraints: Constraints) -> f32 {
+fn apply_constraints_height(height: f64, constraints: Constraints) -> f64 {
     let mut height = height;
 
     height = height.max(constraints.min_height);
@@ -824,7 +824,7 @@ pub fn layout(
                             .get_svg_tree(asset_id)
                             .unwrap_or_else(|| panic!("SVG with ID = {asset_id} has not found"));
 
-                        Vec2::new(tree.size().width(), tree.size().height())
+                        Vec2::new(tree.size().width() as f64, tree.size().height() as f64)
                     }
                 };
                 // };
@@ -897,9 +897,9 @@ pub fn layout(
                     let flex_sum_x = layout_state.flex_sum_x[container_idx].max(1.);
                     let available_width =
                         (container_size_resized.x - container_flex_size.x + spacing).max(0.);
-                    let per_flex = available_width / flex_sum_x;
+                    let per_flex = available_width / flex_sum_x as f64;
 
-                    flex_x * per_flex
+                    flex_x as f64 * per_flex
                 }
                 StackAxisPass2::Vertical { .. } => container_size_resized.x,
             };
@@ -923,9 +923,9 @@ pub fn layout(
                     let flex_sum_y = layout_state.flex_sum_y[container_idx].max(1.);
                     let available_height =
                         (container_size_resized.y - container_flex_size.y + spacing).max(0.);
-                    let per_flex = available_height / flex_sum_y;
+                    let per_flex = available_height / flex_sum_y as f64;
 
-                    flex_y * per_flex
+                    flex_y as f64 * per_flex
                 }
             };
 
@@ -1094,8 +1094,8 @@ pub fn layout(
                 };
 
                 current_position += Vec2::new(
-                    align_x.position(layout_state.layout_direction, boundary.width, widget_size.x),
-                    align_y.position(boundary.height, widget_size.y),
+                    align_x.position_f64(layout_state.layout_direction, boundary.width, widget_size.x),
+                    align_y.position_f64(boundary.height, widget_size.y),
                 );
 
                 let current_container_position = current_position + offset;
@@ -1392,12 +1392,12 @@ pub fn layout(
                     position
                         + Vec2::new(margin.left, margin.right)
                         + Vec2::new(
-                            align_x.position(
+                            align_x.position_f64(
                                 layout_state.layout_direction,
                                 boundary.width,
                                 widget_size.x,
                             ),
-                            align_y.position(boundary.height, widget_size.y),
+                            align_y.position_f64(boundary.height, widget_size.y),
                         )
                         + offset,
                     widget_size - Vec2::new(margin.horizontal(), margin.vertical()),
@@ -1469,7 +1469,7 @@ pub fn layout(
                         width: if size.width.constrained() && *derive_width {
                             Some(rect.width * view.scale_factor)
                         } else if *derive_width {
-                            if constraints.max_width != f32::INFINITY {
+                            if constraints.max_width != f64::INFINITY {
                                 Some(
                                     (constraints.max_width - padding.horizontal())
                                         * view.scale_factor,
@@ -1483,7 +1483,7 @@ pub fn layout(
                         height: if size.height.constrained() && *derive_height {
                             Some(rect.height * view.scale_factor)
                         } else if *derive_height {
-                            if constraints.max_height != f32::INFINITY {
+                            if constraints.max_height != f64::INFINITY {
                                 Some(
                                     (constraints.max_height - padding.vertical())
                                         * view.scale_factor,

@@ -4,13 +4,13 @@ use crate::{ColorOkLab, ColorRgb, ColorRgba, EdgeInsets, Value};
 
 #[derive(Debug, Clone)]
 pub struct Tween<V> {
-    t: f32,
+    t: f64,
     start_value: V,
     current_value: V,
     target_value: V,
     status: AnimationStatus,
-    duration: f32,
-    curve_fn: fn(t: f32) -> f32,
+    duration: f64,
+    curve_fn: fn(t: f64) -> f64,
     repeat: Repeat,
     cycles_done: u32,
     reverse: bool,
@@ -18,12 +18,12 @@ pub struct Tween<V> {
 
 #[derive(Debug, Clone)]
 pub struct Damp<V> {
-    speed: f32,
+    speed: f64,
     current_value: V,
     target_value: V,
     status: AnimationStatus,
-    threshold: f32,
-    curve_fn: fn(t: f32) -> f32,
+    threshold: f64,
+    curve_fn: fn(t: f64) -> f64,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -35,40 +35,40 @@ pub enum AnimationStatus {
 }
 
 pub trait Animation {
-    fn step(&mut self, delta_time: f32);
+    fn step(&mut self, delta_time: f64);
 
     fn in_progress(&self) -> bool;
 }
 
 pub trait Lerp {
-    fn lerp(self, to: Self, t: f32) -> Self;
+    fn lerp(self, to: Self, t: f64) -> Self;
 }
 
 impl Lerp for f32 {
-    fn lerp(self, to: f32, t: f32) -> Self {
-        (self * (1.0 - t)) + (to * t)
+    fn lerp(self, to: f32, t: f64) -> Self {
+        ((self as f64 * (1.0 - t)) + (to as f64 * t)) as f32
     }
 }
 
 impl Lerp for f64 {
-    fn lerp(self, to: f64, t: f32) -> Self {
-        (self * (1.0 - t) as f64) + (to * t as f64)
+    fn lerp(self, to: f64, t: f64) -> Self {
+        (self * (1.0 - t)) + (to * t)
     }
 }
 
 impl Lerp for EdgeInsets {
-    fn lerp(self, to: Self, t: f32) -> Self {
+    fn lerp(self, to: Self, t: f64) -> Self {
         EdgeInsets {
-            top: f32::lerp(self.top, to.top, t),
-            left: f32::lerp(self.left, to.left, t),
-            right: f32::lerp(self.right, to.right, t),
-            bottom: f32::lerp(self.bottom, to.bottom, t),
+            top: f64::lerp(self.top, to.top, t),
+            left: f64::lerp(self.left, to.left, t),
+            right: f64::lerp(self.right, to.right, t),
+            bottom: f64::lerp(self.bottom, to.bottom, t),
         }
     }
 }
 
 impl Lerp for ColorOkLab {
-    fn lerp(self, to: Self, t: f32) -> Self {
+    fn lerp(self, to: Self, t: f64) -> Self {
         ColorOkLab {
             l: f64::lerp(self.l, to.l, t),
             a: f64::lerp(self.a, to.a, t),
@@ -78,7 +78,7 @@ impl Lerp for ColorOkLab {
 }
 
 impl Lerp for ColorRgb {
-    fn lerp(self, to: Self, t: f32) -> Self {
+    fn lerp(self, to: Self, t: f64) -> Self {
         if t == 0. {
             return self;
         }
@@ -96,7 +96,7 @@ impl Lerp for ColorRgb {
 }
 
 impl Lerp for ColorRgba {
-    fn lerp(self, to: Self, t: f32) -> Self {
+    fn lerp(self, to: Self, t: f64) -> Self {
         if t == 0. {
             return self;
         }
@@ -127,8 +127,8 @@ where
             current_value: V::default(),
             target_value: V::default(),
             status: AnimationStatus::Idle,
-            curve_fn: curves::f32::ease_out_quad,
-            duration: Duration::from_millis(300).as_secs_f32(),
+            curve_fn: curves::ease_out_quad,
+            duration: Duration::from_millis(300).as_secs_f64(),
             repeat: Repeat::Once,
             cycles_done: 0,
             reverse: false,
@@ -147,8 +147,8 @@ where
             current_value: value.clone(),
             target_value: value,
             status: AnimationStatus::Idle,
-            curve_fn: curves::f32::ease_out_quad,
-            duration: Duration::from_millis(300).as_secs_f32(),
+            curve_fn: curves::ease_out_quad,
+            duration: Duration::from_millis(300).as_secs_f64(),
             repeat: Repeat::Once,
             cycles_done: 0,
             reverse: false,
@@ -162,12 +162,12 @@ where
     }
 
     pub fn duration(mut self, duration: Duration) -> Self {
-        self.duration = duration.as_secs_f32();
+        self.duration = duration.as_secs_f64();
 
         self
     }
 
-    pub fn curve(mut self, curve_fn: fn(t: f32) -> f32) -> Self {
+    pub fn curve(mut self, curve_fn: fn(t: f64) -> f64) -> Self {
         self.curve_fn = curve_fn;
 
         self
@@ -207,7 +207,7 @@ where
         }
     }
 
-    pub fn t(&self) -> f32 {
+    pub fn t(&self) -> f64 {
         self.t
     }
 
@@ -235,7 +235,7 @@ impl<V> Animation for Tween<V>
 where
     V: Lerp + Clone,
 {
-    fn step(&mut self, delta_time: f32) {
+    fn step(&mut self, delta_time: f64) {
         if self.status == AnimationStatus::Ended {
             self.status = AnimationStatus::Idle;
             return;
@@ -315,23 +315,23 @@ where
             speed: 10.,
             current_value: value.clone(),
             target_value: value,
-            curve_fn: decay_curves::f32::default,
+            curve_fn: decay_curves::default,
             status: AnimationStatus::Idle,
             threshold: 0.01,
         }
     }
 
-    pub fn speed(mut self, speed: f32) -> Self {
+    pub fn speed(mut self, speed: f64) -> Self {
         self.speed = speed;
         self
     }
 
-    pub fn curve(mut self, curve_fn: fn(t: f32) -> f32) -> Self {
+    pub fn curve(mut self, curve_fn: fn(t: f64) -> f64) -> Self {
         self.curve_fn = curve_fn;
         self
     }
 
-    pub fn threshold(mut self, threshold: f32) -> Self {
+    pub fn threshold(mut self, threshold: f64) -> Self {
         self.threshold = threshold;
         self
     }
@@ -390,7 +390,7 @@ impl<V> Animation for Damp<V>
 where
     V: Lerp + Clone + Difference,
 {
-    fn step(&mut self, delta_time: f32) {
+    fn step(&mut self, delta_time: f64) {
         if self.status == AnimationStatus::Ended {
             self.status = AnimationStatus::Idle;
             return;
@@ -418,17 +418,23 @@ where
 }
 
 pub trait Difference {
-    fn difference(&self, other: &Self) -> f32;
+    fn difference(&self, other: &Self) -> f64;
 }
 
 impl Difference for f32 {
-    fn difference(&self, other: &Self) -> f32 {
+    fn difference(&self, other: &Self) -> f64 {
+        (self - other).abs() as f64
+    }
+}
+
+impl Difference for f64 {
+    fn difference(&self, other: &Self) -> f64 {
         (self - other).abs()
     }
 }
 
 impl Difference for EdgeInsets {
-    fn difference(&self, other: &Self) -> f32 {
+    fn difference(&self, other: &Self) -> f64 {
         (self.top - other.top).abs()
             + (self.left - other.left).abs()
             + (self.right - other.right).abs()
@@ -437,304 +443,153 @@ impl Difference for EdgeInsets {
 }
 
 impl Difference for ColorOkLab {
-    fn difference(&self, other: &Self) -> f32 {
-        (self.l - other.l).abs() as f32
-            + (self.a - other.a).abs() as f32
-            + (self.b - other.b).abs() as f32
+    fn difference(&self, other: &Self) -> f64 {
+        (self.l - other.l).abs() + (self.a - other.a).abs() + (self.b - other.b).abs()
     }
 }
 
 pub mod curves {
-    pub mod f32 {
-        // Linear
-        pub fn linear(t: f32) -> f32 {
-            t
-        }
+    // Linear
+    pub fn linear(t: f64) -> f64 {
+        t
+    }
 
-        pub fn smooth_step(t: f32) -> f32 {
-            t * t * (3. - 2. * t)
-        }
+    pub fn smooth_step(t: f64) -> f64 {
+        t * t * (3. - 2. * t)
+    }
 
-        pub fn smoother_step(t: f32) -> f32 {
-            t * t * t * (t * (6. * t - 15.) + 10.)
-        }
+    pub fn smoother_step(t: f64) -> f64 {
+        t * t * t * (t * (6. * t - 15.) + 10.)
+    }
 
-        // Quadratic
-        pub fn ease_in_quad(t: f32) -> f32 {
-            t * t
-        }
+    // Quadratic
+    pub fn ease_in_quad(t: f64) -> f64 {
+        t * t
+    }
 
-        pub fn ease_out_quad(t: f32) -> f32 {
-            1. - (1. - t) * (1. - t)
-        }
+    pub fn ease_out_quad(t: f64) -> f64 {
+        1. - (1. - t) * (1. - t)
+    }
 
-        pub fn ease_in_out_quad(t: f32) -> f32 {
-            if t < 0.5 {
-                2. * t * t
-            } else {
-                1. - (-2. * t + 2.).powi(2) / 2.
-            }
-        }
-
-        // Cubic
-        pub fn ease_in_cubic(t: f32) -> f32 {
-            t * t * t
-        }
-
-        pub fn ease_out_cubic(t: f32) -> f32 {
-            1. - (1. - t).powi(3)
-        }
-
-        pub fn ease_in_out_cubic(t: f32) -> f32 {
-            if t < 0.5 {
-                4. * t * t * t
-            } else {
-                1. - (-2. * t + 2.).powi(3) / 2.
-            }
-        }
-
-        // Sine
-        pub fn ease_in_sine(t: f32) -> f32 {
-            1. - f32::cos(t * std::f32::consts::FRAC_PI_2)
-        }
-
-        pub fn ease_out_sine(t: f32) -> f32 {
-            f32::sin(t * std::f32::consts::FRAC_PI_2)
-        }
-
-        pub fn ease_in_out_sine(t: f32) -> f32 {
-            -(f32::cos(std::f32::consts::PI * t) - 1.) / 2.
-        }
-
-        // Exponential
-        pub fn ease_in_expo(t: f32) -> f32 {
-            if t == 0. {
-                0.
-            } else {
-                f32::powf(2., 10. * t - 10.)
-            }
-        }
-
-        pub fn ease_out_expo(t: f32) -> f32 {
-            if t == 1. {
-                1.
-            } else {
-                1. - f32::powf(2., -10. * t)
-            }
-        }
-
-        // Back (overshoot)
-        pub fn ease_in_back(t: f32) -> f32 {
-            let c1 = 1.70158;
-            let c3 = c1 + 1.;
-            c3 * t * t * t - c1 * t * t
-        }
-
-        pub fn ease_out_back(t: f32) -> f32 {
-            let c1 = 1.70158;
-            let c3 = c1 + 1.;
-            1. + c3 * (t - 1.).powi(3) + c1 * (t - 1.).powi(2)
-        }
-
-        // Elastic
-        pub fn ease_out_elastic(t: f32) -> f32 {
-            if t == 0. {
-                0.
-            } else if t == 1. {
-                1.
-            } else {
-                let c4 = (2. * std::f32::consts::PI) / 3.;
-                f32::powf(2., -10. * t) * f32::sin((t * 10. - 0.75) * c4) + 1.
-            }
-        }
-
-        // Bounce
-        pub fn ease_out_bounce(t: f32) -> f32 {
-            let n1 = 7.5625;
-            let d1 = 2.75;
-
-            if t < 1. / d1 {
-                n1 * t * t
-            } else if t < 2. / d1 {
-                let t = t - 1.5 / d1;
-                n1 * t * t + 0.75
-            } else if t < 2.5 / d1 {
-                let t = t - 2.25 / d1;
-                n1 * t * t + 0.9375
-            } else {
-                let t = t - 2.625 / d1;
-                n1 * t * t + 0.984375
-            }
+    pub fn ease_in_out_quad(t: f64) -> f64 {
+        if t < 0.5 {
+            2. * t * t
+        } else {
+            1. - (-2. * t + 2.).powi(2) / 2.
         }
     }
 
-    pub mod f64 {
-        // Linear
-        pub fn linear(t: f64) -> f64 {
-            t
+    // Cubic
+    pub fn ease_in_cubic(t: f64) -> f64 {
+        t * t * t
+    }
+
+    pub fn ease_out_cubic(t: f64) -> f64 {
+        1. - (1. - t).powi(3)
+    }
+
+    pub fn ease_in_out_cubic(t: f64) -> f64 {
+        if t < 0.5 {
+            4. * t * t * t
+        } else {
+            1. - (-2. * t + 2.).powi(3) / 2.
         }
+    }
 
-        pub fn smooth_step(t: f64) -> f64 {
-            t * t * (3. - 2. * t)
+    // Sine
+    pub fn ease_in_sine(t: f64) -> f64 {
+        1. - f64::cos(t * std::f64::consts::FRAC_PI_2)
+    }
+
+    pub fn ease_out_sine(t: f64) -> f64 {
+        f64::sin(t * std::f64::consts::FRAC_PI_2)
+    }
+
+    pub fn ease_in_out_sine(t: f64) -> f64 {
+        -(f64::cos(std::f64::consts::PI * t) - 1.) / 2.
+    }
+
+    // Exponential
+    pub fn ease_in_expo(t: f64) -> f64 {
+        if t == 0. {
+            0.
+        } else {
+            f64::powf(2., 10. * t - 10.)
         }
+    }
 
-        pub fn smoother_step(t: f64) -> f64 {
-            t * t * t * (t * (6. * t - 15.) + 10.)
+    pub fn ease_out_expo(t: f64) -> f64 {
+        if t == 1. {
+            1.
+        } else {
+            1. - f64::powf(2., -10. * t)
         }
+    }
 
-        // Quadratic
-        pub fn ease_in_quad(t: f64) -> f64 {
-            t * t
+    // Back (overshoot)
+    pub fn ease_in_back(t: f64) -> f64 {
+        let c1 = 1.70158;
+        let c3 = c1 + 1.;
+        c3 * t * t * t - c1 * t * t
+    }
+
+    pub fn ease_out_back(t: f64) -> f64 {
+        let c1 = 1.70158;
+        let c3 = c1 + 1.;
+        1. + c3 * (t - 1.).powi(3) + c1 * (t - 1.).powi(2)
+    }
+
+    // Elastic
+    pub fn ease_out_elastic(t: f64) -> f64 {
+        if t == 0. {
+            0.
+        } else if t == 1. {
+            1.
+        } else {
+            let c4 = (2. * std::f64::consts::PI) / 3.;
+            f64::powf(2., -10. * t) * f64::sin((t * 10. - 0.75) * c4) + 1.
         }
+    }
 
-        pub fn ease_out_quad(t: f64) -> f64 {
-            1. - (1. - t) * (1. - t)
-        }
+    // Bounce
+    pub fn ease_out_bounce(t: f64) -> f64 {
+        let n1 = 7.5625;
+        let d1 = 2.75;
 
-        pub fn ease_in_out_quad(t: f64) -> f64 {
-            if t < 0.5 {
-                2. * t * t
-            } else {
-                1. - (-2. * t + 2.).powi(2) / 2.
-            }
-        }
-
-        // Cubic
-        pub fn ease_in_cubic(t: f64) -> f64 {
-            t * t * t
-        }
-
-        pub fn ease_out_cubic(t: f64) -> f64 {
-            1. - (1. - t).powi(3)
-        }
-
-        pub fn ease_in_out_cubic(t: f64) -> f64 {
-            if t < 0.5 {
-                4. * t * t * t
-            } else {
-                1. - (-2. * t + 2.).powi(3) / 2.
-            }
-        }
-
-        // Sine
-        pub fn ease_in_sine(t: f64) -> f64 {
-            1. - f64::cos(t * std::f64::consts::FRAC_PI_2)
-        }
-
-        pub fn ease_out_sine(t: f64) -> f64 {
-            f64::sin(t * std::f64::consts::FRAC_PI_2)
-        }
-
-        pub fn ease_in_out_sine(t: f64) -> f64 {
-            -(f64::cos(std::f64::consts::PI * t) - 1.) / 2.
-        }
-
-        // Exponential
-        pub fn ease_in_expo(t: f64) -> f64 {
-            if t == 0. {
-                0.
-            } else {
-                f64::powf(2., 10. * t - 10.)
-            }
-        }
-
-        pub fn ease_out_expo(t: f64) -> f64 {
-            if t == 1. {
-                1.
-            } else {
-                1. - f64::powf(2., -10. * t)
-            }
-        }
-
-        // Back (overshoot)
-        pub fn ease_in_back(t: f64) -> f64 {
-            let c1 = 1.70158;
-            let c3 = c1 + 1.;
-            c3 * t * t * t - c1 * t * t
-        }
-
-        pub fn ease_out_back(t: f64) -> f64 {
-            let c1 = 1.70158;
-            let c3 = c1 + 1.;
-            1. + c3 * (t - 1.).powi(3) + c1 * (t - 1.).powi(2)
-        }
-
-        // Elastic
-        pub fn ease_out_elastic(t: f64) -> f64 {
-            if t == 0. {
-                0.
-            } else if t == 1. {
-                1.
-            } else {
-                let c4 = (2. * std::f64::consts::PI) / 3.;
-                f64::powf(2., -10. * t) * f64::sin((t * 10. - 0.75) * c4) + 1.
-            }
-        }
-
-        // Bounce
-        pub fn ease_out_bounce(t: f64) -> f64 {
-            let n1 = 7.5625;
-            let d1 = 2.75;
-
-            if t < 1. / d1 {
-                n1 * t * t
-            } else if t < 2. / d1 {
-                let t = t - 1.5 / d1;
-                n1 * t * t + 0.75
-            } else if t < 2.5 / d1 {
-                let t = t - 2.25 / d1;
-                n1 * t * t + 0.9375
-            } else {
-                let t = t - 2.625 / d1;
-                n1 * t * t + 0.984375
-            }
+        if t < 1. / d1 {
+            n1 * t * t
+        } else if t < 2. / d1 {
+            let t = t - 1.5 / d1;
+            n1 * t * t + 0.75
+        } else if t < 2.5 / d1 {
+            let t = t - 2.25 / d1;
+            n1 * t * t + 0.9375
+        } else {
+            let t = t - 2.625 / d1;
+            n1 * t * t + 0.984375
         }
     }
 }
 
 pub mod decay_curves {
-    pub mod f32 {
-        // Slower decay
-        pub fn slow(t: f32) -> f32 {
-            1. - f32::powf(0.7, t)
-        }
-
-        // Default
-        pub fn default(t: f32) -> f32 {
-            1. - f32::powf(0.5, t)
-        }
-
-        // Faster decay
-        pub fn fast(t: f32) -> f32 {
-            1. - f32::powf(0.2, t)
-        }
-
-        // Very snappy
-        pub fn snappy(t: f32) -> f32 {
-            1. - f32::powf(0.05, t)
-        }
+    // Slower decay
+    pub fn slow(t: f64) -> f64 {
+        1. - f64::powf(0.7, t)
     }
 
-    pub mod f64 {
-        // Slower decay
-        pub fn slow(t: f64) -> f64 {
-            1. - f64::powf(0.7, t)
-        }
+    // Default
+    pub fn default(t: f64) -> f64 {
+        1. - f64::powf(0.5, t)
+    }
 
-        // Default
-        pub fn default(t: f64) -> f64 {
-            1. - f64::powf(0.5, t)
-        }
+    // Faster decay
+    pub fn fast(t: f64) -> f64 {
+        1. - f64::powf(0.2, t)
+    }
 
-        // Faster decay
-        pub fn fast(t: f64) -> f64 {
-            1. - f64::powf(0.2, t)
-        }
-
-        // Very snappy
-        pub fn snappy(t: f64) -> f64 {
-            1. - f64::powf(0.05, t)
-        }
+    // Very snappy
+    pub fn snappy(t: f64) -> f64 {
+        1. - f64::powf(0.05, t)
     }
 }
 
@@ -779,7 +634,7 @@ pub enum FrameKind {
     Hold,
     /// Interpolate from previous value to this value over `duration`.
     /// If `curve` is None, uses the Keyframes' default curve.
-    Tween { curve: Option<fn(f32) -> f32> },
+    Tween { curve: Option<fn(f64) -> f64> },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -795,11 +650,11 @@ pub struct Keyframe<V> {
 pub struct Keyframes<V> {
     frames: Vec<Keyframe<V>>,
     /// Seconds from start, within the current cycle (0..=total_cycle_seconds)
-    elapsed: f32,
+    elapsed: f64,
     /// Cached total duration of one forward cycle
-    total: f32,
+    total: f64,
     /// Default curve used for Tween segments when keyframe curve is None
-    default_curve: fn(f32) -> f32,
+    default_curve: fn(f64) -> f64,
 
     repeat: Repeat,
     cycles_done: u32,
@@ -825,7 +680,7 @@ where
             frames,
             elapsed: 0.0,
             total: 0.0,
-            default_curve: curves::f32::ease_out_quad,
+            default_curve: curves::ease_out_quad,
 
             repeat: Repeat::Once,
             cycles_done: 0,
@@ -837,7 +692,7 @@ where
     }
 
     /// Set the default curve used for Tween segments when a keyframe doesn't specify a curve.
-    pub fn default_curve(mut self, curve: fn(f32) -> f32) -> Self {
+    pub fn default_curve(mut self, curve: fn(f64) -> f64) -> Self {
         self.default_curve = curve;
 
         self
@@ -859,7 +714,7 @@ where
         self
     }
 
-    pub fn tween_with_curve(mut self, duration: Duration, value: V, curve: fn(f32) -> f32) -> Self {
+    pub fn tween_with_curve(mut self, duration: Duration, value: V, curve: fn(f64) -> f64) -> Self {
         self.frames.push(Keyframe {
             duration,
             value,
@@ -923,7 +778,7 @@ where
             .frames
             .iter()
             .skip(1)
-            .map(|k| k.duration.as_secs_f32())
+            .map(|k| k.duration.as_secs_f64())
             .sum();
 
         // avoid division-by-zero; if total==0, we'll just snap to last frame
@@ -968,7 +823,7 @@ where
     }
 
     /// Evaluate the value at local time `t` in [0..=total] for the "forward" direction.
-    fn eval_forward(&self, mut t: f32) -> V
+    fn eval_forward(&self, mut t: f64) -> V
     where
         V: Lerp,
     {
@@ -991,7 +846,7 @@ where
 
         for i in 1..n {
             let seg = self.frames[i].clone();
-            let seg_len = seg.duration.as_secs_f32().max(0.0);
+            let seg_len = seg.duration.as_secs_f64().max(0.0);
             let seg_end_time = seg_start_time + seg_len;
 
             if t <= seg_end_time || i == n - 1 {
@@ -1029,7 +884,7 @@ where
         self.frames.last().unwrap().value.clone()
     }
 
-    fn eval(&self, t: f32) -> V
+    fn eval(&self, t: f64) -> V
     where
         V: Lerp,
     {
@@ -1057,7 +912,7 @@ impl<V> Animation for Keyframes<V>
 where
     V: Lerp + Clone,
 {
-    fn step(&mut self, delta_time: f32) {
+    fn step(&mut self, delta_time: f64) {
         if self.status == AnimationStatus::Ended {
             self.status = AnimationStatus::Idle;
 

@@ -196,8 +196,8 @@ impl<'buffer> Text<'buffer> {
         let buffer = cosmic_text::Buffer::new(
             &mut font_resources.font_system,
             cosmic_text::Metrics::new(
-                font_size * view.scale_factor,
-                line_height * view.scale_factor,
+                (font_size as f64 * view.scale_factor) as f32,
+                (line_height as f64 * view.scale_factor) as f32,
             ),
         );
 
@@ -220,8 +220,8 @@ impl<'buffer> Text<'buffer> {
         let buffer = cosmic_text::Buffer::new(
             &mut font_resources.font_system,
             cosmic_text::Metrics::new(
-                font_size * view.scale_factor,
-                line_height * view.scale_factor,
+                (font_size as f64 * view.scale_factor) as f32,
+                (line_height as f64 * view.scale_factor) as f32,
             ),
         );
 
@@ -247,8 +247,8 @@ impl<'buffer> Text<'buffer> {
             buffer.set_metrics(
                 &mut font_resources.font_system,
                 cosmic_text::Metrics::new(
-                    font_size * view.scale_factor,
-                    line_height * view.scale_factor,
+                    (font_size as f64 * view.scale_factor) as f32,
+                    (line_height as f64 * view.scale_factor) as f32,
                 ),
             );
         });
@@ -262,8 +262,8 @@ impl<'buffer> Text<'buffer> {
             buffer.set_metrics(
                 &mut font_resources.font_system,
                 cosmic_text::Metrics::new(
-                    font_size * view.scale_factor,
-                    line_height * view.scale_factor,
+                    (font_size as f64 * view.scale_factor) as f32,
+                    (line_height as f64 * view.scale_factor) as f32,
                 ),
             );
         });
@@ -305,7 +305,7 @@ impl<'buffer> Text<'buffer> {
             }
         });
 
-        Vec2::new(max_width, height)
+        Vec2::new(max_width as f64, height as f64)
     }
 
     pub fn set_text(&mut self, font_resources: &mut FontResources, text: &str) {

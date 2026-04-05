@@ -73,7 +73,7 @@ pub(crate) struct WidgetsStates {
 
 #[derive(Default)]
 pub struct ViewConfig {
-    pub ime_cursor_rect: Rect,
+    pub ime_cursor_rect: Rect<f32>,
     pub should_use_wide_space: bool,
     pub layout_direction: LayoutDirection,
     pub should_update_cursor_each_frame: bool,

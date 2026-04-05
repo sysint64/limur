@@ -11,7 +11,7 @@ use super::{FrameBuilder, builder::BuildContext};
 pub struct HStackBuilder {
     frame: FrameBuilder,
     rtl_aware: bool,
-    spacing: f32,
+    spacing: f64,
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,
 }
@@ -23,7 +23,7 @@ impl HStackBuilder {
         self
     }
 
-    pub fn spacing(mut self, spacing: f32) -> Self {
+    pub fn spacing(mut self, spacing: f64) -> Self {
         self.spacing = spacing;
 
         self

@@ -115,8 +115,8 @@ pub fn button(text: &str) -> ButtonBuilder<'_> {
         frame: FrameBuilder::new().constraints(Constraints {
             min_width: 20.,
             min_height: 0.,
-            max_width: f32::INFINITY,
-            max_height: f32::INFINITY,
+            max_width: f64::INFINITY,
+            max_height: f64::INFINITY,
         }),
         text,
     }
@@ -165,8 +165,7 @@ impl StatefulWidget for HorizontalScrollBar {
                         } else if gesture.drag_state == DragState::Start {
                             self.last_offset = self.offset;
                         } else {
-                            self.offset = self.last_offset + gesture.drag_x as f64
-                                - gesture.drag_start_x as f64;
+                            self.offset = self.last_offset + gesture.drag_x - gesture.drag_start_x;
                             self.offset = self.offset.clamp(0., scroll_area_width - bar_width);
 
                             let progress_x = self.offset / (scroll_area_width - bar_width);
@@ -183,7 +182,7 @@ impl StatefulWidget for HorizontalScrollBar {
                             }))
                             .width(bar_width)
                             .height(if gesture.is_active() { 8. } else { 4. })
-                            .offset_x(self.offset as f32)
+                            .offset_x(self.offset)
                             .padding(if gesture.is_active() {
                                 EdgeInsets::symmetric(8., 6.)
                             } else {
@@ -271,8 +270,7 @@ impl StatefulWidget for VerticalScrollBar {
                         } else if gesture.drag_state == DragState::Start {
                             self.last_offset = self.offset;
                         } else {
-                            self.offset = self.last_offset + gesture.drag_y as f64
-                                - gesture.drag_start_y as f64;
+                            self.offset = self.last_offset + gesture.drag_y - gesture.drag_start_y;
                             self.offset = self.offset.clamp(0., scroll_area_height - bar_height);
 
                             let progress_y = self.offset / (scroll_area_height - bar_height);
@@ -289,7 +287,7 @@ impl StatefulWidget for VerticalScrollBar {
                             }))
                             .width(if gesture.is_active() { 8. } else { 4. })
                             .height(bar_height)
-                            .offset_y(self.offset as f32)
+                            .offset_y(self.offset)
                             .padding(if gesture.is_active() {
                                 EdgeInsets::symmetric(6., 8.)
                             } else {

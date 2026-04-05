@@ -77,7 +77,7 @@ pub struct BuildContext<'a, 'b> {
     pub(crate) phase_allocator: &'a bumpalo::Bump,
     pub(crate) input: &'a mut UserInput,
     pub(crate) interaction: &'a mut InteractionState,
-    pub(crate) delta_time: f32,
+    pub(crate) delta_time: f64,
     pub(crate) animations_stepped_this_frame: &'a mut FxHashSet<usize>,
     pub(crate) child_index: u32,
     pub(crate) child_index_stack: Vec<u32>,
@@ -120,7 +120,7 @@ impl<'a, 'b> BuildContext<'a, 'b> {
         broadcast_event_queue: &'a mut Vec<Arc<dyn Any + Send>>,
         broadcast_async_tx: &'a mut tokio::sync::mpsc::UnboundedSender<Box<dyn Any + Send>>,
         event_loop_proxy: Arc<dyn ApplicationEventLoopProxy>,
-        delta_time: f32,
+        delta_time: f64,
     ) -> BuildContext<'a, 'b> {
         ui_state.animations_stepped_this_frame.clear();
 
@@ -500,22 +500,22 @@ macro_rules! impl_size_methods {
             self
         }
 
-        pub fn max_width(mut self, value: f32) -> Self {
+        pub fn max_width(mut self, value: f64) -> Self {
             self.constraints.max_width = value;
             self
         }
 
-        pub fn max_height(mut self, value: f32) -> Self {
+        pub fn max_height(mut self, value: f64) -> Self {
             self.constraints.max_height = value;
             self
         }
 
-        pub fn min_width(mut self, value: f32) -> Self {
+        pub fn min_width(mut self, value: f64) -> Self {
             self.constraints.min_width = value;
             self
         }
 
-        pub fn min_height(mut self, value: f32) -> Self {
+        pub fn min_height(mut self, value: f64) -> Self {
             self.constraints.min_height = value;
             self
         }
@@ -547,12 +547,12 @@ macro_rules! impl_width_methods {
             self
         }
 
-        pub fn max_width(mut self, value: f32) -> Self {
+        pub fn max_width(mut self, value: f64) -> Self {
             self.constraints.max_width = value;
             self
         }
 
-        pub fn min_width(mut self, value: f32) -> Self {
+        pub fn min_width(mut self, value: f64) -> Self {
             self.constraints.min_width = value;
             self
         }
@@ -658,7 +658,7 @@ pub trait WidgetBuilder {
         self
     }
 
-    fn max_width(mut self, value: f32) -> Self
+    fn max_width(mut self, value: f64) -> Self
     where
         Self: Sized,
     {
@@ -667,7 +667,7 @@ pub trait WidgetBuilder {
         self
     }
 
-    fn max_height(mut self, value: f32) -> Self
+    fn max_height(mut self, value: f64) -> Self
     where
         Self: Sized,
     {
@@ -676,7 +676,7 @@ pub trait WidgetBuilder {
         self
     }
 
-    fn min_width(mut self, value: f32) -> Self
+    fn min_width(mut self, value: f64) -> Self
     where
         Self: Sized,
     {
@@ -685,7 +685,7 @@ pub trait WidgetBuilder {
         self
     }
 
-    fn min_height(mut self, value: f32) -> Self
+    fn min_height(mut self, value: f64) -> Self
     where
         Self: Sized,
     {
@@ -703,7 +703,7 @@ pub trait WidgetBuilder {
         self
     }
 
-    fn offset(mut self, x: f32, y: f32) -> Self
+    fn offset(mut self, x: f64, y: f64) -> Self
     where
         Self: Sized,
     {
@@ -713,7 +713,7 @@ pub trait WidgetBuilder {
         self
     }
 
-    fn offset_x(mut self, offset: f32) -> Self
+    fn offset_x(mut self, offset: f64) -> Self
     where
         Self: Sized,
     {
@@ -722,7 +722,7 @@ pub trait WidgetBuilder {
         self
     }
 
-    fn offset_y(mut self, offset: f32) -> Self
+    fn offset_y(mut self, offset: f64) -> Self
     where
         Self: Sized,
     {

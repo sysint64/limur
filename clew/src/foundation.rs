@@ -71,7 +71,7 @@ pub enum SizeConstraint {
     Fill(f32),
     #[default]
     Wrap,
-    Fixed(f32),
+    Fixed(f64),
 }
 
 impl SizeConstraint {
@@ -86,13 +86,13 @@ impl SizeConstraint {
 
 impl From<f32> for SizeConstraint {
     fn from(value: f32) -> Self {
-        SizeConstraint::Fixed(value)
+        SizeConstraint::Fixed(value as f64)
     }
 }
 
 impl From<f64> for SizeConstraint {
     fn from(value: f64) -> Self {
-        SizeConstraint::Fixed(value as f32)
+        SizeConstraint::Fixed(value)
     }
 }
 
@@ -101,7 +101,7 @@ impl Size {
         Self { width, height }
     }
 
-    pub fn fixed(width: f32, height: f32) -> Self {
+    pub fn fixed(width: f64, height: f64) -> Self {
         Self {
             width: SizeConstraint::Fixed(width),
             height: SizeConstraint::Fixed(height),
@@ -135,8 +135,8 @@ impl Size {
 impl From<f32> for Size {
     fn from(value: f32) -> Self {
         Self {
-            width: SizeConstraint::Fixed(value),
-            height: SizeConstraint::Fixed(value),
+            width: SizeConstraint::Fixed(value as f64),
+            height: SizeConstraint::Fixed(value as f64),
         }
     }
 }
@@ -144,8 +144,8 @@ impl From<f32> for Size {
 impl From<f64> for Size {
     fn from(value: f64) -> Self {
         Self {
-            width: SizeConstraint::Fixed(value as f32),
-            height: SizeConstraint::Fixed(value as f32),
+            width: SizeConstraint::Fixed(value),
+            height: SizeConstraint::Fixed(value),
         }
     }
 }
@@ -204,7 +204,30 @@ impl TextAlign {
 
 impl AlignX {
     #[inline]
-    pub fn position(&self, layout_direction: LayoutDirection, boundary: f32, size: f32) -> f32 {
+    pub fn position_f64(&self, layout_direction: LayoutDirection, boundary: f64, size: f64) -> f64 {
+        match self {
+            AlignX::Left => 0.,
+            AlignX::Right => boundary - size,
+            AlignX::Center => (boundary - size) / 2.,
+            AlignX::Start => match layout_direction {
+                LayoutDirection::LTR => 0.,
+                LayoutDirection::RTL => boundary - size,
+            },
+            AlignX::End => match layout_direction {
+                LayoutDirection::LTR => boundary - size,
+                LayoutDirection::RTL => 0.,
+            },
+            AlignX::Fraction(fraction) => {
+                // Convert -1.0..1.0 to 0.0..1.0
+                let normalized = (*fraction as f64 + 1.0) / 2.0;
+
+                normalized * (boundary - size)
+            }
+        }
+    }
+
+    #[inline]
+    pub fn position_f32(&self, layout_direction: LayoutDirection, boundary: f32, size: f32) -> f32 {
         match self {
             AlignX::Left => 0.,
             AlignX::Right => boundary - size,
@@ -229,7 +252,22 @@ impl AlignX {
 
 impl AlignY {
     #[inline]
-    pub fn position(&self, boundary: f32, size: f32) -> f32 {
+    pub fn position_f64(&self, boundary: f64, size: f64) -> f64 {
+        match self {
+            AlignY::Top => 0.,
+            AlignY::Bottom => boundary - size,
+            AlignY::Center => (boundary - size) / 2.,
+            AlignY::Fraction(fraction) => {
+                // Convert -1.0..1.0 to 0.0..1.0
+                let normalized = (*fraction as f64 + 1.0) / 2.0;
+
+                normalized * (boundary - size)
+            }
+        }
+    }
+
+    #[inline]
+    pub fn position_f32(&self, boundary: f32, size: f32) -> f32 {
         match self {
             AlignY::Top => 0.,
             AlignY::Bottom => boundary - size,
@@ -267,10 +305,10 @@ pub enum CrossAxisAlignment {
 
 #[derive(Default, Debug, Clone, PartialEq, Copy)]
 pub struct EdgeInsets {
-    pub top: f32,
-    pub left: f32,
-    pub right: f32,
-    pub bottom: f32,
+    pub top: f64,
+    pub left: f64,
+    pub right: f64,
+    pub bottom: f64,
 }
 
 impl EdgeInsets {
@@ -286,7 +324,7 @@ impl EdgeInsets {
         Self::ZERO
     }
 
-    pub fn left(self, value: f32) -> Self {
+    pub fn left(self, value: f64) -> Self {
         Self {
             top: self.top,
             left: value,
@@ -295,7 +333,7 @@ impl EdgeInsets {
         }
     }
 
-    pub fn top(self, value: f32) -> Self {
+    pub fn top(self, value: f64) -> Self {
         Self {
             top: value,
             left: self.left,
@@ -304,7 +342,7 @@ impl EdgeInsets {
         }
     }
 
-    pub fn right(self, value: f32) -> Self {
+    pub fn right(self, value: f64) -> Self {
         Self {
             top: self.top,
             left: self.left,
@@ -313,7 +351,7 @@ impl EdgeInsets {
         }
     }
 
-    pub fn bottom(self, value: f32) -> Self {
+    pub fn bottom(self, value: f64) -> Self {
         Self {
             top: self.top,
             left: self.left,
@@ -329,7 +367,7 @@ impl EdgeInsets {
     ///
     /// # Parameters
     ///
-    /// * `value`: The f32 value to be used for all sides.
+    /// * `value`: The value to be used for all sides.
     ///
     /// # Returns
     ///
@@ -346,7 +384,7 @@ impl EdgeInsets {
     /// assert_eq!(insets.right, 10.0);
     /// assert_eq!(insets.bottom, 10.0);
     /// ```
-    pub fn all(value: f32) -> Self {
+    pub fn all(value: f64) -> Self {
         Self {
             top: value,
             left: value,
@@ -362,8 +400,8 @@ impl EdgeInsets {
     ///
     /// # Parameters
     ///
-    /// * `horizontal`: The f32 value to be used for both left and right insets.
-    /// * `vertical`: The f32 value to be used for both top and bottom insets.
+    /// * `horizontal`: The value to be used for both left and right insets.
+    /// * `vertical`: The value to be used for both top and bottom insets.
     ///
     /// # Returns
     ///
@@ -380,7 +418,7 @@ impl EdgeInsets {
     /// assert_eq!(insets.top, 10.0);
     /// assert_eq!(insets.bottom, 10.0);
     /// ```
-    pub fn symmetric(horizontal: f32, vertical: f32) -> Self {
+    pub fn symmetric(horizontal: f64, vertical: f64) -> Self {
         Self {
             top: vertical,
             left: horizontal,
@@ -395,7 +433,7 @@ impl EdgeInsets {
     ///
     /// # Returns
     ///
-    /// Returns the sum of `self.left` and `self.right` as an f32.
+    /// Returns the sum of `self.left` and `self.right`.
     ///
     /// # Example
     ///
@@ -410,7 +448,7 @@ impl EdgeInsets {
     /// };
     /// assert_eq!(insets.horizontal(), 35.0);
     /// ```
-    pub fn horizontal(&self) -> f32 {
+    pub fn horizontal(&self) -> f64 {
         self.left + self.right
     }
 
@@ -420,7 +458,7 @@ impl EdgeInsets {
     ///
     /// # Returns
     ///
-    /// Returns the sum of `self.top` and `self.bottom` as an f32.
+    /// Returns the sum of `self.top` and `self.bottom`.
     ///
     /// # Example
     ///
@@ -435,7 +473,7 @@ impl EdgeInsets {
     /// };
     /// assert_eq!(insets.vertical(), 40.0);
     /// ```
-    pub fn vertical(&self) -> f32 {
+    pub fn vertical(&self) -> f64 {
         self.top + self.bottom
     }
 }
@@ -455,10 +493,10 @@ impl Add<EdgeInsets> for EdgeInsets {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Constraints {
-    pub min_width: f32,
-    pub min_height: f32,
-    pub max_width: f32,
-    pub max_height: f32,
+    pub min_width: f64,
+    pub min_height: f64,
+    pub max_width: f64,
+    pub max_height: f64,
 }
 
 impl Default for Constraints {
@@ -466,8 +504,8 @@ impl Default for Constraints {
         Self {
             min_width: 0.,
             min_height: 0.,
-            max_width: f32::INFINITY,
-            max_height: f32::INFINITY,
+            max_width: f64::INFINITY,
+            max_height: f64::INFINITY,
         }
     }
 }
@@ -484,13 +522,13 @@ impl Constraints {
 
     pub fn exact_size(size: Size) -> Self {
         let width = match size.width {
-            SizeConstraint::Fill(_) => f32::INFINITY,
+            SizeConstraint::Fill(_) => f64::INFINITY,
             SizeConstraint::Wrap => 0.,
             SizeConstraint::Fixed(value) => value,
         };
 
         let height = match size.height {
-            SizeConstraint::Fill(_) => f32::INFINITY,
+            SizeConstraint::Fill(_) => f64::INFINITY,
             SizeConstraint::Wrap => 0.,
             SizeConstraint::Fixed(value) => value,
         };
@@ -504,23 +542,79 @@ impl Constraints {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Vec2 {
-    pub x: f32,
-    pub y: f32,
+pub trait Scalar:
+    Copy
+    + PartialEq
+    + PartialOrd
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Div<Output = Self>
+    + Neg<Output = Self>
+    + AddAssign
+    + SubAssign
+    + MulAssign
+    + DivAssign
+    + std::fmt::Debug
+{
+    const ZERO: Self;
+
+    const TWO: Self;
 }
 
-impl Vec2 {
-    pub const ZERO: Self = Vec2 { x: 0., y: 0. };
+impl Scalar for f32 {
+    const ZERO: Self = 0.0;
 
-    pub fn new(x: f32, y: f32) -> Self {
+    const TWO: Self = 2.0;
+}
+
+impl Scalar for f64 {
+    const ZERO: Self = 0.0;
+
+    const TWO: Self = 2.0;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C, align(16))]
+pub struct Vec2<T: Scalar = f64> {
+    pub x: T,
+    pub y: T,
+}
+
+impl<T: Scalar> Vec2<T> {
+    pub const ZERO: Self = Vec2 {
+        x: T::ZERO,
+        y: T::ZERO,
+    };
+
+    pub fn new(x: T, y: T) -> Self {
         Self { x, y }
     }
 }
 
-impl Add<Vec2> for Vec2 {
+impl Vec2<f32> {
+    #[inline]
+    pub fn as_f64(self) -> Vec2<f64> {
+        Vec2 {
+            x: self.x as f64,
+            y: self.y as f64,
+        }
+    }
+}
+
+impl Vec2<f64> {
+    #[inline]
+    pub fn as_f32(self) -> Vec2<f32> {
+        Vec2 {
+            x: self.x as f32,
+            y: self.y as f32,
+        }
+    }
+}
+
+impl<T: Scalar> Add for Vec2<T> {
     type Output = Self;
-    fn add(self, rhs: Vec2) -> Self::Output {
+    fn add(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x + rhs.x,
             y: self.y + rhs.y,
@@ -528,9 +622,9 @@ impl Add<Vec2> for Vec2 {
     }
 }
 
-impl Sub<Vec2> for Vec2 {
+impl<T: Scalar> Sub for Vec2<T> {
     type Output = Self;
-    fn sub(self, rhs: Vec2) -> Self::Output {
+    fn sub(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x - rhs.x,
             y: self.y - rhs.y,
@@ -538,9 +632,9 @@ impl Sub<Vec2> for Vec2 {
     }
 }
 
-impl Mul<f32> for Vec2 {
+impl<T: Scalar> Mul<T> for Vec2<T> {
     type Output = Self;
-    fn mul(self, rhs: f32) -> Self::Output {
+    fn mul(self, rhs: T) -> Self::Output {
         Self {
             x: self.x * rhs,
             y: self.y * rhs,
@@ -548,19 +642,9 @@ impl Mul<f32> for Vec2 {
     }
 }
 
-impl Mul<Vec2> for f32 {
-    type Output = Vec2;
-    fn mul(self, rhs: Vec2) -> Self::Output {
-        Vec2 {
-            x: self * rhs.x,
-            y: self * rhs.y,
-        }
-    }
-}
-
-impl Div<f32> for Vec2 {
+impl<T: Scalar> Div<T> for Vec2<T> {
     type Output = Self;
-    fn div(self, rhs: f32) -> Self::Output {
+    fn div(self, rhs: T) -> Self::Output {
         Self {
             x: self.x / rhs,
             y: self.y / rhs,
@@ -568,7 +652,7 @@ impl Div<f32> for Vec2 {
     }
 }
 
-impl Neg for Vec2 {
+impl<T: Scalar> Neg for Vec2<T> {
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self {
@@ -578,29 +662,29 @@ impl Neg for Vec2 {
     }
 }
 
-impl AddAssign<Vec2> for Vec2 {
-    fn add_assign(&mut self, rhs: Vec2) {
+impl<T: Scalar> AddAssign for Vec2<T> {
+    fn add_assign(&mut self, rhs: Self) {
         self.x += rhs.x;
         self.y += rhs.y;
     }
 }
 
-impl SubAssign<Vec2> for Vec2 {
-    fn sub_assign(&mut self, rhs: Vec2) {
+impl<T: Scalar> SubAssign for Vec2<T> {
+    fn sub_assign(&mut self, rhs: Self) {
         self.x -= rhs.x;
         self.y -= rhs.y;
     }
 }
 
-impl MulAssign<f32> for Vec2 {
-    fn mul_assign(&mut self, rhs: f32) {
+impl<T: Scalar> MulAssign<T> for Vec2<T> {
+    fn mul_assign(&mut self, rhs: T) {
         self.x *= rhs;
         self.y *= rhs;
     }
 }
 
-impl DivAssign<f32> for Vec2 {
-    fn div_assign(&mut self, rhs: f32) {
+impl<T: Scalar> DivAssign<T> for Vec2<T> {
+    fn div_assign(&mut self, rhs: T) {
         self.x /= rhs;
         self.y /= rhs;
     }
@@ -618,7 +702,7 @@ impl PhysicalSize {
     }
 
     pub(crate) fn to_vec2(&self) -> Vec2 {
-        Vec2::new(self.width as f32, self.height as f32)
+        Vec2::new(self.width as f64, self.height as f64)
     }
 }
 
@@ -629,7 +713,7 @@ pub struct ViewId(pub usize);
 pub struct View {
     pub id: ViewId,
     pub physical_size: PhysicalSize,
-    pub scale_factor: f32,
+    pub scale_factor: f64,
     pub safe_area: EdgeInsets,
 }
 
@@ -639,18 +723,49 @@ impl View {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
-pub struct Rect {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C, align(16))]
+pub struct Rect<T: Scalar = f64> {
+    pub x: T,
+    pub y: T,
+    pub width: T,
+    pub height: T,
 }
 
-impl Mul<f32> for Rect {
-    type Output = Self;
+impl<T: Scalar> Default for Rect<T> {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
 
-    fn mul(self, rhs: f32) -> Self::Output {
+impl Rect<f32> {
+    #[inline]
+    pub fn as_f64(self) -> Rect<f64> {
+        Rect {
+            x: self.x as f64,
+            y: self.y as f64,
+            width: self.width as f64,
+            height: self.height as f64,
+        }
+    }
+}
+
+impl Rect<f64> {
+    #[inline]
+    pub fn as_f32(self) -> Rect<f32> {
+        Rect {
+            x: self.x as f32,
+            y: self.y as f32,
+            width: self.width as f32,
+            height: self.height as f32,
+        }
+    }
+}
+
+impl<T: Scalar> Mul<T> for Rect<T> {
+    type Output = Self;
+    #[inline]
+    fn mul(self, rhs: T) -> Self::Output {
         Self {
             x: self.x * rhs,
             y: self.y * rhs,
@@ -660,26 +775,16 @@ impl Mul<f32> for Rect {
     }
 }
 
-impl Default for Rect {
-    fn default() -> Self {
-        Self {
-            x: 0.0,
-            y: 0.0,
-            width: 0.0,
-            height: 0.0,
-        }
-    }
-}
-
-impl Rect {
+impl<T: Scalar> Rect<T> {
     pub const ZERO: Self = Self {
-        x: 0.0,
-        y: 0.0,
-        width: 0.0,
-        height: 0.0,
+        x: T::ZERO,
+        y: T::ZERO,
+        width: T::ZERO,
+        height: T::ZERO,
     };
 
-    pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+    #[inline]
+    pub fn new(x: T, y: T, width: T, height: T) -> Self {
         Self {
             x,
             y,
@@ -688,7 +793,8 @@ impl Rect {
         }
     }
 
-    pub fn from_pos_size(pos: Vec2, size: Vec2) -> Self {
+    #[inline]
+    pub fn from_pos_size(pos: Vec2<T>, size: Vec2<T>) -> Self {
         Self {
             x: pos.x,
             y: pos.y,
@@ -697,6 +803,7 @@ impl Rect {
         }
     }
 
+    #[inline]
     pub fn inverse_y(&self) -> Self {
         Self {
             x: self.x,
@@ -706,45 +813,54 @@ impl Rect {
         }
     }
 
-    pub fn left(&self) -> f32 {
+    #[inline]
+    pub fn left(&self) -> T {
         self.x
     }
 
-    pub fn right(&self) -> f32 {
+    #[inline]
+    pub fn right(&self) -> T {
         self.x + self.width
     }
 
-    pub fn top(&self) -> f32 {
+    #[inline]
+    pub fn top(&self) -> T {
         self.y
     }
 
-    pub fn bottom(&self) -> f32 {
+    #[inline]
+    pub fn bottom(&self) -> T {
         self.y + self.height
     }
 
-    pub fn position(&self) -> Vec2 {
+    #[inline]
+    pub fn position(&self) -> Vec2<T> {
         Vec2::new(self.x, self.y)
     }
 
-    pub fn size(&self) -> Vec2 {
+    #[inline]
+    pub fn size(&self) -> Vec2<T> {
         Vec2::new(self.width, self.height)
     }
 
-    pub fn expand(&self, size: f32) -> Rect {
-        Rect {
+    #[inline]
+    pub fn expand(&self, size: T) -> Self {
+        Self {
             x: self.x - size,
             y: self.y - size,
-            width: self.width + size * 2.,
-            height: self.height + size * 2.,
+            width: self.width + size * T::TWO,
+            height: self.height + size * T::TWO,
         }
     }
 
-    pub fn shrink(&self, size: f32) -> Rect {
+    #[inline]
+    pub fn shrink(&self, size: T) -> Self {
         self.expand(-size)
     }
 
-    pub fn offset(&self, dx: f32, dy: f32) -> Rect {
-        Rect {
+    #[inline]
+    pub fn offset(&self, dx: T, dy: T) -> Self {
+        Self {
             x: self.x + dx,
             y: self.y + dy,
             width: self.width,
@@ -753,23 +869,23 @@ impl Rect {
     }
 }
 
-pub fn point_with_rect_hit_test(point: Vec2, rect: Rect) -> bool {
-    point.x >= rect.position().x
-        && point.x <= rect.position().x + rect.size().x
-        && point.y >= rect.position().y
-        && point.y <= rect.position().y + rect.size().y
+#[inline]
+pub fn point_with_rect_hit_test<T: Scalar>(point: Vec2<T>, rect: Rect<T>) -> bool {
+    point.x >= rect.x
+        && point.x <= rect.x + rect.width
+        && point.y >= rect.y
+        && point.y <= rect.y + rect.height
 }
 
-pub fn rect_contains_boundary(boundary: Rect, rect: Rect) -> bool {
-    let left_top = boundary.position();
-    let right_top = boundary.position() + Vec2::new(boundary.size().x, 0.);
-    let left_bottom = boundary.position() + Vec2::new(0., boundary.size().y);
-    let right_bottom = boundary.position() + Vec2::new(boundary.size().x, boundary.size().y);
+#[inline]
+pub fn rect_contains_boundary<T: Scalar>(boundary: Rect<T>, rect: Rect<T>) -> bool {
+    let pos = boundary.position();
+    let size = boundary.size();
 
-    point_with_rect_hit_test(left_top, rect)
-        || point_with_rect_hit_test(right_top, rect)
-        || point_with_rect_hit_test(left_bottom, rect)
-        || point_with_rect_hit_test(right_bottom, rect)
+    point_with_rect_hit_test(pos, rect)
+        || point_with_rect_hit_test(Vec2::new(pos.x + size.x, pos.y), rect)
+        || point_with_rect_hit_test(Vec2::new(pos.x, pos.y + size.y), rect)
+        || point_with_rect_hit_test(Vec2::new(pos.x + size.x, pos.y + size.y), rect)
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

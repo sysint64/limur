@@ -30,7 +30,7 @@ pub struct State {
     pub(crate) color: ColorRgba,
     pub(crate) text_align: TextAlign,
     pub(crate) vertical_align: AlignY,
-    pub(crate) scale_factor: f32,
+    pub(crate) scale_factor: f64,
 }
 
 impl WidgetState for State {
@@ -193,14 +193,14 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
     let position = placement.rect.position().px(ctx);
 
     let text = ctx.text.get_mut(state.text_id);
-    let text_size = text.calculate_size();
+    let text_size = text.calculate_size().as_f32();
     let text_position = position
         + Vec2::new(
             state
                 .text_align
                 .to_align_x()
-                .position(ctx.layout_direction, size.x, text_size.x),
-            state.vertical_align.position(size.y, text_size.y),
+                .position_f32(ctx.layout_direction, size.x, text_size.x),
+            state.vertical_align.position_f32(size.y, text_size.y),
         );
 
     ctx.push_command(
