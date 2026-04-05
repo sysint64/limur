@@ -38,6 +38,7 @@ impl<'a> ButtonBuilder<'a> {
     #[profiling::function]
     pub fn build(mut self, ctx: &mut BuildContext) -> ButtonResponse {
         let layout = self.frame.take_layout();
+
         let response = self.frame.build(ctx, |ctx| {
             gesture_detector()
                 .clickable(true)

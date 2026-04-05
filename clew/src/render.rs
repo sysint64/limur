@@ -715,7 +715,7 @@ pub fn layout_and_render(
 
         tracy_client::plot!(
             "clew :: Render Commands",
-            state.render_state.commands.len() as f64
+            state.render_state.unsorted_commands.len() as f64
         );
     }
 

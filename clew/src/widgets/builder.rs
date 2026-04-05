@@ -122,10 +122,10 @@ impl<'a, 'b> BuildContext<'a, 'b> {
         broadcast_async_tx: &'a mut tokio::sync::mpsc::UnboundedSender<Box<dyn Any + Send>>,
         event_loop_proxy: Arc<dyn ApplicationEventLoopProxy>,
         delta_time: f64,
-        should_update: bool,
+        pre_layout: bool,
     ) -> BuildContext<'a, 'b> {
         BuildContext {
-            pre_layout: should_update,
+            pre_layout,
             child_index: 0,
             ignore_pointer: false,
             layout_commands: &mut ui_state.layout_commands,
@@ -183,7 +183,7 @@ impl<'a, 'b> BuildContext<'a, 'b> {
         }
     }
 
-    pub fn should_update(&self) -> bool {
+    pub fn pre_layout(&self) -> bool {
         self.pre_layout
     }
 

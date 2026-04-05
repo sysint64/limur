@@ -879,14 +879,18 @@ pub fn point_with_rect_hit_test<T: Scalar>(point: Vec2<T>, rect: Rect<T>) -> boo
 
 #[inline]
 pub fn rect_contains_boundary<T: Scalar>(boundary: Rect<T>, rect: Rect<T>) -> bool {
-    // let pos = boundary.position();
-    // let size = boundary.size();
+    let pos = boundary.position();
+    let size = boundary.size();
 
-    // point_with_rect_hit_test(pos, rect)
-    //     || point_with_rect_hit_test(Vec2::new(pos.x + size.x, pos.y), rect)
-    //     || point_with_rect_hit_test(Vec2::new(pos.x, pos.y + size.y), rect)
-    //     || point_with_rect_hit_test(Vec2::new(pos.x + size.x, pos.y + size.y), rect)
-    true
+    point_with_rect_hit_test(pos, rect)
+        || point_with_rect_hit_test(Vec2::new(pos.x + size.x, pos.y), rect)
+        || point_with_rect_hit_test(Vec2::new(pos.x, pos.y + size.y), rect)
+        || point_with_rect_hit_test(Vec2::new(pos.x + size.x, pos.y + size.y), rect)
+}
+
+#[inline]
+pub fn rects_overlap<T: Scalar>(a: Rect<T>, b: Rect<T>) -> bool {
+    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

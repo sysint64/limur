@@ -143,8 +143,10 @@ impl GestureDetectorBuilder {
         state.dragable = self.dragable;
         state.focusable = self.focusable;
 
-        if !context.pre_layout {
+        if context.pre_layout {
             handle_interaction(id, context.input, context.view, context.interaction, state);
+        } else {
+            state.clicked = false;
         }
 
         let response = GestureDetectorResponse {
@@ -165,11 +167,13 @@ impl GestureDetectorBuilder {
         context.foregrounds.push(widget_ref);
         context.provide(response.clone(), callback);
 
-        context
-            .widgets_states
-            .gesture_detector
-            .accessed_this_frame
-            .insert(id);
+        if !context.pre_layout {
+            context
+                .widgets_states
+                .gesture_detector
+                .accessed_this_frame
+                .insert(id);
+        }
 
         response
     }

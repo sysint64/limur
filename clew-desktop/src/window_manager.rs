@@ -6,7 +6,6 @@ use clew::{
     state::UiState,
     text::{StringId, TextId, TextsResources},
 };
-use winit::platform::{wayland::ActiveEventLoopExtWayland, x11::ActiveEventLoopExtX11};
 
 use crate::window::Window;
 
@@ -94,7 +93,10 @@ impl<'a, App, Event> WindowManager<'a, App, Event> {
                 ))
                 .with_resizable(descriptor.resizable);
 
+            #[cfg(target_os = "linux")]
             if let Some(name) = descriptor.name {
+                use winit::platform::{wayland::ActiveEventLoopExtWayland, x11::ActiveEventLoopExtX11};
+
                 if event_loop.is_wayland() {
                     use winit::platform::wayland::WindowAttributesExtWayland;
 

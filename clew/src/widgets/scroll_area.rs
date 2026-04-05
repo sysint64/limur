@@ -119,15 +119,17 @@ impl ScrollAreaBuilder {
             let layout_measures = context.widgets_states.layout_measures.get_mut(id);
 
             if let Some(layout_measures) = layout_measures {
-                handle_interaction(
-                    id,
-                    state,
-                    context.input,
-                    context.interaction,
-                    layout_measures,
-                    layout_measures.wrap_width,
-                    layout_measures.wrap_height,
-                );
+                if context.pre_layout {
+                    handle_interaction(
+                        id,
+                        state,
+                        context.input,
+                        context.interaction,
+                        layout_measures,
+                        layout_measures.wrap_width,
+                        layout_measures.wrap_height,
+                    );
+                }
             }
 
             state.scroll_direction = self.scroll_direction;
@@ -219,6 +221,10 @@ pub fn set_scroll_progress_x(context: &mut BuildContext, id: WidgetId, value: f6
 }
 
 pub fn set_scroll_progress_y(context: &mut BuildContext, id: WidgetId, value: f64) {
+    if context.pre_layout() {
+        return;
+    }
+
     let state = context.widgets_states.scroll_area.get_mut(id);
 
     if let Some(state) = state {

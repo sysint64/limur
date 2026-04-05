@@ -3,7 +3,7 @@ use crate::{
     LayoutDirection, MainAxisAlignment, Rect, Size, SizeConstraint, Vec2, View, WidgetId,
     WidgetRef, WidgetType,
     assets::Assets,
-    rect_contains_boundary,
+    rects_overlap,
     state::TypedWidgetStates,
     text::{TextId, TextsResources},
 };
@@ -1102,7 +1102,6 @@ pub fn layout(
                     align_y.position_f64(boundary.height, widget_size.y),
                 );
 
-
                 let current_container_position = current_position + offset;
 
                 if RENDER_CONTAINER_DEBUG_BOUNDARIES {
@@ -1131,7 +1130,7 @@ pub fn layout(
                 let decorator_rect = Rect::from_pos_size(current_position + offset, inside_size);
 
                 for widget_ref in backgrounds {
-                    if rect_contains_boundary(
+                    if rects_overlap(
                         Rect::from_pos_size(position + offset, inside_size),
                         Rect::from_pos_size(Vec2::ZERO, root_size),
                     ) {
@@ -1411,10 +1410,8 @@ pub fn layout(
                 let boundary = Rect::from_pos_size(boundary.position() + offset, boundary.size());
 
                 // Don't render anything outside the screen view
-                let should_render = rect_contains_boundary(
-                    decorators_rect,
-                    Rect::from_pos_size(Vec2::ZERO, root_size),
-                );
+                let should_render =
+                    rects_overlap(decorators_rect, Rect::from_pos_size(Vec2::ZERO, root_size));
 
                 if should_render {
                     for widget_ref in backgrounds {
