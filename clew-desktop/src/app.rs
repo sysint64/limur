@@ -369,8 +369,8 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 match delta {
                     winit::event::MouseScrollDelta::LineDelta(x, y) => {
                         // Scale line delta
-                        window.ui_state.user_input.mouse_wheel_delta_x = x;
-                        window.ui_state.user_input.mouse_wheel_delta_y = y;
+                        window.ui_state.user_input.mouse_wheel_delta_x = x * 20.;
+                        window.ui_state.user_input.mouse_wheel_delta_y = y * 20.;
                     }
                     winit::event::MouseScrollDelta::PixelDelta(pos) => {
                         window.ui_state.user_input.mouse_wheel_delta_x = pos.x as f32;

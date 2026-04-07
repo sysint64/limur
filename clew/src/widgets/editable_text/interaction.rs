@@ -474,6 +474,7 @@ pub(crate) fn handle_interaction(
                 }
             }
 
+            normalize_editable_text_selection(state, view_config, editor);
             on_editable_text_cursor_moved(state, view_config, editor);
         }
 
@@ -519,37 +520,41 @@ pub(crate) fn handle_interaction(
                 }
             }
 
+            normalize_editable_text_selection(state, view_config, editor);
             on_editable_text_cursor_moved(state, view_config, editor);
-            }
+        }
 
         if shortcuts_manager.is_shortcut(TextEditingShortcut::SelectAll)
-            && let Some(id) = state.text_id {
-                let editor = text.editor_mut(id);
-                editor.set_selection(cosmic_text::Selection::None);
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::BufferStart),
-                );
-                editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::BufferEnd),
-                );
-                on_editable_text_cursor_moved(state, view_config, editor);
-            }
+            && let Some(id) = state.text_id
+        {
+            let editor = text.editor_mut(id);
+            editor.set_selection(cosmic_text::Selection::None);
+            editor.action(
+                &mut fonts.font_system,
+                cosmic_text::Action::Motion(cosmic_text::Motion::BufferStart),
+            );
+            editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
+            editor.action(
+                &mut fonts.font_system,
+                cosmic_text::Action::Motion(cosmic_text::Motion::BufferEnd),
+            );
+            on_editable_text_cursor_moved(state, view_config, editor);
+        }
 
         #[cfg(feature = "clipboard")]
         if let Some(clipboard) = clipboard {
             if shortcuts_manager.is_shortcut(CommonShortcut::Copy)
-                && let Some(id) = state.text_id {
-                    let editor = text.editor_mut(id);
-                    let text = editor.copy_selection();
+                && let Some(id) = state.text_id
+            {
+                let editor = text.editor_mut(id);
+                let text = editor.copy_selection();
 
-                    if let Some(text) = text
-                        && let Err(err) = clipboard.set_text(text) {
-                            log::error!("Failed to copy to clipboard: {err}");
-                        }
+                if let Some(text) = text
+                    && let Err(err) = clipboard.set_text(text)
+                {
+                    log::error!("Failed to copy to clipboard: {err}");
                 }
+            }
 
             if shortcuts_manager.is_shortcut(CommonShortcut::Cut)
                 && let Some(id) = state.text_id
@@ -586,71 +591,73 @@ pub(crate) fn handle_interaction(
             }
 
             if shortcuts_manager.is_shortcut(CommonShortcut::Paste)
-                && let Some(id) = state.text_id {
-                    let editor = text.editor_mut(id);
+                && let Some(id) = state.text_id
+            {
+                let editor = text.editor_mut(id);
 
-                    match clipboard.get_text() {
-                        Ok(text) => {
-                            let bounds = editor.selection_bounds();
-                            let selected_text = editor.copy_selection();
+                match clipboard.get_text() {
+                    Ok(text) => {
+                        let bounds = editor.selection_bounds();
+                        let selected_text = editor.copy_selection();
 
-                            let after_start = if let Some((before_start, _)) = bounds {
-                                before_start
-                            } else {
-                                editor.cursor()
-                            };
+                        let after_start = if let Some((before_start, _)) = bounds {
+                            before_start
+                        } else {
+                            editor.cursor()
+                        };
 
-                            editor.insert_string(&text, None);
-                            let after_end = editor.cursor();
+                        editor.insert_string(&text, None);
+                        let after_end = editor.cursor();
 
-                            let delta = if let Some((before_start, before_end)) = bounds {
-                                TextEditDelta::Replace {
-                                    range_before: (before_start, before_end),
-                                    range_after: (after_start, after_end),
-                                    text_before: selected_text
-                                        .expect("Selection should be available"),
-                                    text_after: text,
-                                }
-                            } else {
-                                TextEditDelta::Insert {
-                                    cursor_before: after_start,
-                                    cursor_after: after_end,
-                                    text,
-                                }
-                            };
+                        let delta = if let Some((before_start, before_end)) = bounds {
+                            TextEditDelta::Replace {
+                                range_before: (before_start, before_end),
+                                range_after: (after_start, after_end),
+                                text_before: selected_text.expect("Selection should be available"),
+                                text_after: text,
+                            }
+                        } else {
+                            TextEditDelta::Insert {
+                                cursor_before: after_start,
+                                cursor_after: after_end,
+                                text,
+                            }
+                        };
 
-                            on_editable_text_updated(state, view_config, editor, Some(delta));
-                        }
-                        Err(err) => {
-                            log::error!("Failed to paste from clipboard: {err}");
-                        }
+                        on_editable_text_updated(state, view_config, editor, Some(delta));
+                    }
+                    Err(err) => {
+                        log::error!("Failed to paste from clipboard: {err}");
                     }
                 }
+            }
         }
 
         if shortcuts_manager.is_shortcut(CommonShortcut::Undo)
-            && let Some(id) = state.text_id {
-                let editor = text.editor_mut(id);
-                let delta = state.history_manager.undo(editor).cloned();
+            && let Some(id) = state.text_id
+        {
+            let editor = text.editor_mut(id);
+            let delta = state.history_manager.undo(editor).cloned();
 
-                on_editable_text_updated(state, view_config, editor, None);
+            on_editable_text_updated(state, view_config, editor, None);
 
-                if let Some(delta) = delta {
-                    state.deltas.push(EditableTextDelta::Undo(delta));
-                }
+            if let Some(delta) = delta {
+                state.deltas.push(EditableTextDelta::Undo(delta));
             }
+        }
 
         if shortcuts_manager.is_shortcut(CommonShortcut::Redo)
-            && let Some(id) = state.text_id {
-                let editor = text.editor_mut(id);
-                let delta = state.history_manager.redo(editor).cloned();
+            && let Some(id) = state.text_id
+        {
+            let editor = text.editor_mut(id);
+            let delta = state.history_manager.redo(editor).cloned();
 
-                on_editable_text_updated(state, view_config, editor, None);
+            on_editable_text_updated(state, view_config, editor, None);
 
-                if let Some(delta) = delta {
-                    state.deltas.push(EditableTextDelta::Apply(delta));
-                }
+            if let Some(delta) = delta {
+                state.deltas.push(EditableTextDelta::Apply(delta));
             }
+        }
 
         for text_input_action in &user_input.text_input_actions {
             match text_input_action {
@@ -683,43 +690,43 @@ pub(crate) fn handle_interaction(
                 TextInputAction::Insert => {
                     if !user_input.text_input.is_empty()
                         && shortcuts_manager.active_shortcut_id().is_none()
-                        && let Some(id) = state.text_id {
-                            let editor = text.editor_mut(id);
-                            let text = user_input.text_input.clone();
+                        && let Some(id) = state.text_id
+                    {
+                        let editor = text.editor_mut(id);
+                        let text = user_input.text_input.clone();
 
-                            let bounds = editor.selection_bounds();
-                            let selected_text = editor.copy_selection();
+                        let bounds = editor.selection_bounds();
+                        let selected_text = editor.copy_selection();
 
-                            let after_start = if let Some((before_start, _)) = bounds {
-                                before_start
-                            } else {
-                                editor.cursor()
-                            };
+                        let after_start = if let Some((before_start, _)) = bounds {
+                            before_start
+                        } else {
+                            editor.cursor()
+                        };
 
-                            editor.insert_string(&text, None);
-                            let after_end = editor.cursor();
+                        editor.insert_string(&text, None);
+                        let after_end = editor.cursor();
 
-                            let delta = if let Some((before_start, before_end)) = bounds
-                                && before_start != before_end
-                            {
-                                TextEditDelta::Replace {
-                                    range_before: (before_start, before_end),
-                                    range_after: (after_start, after_end),
-                                    text_before: selected_text
-                                        .expect("Selection should be available"),
-                                    text_after: text,
-                                }
-                            } else {
-                                TextEditDelta::Insert {
-                                    cursor_before: after_start,
-                                    cursor_after: after_end,
-                                    text,
-                                }
-                            };
+                        let delta = if let Some((before_start, before_end)) = bounds
+                            && before_start != before_end
+                        {
+                            TextEditDelta::Replace {
+                                range_before: (before_start, before_end),
+                                range_after: (after_start, after_end),
+                                text_before: selected_text.expect("Selection should be available"),
+                                text_after: text,
+                            }
+                        } else {
+                            TextEditDelta::Insert {
+                                cursor_before: after_start,
+                                cursor_after: after_end,
+                                text,
+                            }
+                        };
 
-                            editor.set_selection(cosmic_text::Selection::None);
-                            on_editable_text_updated(state, view_config, editor, Some(delta));
-                        }
+                        editor.set_selection(cosmic_text::Selection::None);
+                        on_editable_text_updated(state, view_config, editor, Some(delta));
+                    }
                 }
             }
         }
@@ -863,9 +870,10 @@ pub(crate) fn handle_interaction(
                     let bounds = editor.selection_bounds();
 
                     if let Some((start, end)) = bounds
-                        && start == end {
-                            editor.set_selection(cosmic_text::Selection::None);
-                        }
+                        && start == end
+                    {
+                        editor.set_selection(cosmic_text::Selection::None);
+                    }
 
                     state.direction_decided = false;
                     on_editable_text_cursor_moved(state, view_config, editor);
@@ -995,7 +1003,7 @@ pub(crate) fn normalize_editable_text_selection(
         let bounds = editor.selection_bounds();
 
         if let Some((start, end)) = bounds {
-            if start == end {
+            if start.line == end.line && start.index == end.index {
                 editor.set_selection(cosmic_text::Selection::None);
                 state.direction_decided = true;
             } else {
