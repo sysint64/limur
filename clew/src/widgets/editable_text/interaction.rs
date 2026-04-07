@@ -81,7 +81,7 @@ pub(crate) fn handle_interaction(
             && let Some(id) = state.text_id
         {
             let editor = text.editor_mut(id);
-            normalize_editable_text_selection(state, view_config, editor);
+            normalize_editable_text_selection(state, view_config, editor, true);
         }
 
         let has_selection = if let Some(id) = state.text_id {
@@ -474,7 +474,6 @@ pub(crate) fn handle_interaction(
                 }
             }
 
-            normalize_editable_text_selection(state, view_config, editor);
             on_editable_text_cursor_moved(state, view_config, editor);
         }
 
@@ -520,7 +519,6 @@ pub(crate) fn handle_interaction(
                 }
             }
 
-            normalize_editable_text_selection(state, view_config, editor);
             on_editable_text_cursor_moved(state, view_config, editor);
         }
 
@@ -887,7 +885,7 @@ pub(crate) fn handle_interaction(
         if let Some(id) = state.text_id {
             let editor = text.editor_mut(id);
             if user_input.mouse_released {
-                normalize_editable_text_selection(state, view_config, editor);
+                normalize_editable_text_selection(state, view_config, editor, true);
             }
         }
     } else if gesture_response.was_focused() {
@@ -991,6 +989,7 @@ pub(crate) fn normalize_editable_text_selection(
     state: &mut State,
     view_config: &mut ViewConfig,
     editor: &mut cosmic_text::Editor,
+    handle_cursor_moved: bool,
 ) {
     let normalize_selection = match editor.selection() {
         cosmic_text::Selection::None => false,
@@ -1047,7 +1046,9 @@ pub(crate) fn normalize_editable_text_selection(
                     }
                 }
 
-                on_editable_text_cursor_moved(state, view_config, editor);
+                if handle_cursor_moved {
+                    on_editable_text_cursor_moved(state, view_config, editor);
+                }
             }
         } else {
             editor.set_selection(cosmic_text::Selection::None);
@@ -1060,6 +1061,8 @@ pub(crate) fn on_editable_text_cursor_moved(
     view_config: &mut ViewConfig,
     editor: &mut cosmic_text::Editor,
 ) {
+    normalize_editable_text_selection(state, view_config, editor, false);
+
     state.ime_cursor_end = editor.cursor();
     state.direction_decided =
         state.direction_decided || editor.selection() == cosmic_text::Selection::None;
