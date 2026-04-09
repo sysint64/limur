@@ -13,7 +13,6 @@ use cosmic_text::Edit;
 
 use crate::{
     AlignY, ColorRgba, Rect, TextAlign, Vec2, WidgetRef, WidgetType,
-    keyboard::KeyCode,
     layout::{DeriveWrapSize, LayoutCommand},
     text::{Text, TextId},
     text_data::TextData,
@@ -277,25 +276,11 @@ impl<'a> EditableTextBuilder<'a> {
             if let Some(gesture_response) = self.gesture_response {
                 state.gesture_detector_response = gesture_response.clone();
 
-                interaction::handle_interaction(
-                    id,
-                    context.input,
-                    context.view,
-                    &gesture_response,
-                    state,
-                    context.os_events,
-                    context.text,
-                    context.fonts,
-                    context.view_config,
-                    context.shortcuts_manager,
-                    #[cfg(feature = "clipboard")]
-                    context.clipboard.as_mut(),
-                    state.boundary,
-                );
-
                 if gesture_response.is_focused {
                     interaction::handle_commands(context, id);
                 }
+
+                interaction::handle_interaction(context, id, &gesture_response);
 
                 context
                     .widgets_states

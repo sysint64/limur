@@ -113,7 +113,7 @@ where
 }
 
 impl<'a, 'b> BuildContext<'a, 'b> {
-    // #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ui_state: &'a mut UiState,
         texts: &'a mut TextsResources<'b>,

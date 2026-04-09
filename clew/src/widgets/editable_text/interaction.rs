@@ -1,21 +1,16 @@
 use std::time::Instant;
 
-#[cfg(feature = "clipboard")]
-use arboard::Clipboard;
-
 use cosmic_text::Edit;
-use smallvec::SmallVec;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    BuildContext, GestureDetectorResponse, LayoutDirection, Rect, ShortcutId, ShortcutsManager,
-    View, WidgetId,
-    io::{Cursor, TextInputAction, UserInput},
+    BuildContext, GestureDetectorResponse, LayoutDirection, ShortcutId, WidgetId,
+    io::{Cursor, TextInputAction},
     keyboard::KeyCode,
     state::ViewConfig,
-    text::{FontResources, TextsResources},
-    text_history::{TextDeletionDirection, TextEditDelta},
+    text::FontResources,
+    text_history::TextEditDelta,
 };
 
 use super::{CommonShortcut, EditableTextDelta, OsEvent, State, TextEditingShortcut, commands};
@@ -42,6 +37,41 @@ pub(crate) fn handle_commands(context: &mut BuildContext, id: WidgetId) {
 
     if context.input.key_pressed == Some(KeyCode::Backspace) {
         commands::backspace(context, id);
+    }
+
+    if context.input.key_pressed == Some(KeyCode::Enter) {
+        commands::insert_new_line(context, id);
+        context.shortcuts_manager.reset();
+    }
+
+    if context
+        .shortcuts_manager
+        .is_shortcut(TextEditingShortcut::SelectAll)
+    {
+        commands::select_all(context, id);
+    }
+
+    if context.shortcuts_manager.is_shortcut(CommonShortcut::Undo) {
+        commands::undo(context, id);
+    }
+
+    if context.shortcuts_manager.is_shortcut(CommonShortcut::Redo) {
+        commands::redo(context, id);
+    }
+
+    #[cfg(feature = "clipboard")]
+    {
+        if context.shortcuts_manager.is_shortcut(CommonShortcut::Copy) {
+            commands::copy_selected(context, id);
+        }
+
+        if context.shortcuts_manager.is_shortcut(CommonShortcut::Cut) {
+            commands::cut_selected(context, id);
+        }
+
+        if context.shortcuts_manager.is_shortcut(CommonShortcut::Paste) {
+            commands::paste(context, id);
+        }
     }
 
     if cfg!(target_os = "macos") {
@@ -85,60 +115,33 @@ pub(crate) fn handle_commands(context: &mut BuildContext, id: WidgetId) {
 
 #[allow(clippy::too_many_arguments, clippy::collapsible_else_if)]
 pub(crate) fn handle_interaction(
-    _id: WidgetId,
-    user_input: &mut UserInput,
-    view: &View,
+    context: &mut BuildContext,
+    widget_id: WidgetId,
     gesture_response: &GestureDetectorResponse,
-    state: &mut State,
-    os_events: &mut SmallVec<[OsEvent; 4]>,
-    text: &mut TextsResources,
-    fonts: &mut FontResources,
-    view_config: &mut ViewConfig,
-    shortcuts_manager: &mut ShortcutsManager,
-    #[cfg(feature = "clipboard")] clipboard: Option<&mut Clipboard>,
-    boundary: Rect,
 ) {
     if gesture_response.is_hot() || gesture_response.is_active() {
-        user_input.cursor = Cursor::Text;
+        context.input.cursor = Cursor::Text;
     }
 
     if gesture_response.is_active() {
-        if user_input.mouse_released && gesture_response.is_hot() {
-            os_events.push(OsEvent::FocusWindow);
+        if context.input.mouse_released && gesture_response.is_hot() {
+            context.os_events.push(OsEvent::FocusWindow);
         }
-    } else if user_input.mouse_left_pressed && gesture_response.is_hot() {
-        os_events.push(OsEvent::FocusWindow);
+    } else if context.input.mouse_left_pressed && gesture_response.is_hot() {
+        context.os_events.push(OsEvent::FocusWindow);
     }
 
     if gesture_response.is_focused() {
         // Important to do this when mouse released just for convinience so we
         // can properly handle was_focused branch without conflicting with
         // other text editing widgets.
-        if user_input.mouse_released {
-            os_events.push(OsEvent::ActivateIme);
+        if context.input.mouse_released {
+            context.os_events.push(OsEvent::ActivateIme);
         }
 
-        view_config.should_update_cursor_each_frame = true;
+        context.view_config.should_update_cursor_each_frame = true;
 
-        let select_modifier = user_input.is_shift_pressed();
-        let word_modifier = if cfg!(target_os = "macos") {
-            if state.macos_cmd_modifier {
-                user_input.is_super_pressed()
-            } else {
-                user_input.is_ctrl_pressed()
-            }
-        } else {
-            user_input.is_ctrl_pressed()
-        };
-        let paragraph_modifier = if cfg!(target_os = "macos") {
-            if state.macos_cmd_modifier {
-                user_input.is_super_pressed()
-            } else {
-                user_input.is_ctrl_pressed()
-            }
-        } else {
-            user_input.is_ctrl_pressed()
-        };
+        let select_modifier = commands::select_modifier_enabled(context);
 
         // List of shortcuts that modifies text
         let edit_shortcuts: &[ShortcutId] = &[
@@ -147,370 +150,192 @@ pub(crate) fn handle_interaction(
             TextEditingShortcut::NextLine.into(),
         ];
 
-        if let Some(shortcut) = shortcuts_manager.active_shortcut_id()
+        let has_selection = commands::has_selection(context, widget_id);
+
+        let state = context
+            .widgets_states
+            .editable_text
+            .get_mut(widget_id)
+            .expect("State should be initialize by this point");
+
+        if let Some(shortcut) = context.shortcuts_manager.active_shortcut_id()
             && edit_shortcuts.contains(&shortcut)
             && let Some(id) = state.text_id
         {
-            let editor = text.editor_mut(id);
-            normalize_editable_text_selection(state, view_config, editor, true);
+            let editor = context.text.editor_mut(id);
+            normalize_editable_text_selection(state, context.view_config, editor, true);
         }
 
-        let has_selection = if let Some(id) = state.text_id {
-            let editor = text.editor_mut(id);
-
-            editor.selection() != cosmic_text::Selection::None
-        } else {
-            false
-        };
-
         if let Some(id) = state.text_id {
-            let editor = text.editor_mut(id);
+            let editor = context.text.editor_mut(id);
 
             if select_modifier && !has_selection {
                 editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
             }
         };
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::NextLine) && state.multi_line {
-            user_input.text_input.push('\n');
-            user_input.text_input_actions.push(TextInputAction::Insert);
+        handle_input_actions(widget_id, context);
+        handle_mouse_drag(widget_id, context, gesture_response);
 
-            // If shortcut_id is not None then actions won't be processed
-            shortcuts_manager.reset();
+        let state = context
+            .widgets_states
+            .editable_text
+            .get_mut(widget_id)
+            .expect("State should be initialize by this point");
+
+        if let Some(id) = state.text_id {
+            let editor = context.text.editor_mut(id);
+            if context.input.mouse_released {
+                normalize_editable_text_selection(state, context.view_config, editor, true);
+            }
         }
+    } else if gesture_response.was_focused() {
+        context.input.ime_preedit.clear();
+        context.os_events.push(OsEvent::CommitIme);
+        context.view_config.should_update_cursor_each_frame = false;
 
-        let prevent_insert = /* !shortcuts_manager.last_sequence.is_empty()
-            && shortcuts_manager.candidates > 0
-            || */
-        //shortcuts_manager.last_active_shortcut_id().is_some();
-            word_modifier || paragraph_modifier;
+        context.os_events.push(OsEvent::DeactivateIme);
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::SelectAll)
-            && let Some(id) = state.text_id
-        {
-            let editor = text.editor_mut(id);
+        let state = context
+            .widgets_states
+            .editable_text
+            .get_mut(widget_id)
+            .expect("State should be initialize by this point");
+
+        state.history_manager.clear();
+        state.scroll_x = 0.;
+
+        if let Some(id) = state.text_id {
+            let editor = context.text.editor_mut(id);
             editor.set_selection(cosmic_text::Selection::None);
             editor.action(
-                &mut fonts.font_system,
-                cosmic_text::Action::Motion(cosmic_text::Motion::BufferStart),
+                &mut context.fonts.font_system,
+                cosmic_text::Action::Motion(cosmic_text::Motion::Home),
             );
-            editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
-            editor.action(
-                &mut fonts.font_system,
-                cosmic_text::Action::Motion(cosmic_text::Motion::BufferEnd),
-            );
-            on_editable_text_cursor_moved(state, view_config, editor);
+
+            on_editable_text_cursor_moved(state, context.view_config, editor);
         }
+    }
+}
 
-        #[cfg(feature = "clipboard")]
-        if let Some(clipboard) = clipboard {
-            if shortcuts_manager.is_shortcut(CommonShortcut::Copy)
-                && let Some(id) = state.text_id
-            {
-                let editor = text.editor_mut(id);
-                let text = editor.copy_selection();
+fn handle_mouse_drag(
+    widget_id: WidgetId,
+    context: &mut BuildContext,
+    gesture_response: &GestureDetectorResponse,
+) {
+    let select_modifier = commands::select_modifier_enabled(context);
+    let state = context
+        .widgets_states
+        .editable_text
+        .get_mut(widget_id)
+        .expect("State should be initialize by this point");
 
-                if let Some(text) = text
-                    && let Err(err) = clipboard.set_text(text)
-                {
-                    log::error!("Failed to copy to clipboard: {err}");
-                }
-            }
+    let mouse_dx = state.last_mouse_x - context.input.mouse_x;
+    let mouse_dy = state.last_mouse_y - context.input.mouse_y;
 
-            if shortcuts_manager.is_shortcut(CommonShortcut::Cut)
-                && let Some(id) = state.text_id
-                && has_selection
-            {
-                let editor = text.editor_mut(id);
-                let text = editor.copy_selection();
+    state.last_mouse_x = context.input.mouse_x;
+    state.last_mouse_y = context.input.mouse_y;
 
-                if let Some(text) = text {
-                    match clipboard.set_text(text.clone()) {
-                        Ok(_) => {
-                            let (start, end) = editor
-                                .selection_bounds()
-                                .expect("Selection should be available");
-                            editor.delete_selection();
+    let drag_trigger = 4.0 * context.view.scale_factor;
 
-                            on_editable_text_updated(
-                                state,
-                                view_config,
-                                editor,
-                                Some(TextEditDelta::Delete {
-                                    start,
-                                    end,
-                                    deleted_text: text,
-                                    direction: TextDeletionDirection::Backward,
-                                }),
-                            );
-                        }
-                        Err(err) => {
-                            log::error!("Failed to copy to clipboard: {err}");
-                        }
-                    }
-                }
-            }
+    if gesture_response.is_active() {
+        state.mouse_path_x += mouse_dx.abs();
+        state.mouse_path_y += mouse_dy.abs();
 
-            if shortcuts_manager.is_shortcut(CommonShortcut::Paste)
-                && let Some(id) = state.text_id
-            {
-                let editor = text.editor_mut(id);
+        if let Some(id) = state.text_id {
+            let editor = context.text.editor_mut(id);
 
-                match clipboard.get_text() {
-                    Ok(text) => {
-                        let bounds = editor.selection_bounds();
-                        let selected_text = editor.copy_selection();
+            let relative_mouse_x = context.input.mouse_x as f32
+                - (state.boundary.x * context.view.scale_factor) as f32
+                - state.text_offset.x;
+            let relative_mouse_y = context.input.mouse_y as f32
+                - (state.boundary.y * context.view.scale_factor) as f32
+                - state.text_offset.y;
 
-                        let after_start = if let Some((before_start, _)) = bounds {
-                            before_start
-                        } else {
-                            editor.cursor()
-                        };
+            let relative_mouse_x = relative_mouse_x.floor() as i32;
+            let relative_mouse_y = relative_mouse_y.floor() as i32;
 
-                        editor.insert_string(&text, None);
-                        let after_end = editor.cursor();
+            if context.input.mouse_left_pressed {
+                context.input.ime_preedit.clear();
+                context.os_events.push(OsEvent::CommitIme);
 
-                        let delta = if let Some((before_start, before_end)) = bounds {
-                            TextEditDelta::Replace {
-                                range_before: (before_start, before_end),
-                                range_after: (after_start, after_end),
-                                text_before: selected_text.expect("Selection should be available"),
-                                text_after: text,
-                            }
-                        } else {
-                            TextEditDelta::Insert {
-                                cursor_before: after_start,
-                                cursor_after: after_end,
-                                text,
-                            }
-                        };
-
-                        on_editable_text_updated(state, view_config, editor, Some(delta));
-                    }
-                    Err(err) => {
-                        log::error!("Failed to paste from clipboard: {err}");
-                    }
-                }
-            }
-        }
-
-        if shortcuts_manager.is_shortcut(CommonShortcut::Undo)
-            && let Some(id) = state.text_id
-        {
-            let editor = text.editor_mut(id);
-            let delta = state.history_manager.undo(editor).cloned();
-
-            on_editable_text_updated(state, view_config, editor, None);
-
-            if let Some(delta) = delta {
-                state.deltas.push(EditableTextDelta::Undo(delta));
-            }
-        }
-
-        if shortcuts_manager.is_shortcut(CommonShortcut::Redo)
-            && let Some(id) = state.text_id
-        {
-            let editor = text.editor_mut(id);
-            let delta = state.history_manager.redo(editor).cloned();
-
-            on_editable_text_updated(state, view_config, editor, None);
-
-            if let Some(delta) = delta {
-                state.deltas.push(EditableTextDelta::Apply(delta));
-            }
-        }
-
-        for text_input_action in &user_input.text_input_actions {
-            match text_input_action {
-                TextInputAction::None => {}
-                TextInputAction::ImePreedit => {
-                    if let Some(id) = state.text_id {
-                        let editor = text.editor_mut(id);
-
-                        if editor.selection() != cosmic_text::Selection::None {
-                            editor.delete_selection();
-                        }
-
-                        editor.delete_range(editor.cursor(), state.ime_cursor_end);
-                        on_editable_text_updated(state, view_config, editor, None);
-
-                        if !user_input.ime_preedit.is_empty() {
-                            state.ime_cursor_end =
-                                editor.insert_at(editor.cursor(), &user_input.ime_preedit, None);
-                        }
-                    }
-                }
-                TextInputAction::ImeEnable => {}
-                TextInputAction::ImeDisable | TextInputAction::ImeCommit => {
-                    if let Some(id) = state.text_id {
-                        let editor = text.editor_mut(id);
-                        editor.delete_range(editor.cursor(), state.ime_cursor_end);
-                        on_editable_text_updated(state, view_config, editor, None);
-                    }
-                }
-                TextInputAction::Insert => {
-                    if !user_input.text_input.is_empty()
-                        && shortcuts_manager.active_shortcut_id().is_none()
-                        && !prevent_insert
-                        && let Some(id) = state.text_id
-                    {
-                        let editor = text.editor_mut(id);
-                        let text = user_input.text_input.clone();
-
-                        let bounds = editor.selection_bounds();
-                        let selected_text = editor.copy_selection();
-
-                        let after_start = if let Some((before_start, _)) = bounds {
-                            before_start
-                        } else {
-                            editor.cursor()
-                        };
-
-                        editor.insert_string(&text, None);
-                        let after_end = editor.cursor();
-
-                        let delta = if let Some((before_start, before_end)) = bounds
-                            && before_start != before_end
-                        {
-                            TextEditDelta::Replace {
-                                range_before: (before_start, before_end),
-                                range_after: (after_start, after_end),
-                                text_before: selected_text.expect("Selection should be available"),
-                                text_after: text,
-                            }
-                        } else {
-                            TextEditDelta::Insert {
-                                cursor_before: after_start,
-                                cursor_after: after_end,
-                                text,
-                            }
-                        };
-
-                        editor.set_selection(cosmic_text::Selection::None);
-                        on_editable_text_updated(state, view_config, editor, Some(delta));
-                    }
-                }
-            }
-        }
-
-        user_input.text_input_actions.clear();
-
-        let mouse_dx = state.last_mouse_x - user_input.mouse_x;
-        let mouse_dy = state.last_mouse_y - user_input.mouse_y;
-
-        state.last_mouse_x = user_input.mouse_x;
-        state.last_mouse_y = user_input.mouse_y;
-
-        let drag_trigger = 4.0 * view.scale_factor;
-
-        if gesture_response.is_active() {
-            state.mouse_path_x += mouse_dx.abs();
-            state.mouse_path_y += mouse_dy.abs();
-
-            if let Some(id) = state.text_id {
-                let editor = text.editor_mut(id);
-
-                let relative_mouse_x = user_input.mouse_x as f32
-                    - (boundary.x * view.scale_factor) as f32
-                    - state.text_offset.x;
-                let relative_mouse_y = user_input.mouse_y as f32
-                    - (boundary.y * view.scale_factor) as f32
-                    - state.text_offset.y;
-
-                let relative_mouse_x = relative_mouse_x.floor() as i32;
-                let relative_mouse_y = relative_mouse_y.floor() as i32;
-
-                if user_input.mouse_left_pressed {
-                    user_input.ime_preedit.clear();
-                    os_events.push(OsEvent::CommitIme);
-
-                    if user_input.mouse_left_click_count == 1 {
-                        if select_modifier {
-                            editor.action(
-                                &mut fonts.font_system,
-                                cosmic_text::Action::Drag {
-                                    x: relative_mouse_x,
-                                    y: relative_mouse_y,
-                                },
-                            );
-                        } else {
-                            editor.set_selection(cosmic_text::Selection::None);
-
-                            // HACK: Invalidate buffer by invoking Home motion
-                            // Don't know why, but it makes click position
-                            // more consistent when text buffer updates from
-                            // the build phase
-                            editor.action(
-                                &mut fonts.font_system,
-                                cosmic_text::Action::Motion(cosmic_text::Motion::Home),
-                            );
-                            editor.action(
-                                &mut fonts.font_system,
-                                cosmic_text::Action::Click {
-                                    x: relative_mouse_x,
-                                    y: relative_mouse_y,
-                                },
-                            );
-                        }
-                    } else if user_input.mouse_left_click_count.is_multiple_of(2) {
+                if context.input.mouse_left_click_count == 1 {
+                    if select_modifier {
                         editor.action(
-                            &mut fonts.font_system,
-                            cosmic_text::Action::DoubleClick {
+                            &mut context.fonts.font_system,
+                            cosmic_text::Action::Drag {
                                 x: relative_mouse_x,
                                 y: relative_mouse_y,
                             },
                         );
                     } else {
+                        editor.set_selection(cosmic_text::Selection::None);
+
+                        // HACK: Invalidate buffer by invoking Home motion
+                        // Don't know why, but it makes click position
+                        // more consistent when text buffer updates from
+                        // the build phase
                         editor.action(
-                            &mut fonts.font_system,
-                            cosmic_text::Action::TripleClick {
+                            &mut context.fonts.font_system,
+                            cosmic_text::Action::Motion(cosmic_text::Motion::Home),
+                        );
+                        editor.action(
+                            &mut context.fonts.font_system,
+                            cosmic_text::Action::Click {
                                 x: relative_mouse_x,
                                 y: relative_mouse_y,
                             },
                         );
                     }
+                } else if context.input.mouse_left_click_count.is_multiple_of(2) {
+                    editor.action(
+                        &mut context.fonts.font_system,
+                        cosmic_text::Action::DoubleClick {
+                            x: relative_mouse_x,
+                            y: relative_mouse_y,
+                        },
+                    );
+                } else {
+                    editor.action(
+                        &mut context.fonts.font_system,
+                        cosmic_text::Action::TripleClick {
+                            x: relative_mouse_x,
+                            y: relative_mouse_y,
+                        },
+                    );
+                }
 
-                    user_input.last_click_time = Some(Instant::now());
-                    state.direction_decided = false;
-                    on_editable_text_cursor_moved(state, view_config, editor);
-                } else if let Some(last_click_time) = user_input.last_click_time
-                    && last_click_time.elapsed().as_millis() > 17
-                    && (state.mouse_path_x > drag_trigger || state.mouse_path_y > drag_trigger)
-                {
-                    let height = boundary.height * view.scale_factor;
-                    let scroll_area_size = 8.0 * view.scale_factor;
-                    let relative_mouse_y_f64 = relative_mouse_y as f64;
-                    let at_top = relative_mouse_y_f64 <= scroll_area_size;
-                    let at_bottom = relative_mouse_y_f64 >= height - scroll_area_size;
+                context.input.last_click_time = Some(Instant::now());
+                state.direction_decided = false;
+                on_editable_text_cursor_moved(state, context.view_config, editor);
+            } else if let Some(last_click_time) = context.input.last_click_time
+                && last_click_time.elapsed().as_millis() > 17
+                && (state.mouse_path_x > drag_trigger || state.mouse_path_y > drag_trigger)
+            {
+                let height = state.boundary.height * context.view.scale_factor;
+                let scroll_area_size = 8.0 * context.view.scale_factor;
+                let relative_mouse_y_f64 = relative_mouse_y as f64;
+                let at_top = relative_mouse_y_f64 <= scroll_area_size;
+                let at_bottom = relative_mouse_y_f64 >= height - scroll_area_size;
 
-                    // Adjust overscroll speed
-                    if at_top || at_bottom {
-                        let mut distance = if at_top {
-                            (relative_mouse_y_f64 - scroll_area_size).abs()
-                        } else {
-                            (relative_mouse_y_f64 - height + scroll_area_size).abs()
-                        };
+                // Adjust overscroll speed
+                if at_top || at_bottom {
+                    let mut distance = if at_top {
+                        (relative_mouse_y_f64 - scroll_area_size).abs()
+                    } else {
+                        (relative_mouse_y_f64 - height + scroll_area_size).abs()
+                    };
 
-                        distance = f64::min(distance, 200.0);
-                        let normalized = distance / 200.0; // 0.0 to 1.0
+                    distance = f64::min(distance, 200.0);
+                    let normalized = distance / 200.0; // 0.0 to 1.0
 
-                        // non-linear curve - x^2 for more natural feel
-                        let interval = (40.0 * (1.0 - normalized * normalized)).ceil() as u128;
+                    // non-linear curve - x^2 for more natural feel
+                    let interval = (40.0 * (1.0 - normalized * normalized)).ceil() as u128;
 
-                        if let Some(last_drag) = state.last_drag {
-                            if last_drag.elapsed().as_millis() > interval {
-                                editor.action(
-                                    &mut fonts.font_system,
-                                    cosmic_text::Action::Drag {
-                                        x: relative_mouse_x,
-                                        y: relative_mouse_y,
-                                    },
-                                );
-                                state.last_drag = Some(Instant::now());
-                            }
-                        } else {
+                    if let Some(last_drag) = state.last_drag {
+                        if last_drag.elapsed().as_millis() > interval {
                             editor.action(
-                                &mut fonts.font_system,
+                                &mut context.fonts.font_system,
                                 cosmic_text::Action::Drag {
                                     x: relative_mouse_x,
                                     y: relative_mouse_y,
@@ -520,7 +345,7 @@ pub(crate) fn handle_interaction(
                         }
                     } else {
                         editor.action(
-                            &mut fonts.font_system,
+                            &mut context.fonts.font_system,
                             cosmic_text::Action::Drag {
                                 x: relative_mouse_x,
                                 y: relative_mouse_y,
@@ -528,49 +353,94 @@ pub(crate) fn handle_interaction(
                         );
                         state.last_drag = Some(Instant::now());
                     }
+                } else {
+                    editor.action(
+                        &mut context.fonts.font_system,
+                        cosmic_text::Action::Drag {
+                            x: relative_mouse_x,
+                            y: relative_mouse_y,
+                        },
+                    );
+                    state.last_drag = Some(Instant::now());
+                }
 
-                    let bounds = editor.selection_bounds();
+                let bounds = editor.selection_bounds();
 
-                    if let Some((start, end)) = bounds
-                        && start == end
-                    {
-                        editor.set_selection(cosmic_text::Selection::None);
+                if let Some((start, end)) = bounds
+                    && start == end
+                {
+                    editor.set_selection(cosmic_text::Selection::None);
+                }
+
+                state.direction_decided = false;
+                on_editable_text_cursor_moved(state, context.view_config, editor);
+            }
+        }
+    } else {
+        state.mouse_path_x = 0.;
+        state.mouse_path_y = 0.;
+    }
+}
+
+fn handle_input_actions(widget_id: WidgetId, context: &mut BuildContext) {
+    let input_actions = std::mem::take(&mut context.input.text_input_actions);
+    let word_modifier = commands::word_modifier_enabled(context, widget_id);
+    let paragraph_modifier = commands::paragraph_modifier_enabled(context, widget_id);
+    let prevent_insert = /* !shortcuts_manager.last_sequence.is_empty()
+            && shortcuts_manager.candidates > 0
+            || */
+        //shortcuts_manager.last_active_shortcut_id().is_some();
+            word_modifier || paragraph_modifier;
+
+    for text_input_action in &input_actions {
+        match text_input_action {
+            TextInputAction::None => {}
+            TextInputAction::ImePreedit => {
+                let state = context
+                    .widgets_states
+                    .editable_text
+                    .get_mut(widget_id)
+                    .expect("State should be initialize by this point");
+
+                if let Some(id) = state.text_id {
+                    let editor = context.text.editor_mut(id);
+
+                    if editor.selection() != cosmic_text::Selection::None {
+                        editor.delete_selection();
                     }
 
-                    state.direction_decided = false;
-                    on_editable_text_cursor_moved(state, view_config, editor);
+                    editor.delete_range(editor.cursor(), state.ime_cursor_end);
+                    on_editable_text_updated(state, context.view_config, editor, None);
+
+                    if !context.input.ime_preedit.is_empty() {
+                        state.ime_cursor_end =
+                            editor.insert_at(editor.cursor(), &context.input.ime_preedit, None);
+                    }
                 }
             }
-        } else {
-            state.mouse_path_x = 0.;
-            state.mouse_path_y = 0.;
-        }
+            TextInputAction::ImeEnable => {}
+            TextInputAction::ImeDisable | TextInputAction::ImeCommit => {
+                let state = context
+                    .widgets_states
+                    .editable_text
+                    .get_mut(widget_id)
+                    .expect("State should be initialize by this point");
 
-        if let Some(id) = state.text_id {
-            let editor = text.editor_mut(id);
-            if user_input.mouse_released {
-                normalize_editable_text_selection(state, view_config, editor, true);
+                if let Some(id) = state.text_id {
+                    let editor = context.text.editor_mut(id);
+                    editor.delete_range(editor.cursor(), state.ime_cursor_end);
+                    on_editable_text_updated(state, context.view_config, editor, None);
+                }
             }
-        }
-    } else if gesture_response.was_focused() {
-        user_input.ime_preedit.clear();
-        os_events.push(OsEvent::CommitIme);
-        view_config.should_update_cursor_each_frame = false;
-
-        os_events.push(OsEvent::DeactivateIme);
-
-        state.history_manager.clear();
-        state.scroll_x = 0.;
-
-        if let Some(id) = state.text_id {
-            let editor = text.editor_mut(id);
-            editor.set_selection(cosmic_text::Selection::None);
-            editor.action(
-                &mut fonts.font_system,
-                cosmic_text::Action::Motion(cosmic_text::Motion::Home),
-            );
-
-            on_editable_text_cursor_moved(state, view_config, editor);
+            TextInputAction::Insert => {
+                if !context.input.text_input.is_empty()
+                    && context.shortcuts_manager.active_shortcut_id().is_none()
+                    && !prevent_insert
+                {
+                    let text = context.input.text_input.clone();
+                    commands::insert_text(context, widget_id, text);
+                }
+            }
         }
     }
 }
