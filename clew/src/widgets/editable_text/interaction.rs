@@ -113,7 +113,6 @@ pub(crate) fn handle_commands(context: &mut BuildContext, id: WidgetId) {
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::collapsible_else_if)]
 pub(crate) fn handle_interaction(
     context: &mut BuildContext,
     widget_id: WidgetId,
@@ -235,7 +234,6 @@ fn handle_mouse_drag(
 
     state.last_mouse_x = context.input.mouse_x;
     state.last_mouse_y = context.input.mouse_y;
-
     let drag_trigger = 4.0 * context.view.scale_factor;
 
     if gesture_response.is_active() {

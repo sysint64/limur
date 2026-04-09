@@ -119,7 +119,7 @@ impl ScrollAreaBuilder {
             let layout_measures = context.widgets_states.layout_measures.get_mut(id);
 
             if let Some(layout_measures) = layout_measures {
-                if context.pre_layout {
+                if !context.pre_layout {
                     handle_interaction(
                         id,
                         state,
