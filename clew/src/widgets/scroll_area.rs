@@ -196,7 +196,7 @@ pub fn scroll_area() -> ScrollAreaBuilder {
     }
 }
 
-pub fn set_scroll_offset_x(context: &mut BuildContext, id: WidgetId, value: f64) {
+pub fn set_offset_x(context: &mut BuildContext, id: WidgetId, value: f64) {
     let state = context.widgets_states.scroll_area.get_mut(id);
 
     if let Some(state) = state {
@@ -204,7 +204,7 @@ pub fn set_scroll_offset_x(context: &mut BuildContext, id: WidgetId, value: f64)
     }
 }
 
-pub fn set_scroll_offset_y(context: &mut BuildContext, id: WidgetId, value: f64) {
+pub fn set_offset_y(context: &mut BuildContext, id: WidgetId, value: f64) {
     let state = context.widgets_states.scroll_area.get_mut(id);
 
     if let Some(state) = state {
@@ -212,7 +212,7 @@ pub fn set_scroll_offset_y(context: &mut BuildContext, id: WidgetId, value: f64)
     }
 }
 
-pub fn set_scroll_progress_x(context: &mut BuildContext, id: WidgetId, value: f64) {
+pub fn set_progress_x(context: &mut BuildContext, id: WidgetId, value: f64) {
     let state = context.widgets_states.scroll_area.get_mut(id);
 
     if let Some(state) = state {
@@ -220,7 +220,7 @@ pub fn set_scroll_progress_x(context: &mut BuildContext, id: WidgetId, value: f6
     }
 }
 
-pub fn set_scroll_progress_y(context: &mut BuildContext, id: WidgetId, value: f64) {
+pub fn set_progress_y(context: &mut BuildContext, id: WidgetId, value: f64) {
     if context.pre_layout() {
         return;
     }

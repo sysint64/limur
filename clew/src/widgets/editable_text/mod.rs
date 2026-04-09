@@ -1,5 +1,8 @@
+pub mod commands;
 pub(crate) mod interaction;
 pub(crate) mod render;
+
+pub use commands::*;
 
 pub(crate) use render::render;
 
@@ -10,6 +13,7 @@ use cosmic_text::Edit;
 
 use crate::{
     AlignY, ColorRgba, Rect, TextAlign, Vec2, WidgetRef, WidgetType,
+    keyboard::KeyCode,
     layout::{DeriveWrapSize, LayoutCommand},
     text::{Text, TextId},
     text_data::TextData,
@@ -89,6 +93,7 @@ pub(crate) struct State {
     pub(crate) boundary: Rect,
     pub(crate) truncate_lines: bool,
     pub(crate) virtualize: bool,
+    pub(crate) macos_cmd_modifier: bool,
 }
 
 impl State {
@@ -127,6 +132,7 @@ impl State {
             boundary: Rect::ZERO,
             truncate_lines: false,
             virtualize: true,
+            macos_cmd_modifier: false,
         }
     }
 }
@@ -134,6 +140,7 @@ impl State {
 #[derive(Debug, Clone, Copy, ShortcutScopeId)]
 pub enum ShortcutScopes {
     TextEditing,
+    GestureDetector,
 }
 
 #[derive(Debug, Clone, Copy, ShortcutId)]
@@ -266,30 +273,36 @@ impl<'a> EditableTextBuilder<'a> {
         state.multi_line = self.multi_line;
         state.virtualize = self.virtualize;
 
-        if let Some(gesture_response) = self.gesture_response {
-            state.gesture_detector_response = gesture_response.clone();
+        if context.pre_layout {
+            if let Some(gesture_response) = self.gesture_response {
+                state.gesture_detector_response = gesture_response.clone();
 
-            interaction::handle_interaction(
-                id,
-                context.input,
-                context.view,
-                &gesture_response,
-                state,
-                context.os_events,
-                context.text,
-                context.fonts,
-                context.view_config,
-                context.shortcuts_manager,
-                #[cfg(feature = "clipboard")]
-                context.clipboard.as_mut(),
-                state.boundary,
-            );
+                interaction::handle_interaction(
+                    id,
+                    context.input,
+                    context.view,
+                    &gesture_response,
+                    state,
+                    context.os_events,
+                    context.text,
+                    context.fonts,
+                    context.view_config,
+                    context.shortcuts_manager,
+                    #[cfg(feature = "clipboard")]
+                    context.clipboard.as_mut(),
+                    state.boundary,
+                );
 
-            context
-                .widgets_states
-                .editable_text
-                .accessed_this_frame
-                .insert(id);
+                if gesture_response.is_focused {
+                    interaction::handle_commands(context, id);
+                }
+
+                context
+                    .widgets_states
+                    .editable_text
+                    .accessed_this_frame
+                    .insert(id);
+            }
         }
 
         let state = context

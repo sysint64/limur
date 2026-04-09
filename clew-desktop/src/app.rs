@@ -308,8 +308,9 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                     self.force_redraw,
                 );
 
-                window.ui_state.user_input.key_pressed.clear();
-                window.ui_state.user_input.key_pressed_repeat.clear();
+                window.ui_state.user_input.text_input.clear();
+                window.ui_state.user_input.keys_pressed.clear();
+                window.ui_state.user_input.keys_pressed_repeat.clear();
 
                 if need_to_redraw {
                     window.renderer.process_commands(
@@ -408,6 +409,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
             }
             winit::event::WindowEvent::ModifiersChanged(new_modifiers) => {
                 self.modifiers = from_winit_modifiers(new_modifiers.state());
+                window.ui_state.user_input.modifiers = self.modifiers;
             }
             winit::event::WindowEvent::KeyboardInput {
                 event:
@@ -426,16 +428,21 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                     state == winit::event::ElementState::Released;
 
                 if state == winit::event::ElementState::Pressed {
+                    window.ui_state.user_input.key_pressed = from_winit_key_code(code);
+
                     if !repeat {
                         self.key_code = from_winit_key_code(code);
                     } else {
                         self.key_code_repeat = from_winit_key_code(code);
                     }
+                } else if state == winit::event::ElementState::Released {
+                    window.ui_state.user_input.key_released = from_winit_key_code(code);
                 }
 
                 match logical_key {
                     winit::keyboard::Key::Character(ref text) => {
                         if state.is_pressed() {
+                            println!("char: {text}");
                             window.ui_state.user_input.text_input.push_str(text);
                             window
                                 .ui_state
@@ -472,13 +479,13 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 window
                     .ui_state
                     .user_input
-                    .key_pressed
+                    .keys_pressed
                     .push((self.modifiers, self.key_code));
 
                 window
                     .ui_state
                     .user_input
-                    .key_pressed_repeat
+                    .keys_pressed_repeat
                     .push((self.modifiers, self.key_code_repeat));
             }
             // Text input events (handles regular text and IME composition)

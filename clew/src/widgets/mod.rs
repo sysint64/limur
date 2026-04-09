@@ -7,6 +7,7 @@ pub mod frame;
 pub mod gap;
 pub mod gesture_detector;
 pub mod hstack;
+pub mod list_view;
 pub mod scope;
 pub mod scroll_area;
 pub mod shortcuts;
@@ -14,7 +15,6 @@ pub mod stateful;
 pub mod svg;
 pub mod text;
 pub mod virtual_list;
-pub mod list_view;
 pub mod vstack;
 pub mod widget;
 pub mod zstack;
@@ -30,17 +30,15 @@ pub use frame::FrameBuilder;
 pub use gap::gap;
 pub use gesture_detector::{DragState, GestureDetectorResponse, gesture_detector};
 pub use hstack::hstack;
+pub use list_view::list_view;
 pub use scope::scope;
-pub use scroll_area::{
-    ScrollAreaResponse, scroll_area, set_scroll_offset_x, set_scroll_offset_y,
-    set_scroll_progress_x, set_scroll_progress_y,
-};
+pub use scroll_area::{ScrollAreaResponse, scroll_area};
 pub use shortcuts::shortcut_scope;
+pub use stateful::StatefulWidget;
 pub use stateful::stateful;
 pub use svg::svg;
 pub use text::text;
 pub use virtual_list::virtual_list;
-pub use list_view::list_view;
 pub use vstack::vstack;
 pub use widget::{Widget, widget};
 pub use zstack::zstack;

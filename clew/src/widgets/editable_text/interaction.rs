@@ -9,16 +9,79 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    GestureDetectorResponse, LayoutDirection, Rect, ShortcutId, ShortcutsManager, View, WidgetId,
+    BuildContext, GestureDetectorResponse, LayoutDirection, Rect, ShortcutId, ShortcutsManager,
+    View, WidgetId,
     io::{Cursor, TextInputAction, UserInput},
+    keyboard::KeyCode,
     state::ViewConfig,
     text::{FontResources, TextsResources},
     text_history::{TextDeletionDirection, TextEditDelta},
 };
 
-use super::{
-    CommonShortcut, EditableTextDelta, OsEvent, State, TextEditingShortcut, TextInputModifier,
-};
+use super::{CommonShortcut, EditableTextDelta, OsEvent, State, TextEditingShortcut, commands};
+
+pub(crate) fn handle_commands(context: &mut BuildContext, id: WidgetId) {
+    let is_multi_line = context
+        .widgets_states
+        .editable_text
+        .get(id)
+        .map(|it| it.multi_line)
+        .unwrap_or(false);
+
+    if context.input.key_pressed == Some(KeyCode::ArrowRight) {
+        commands::move_next(context, id);
+    }
+
+    if context.input.key_pressed == Some(KeyCode::ArrowLeft) {
+        commands::move_prev(context, id);
+    }
+
+    if context.input.key_pressed == Some(KeyCode::Delete) {
+        commands::delete(context, id);
+    }
+
+    if context.input.key_pressed == Some(KeyCode::Backspace) {
+        commands::backspace(context, id);
+    }
+
+    if cfg!(target_os = "macos") {
+        // TODO
+    } else {
+        if context.input.key_pressed == Some(KeyCode::Home) {
+            if context.input.is_ctrl_pressed() && is_multi_line {
+                commands::buffer_start(context, id);
+            } else {
+                commands::move_start(context, id);
+            }
+        }
+
+        if context.input.key_pressed == Some(KeyCode::End) {
+            if context.input.is_ctrl_pressed() && is_multi_line {
+                commands::buffer_end(context, id);
+            } else {
+                commands::move_end(context, id);
+            }
+        }
+
+        if is_multi_line {
+            if context.input.key_pressed == Some(KeyCode::ArrowUp) {
+                commands::move_up(context, id);
+            }
+
+            if context.input.key_pressed == Some(KeyCode::ArrowDown) {
+                commands::move_down(context, id);
+            }
+
+            if context.input.key_pressed == Some(KeyCode::PageUp) {
+                commands::page_up(context, id);
+            }
+
+            if context.input.key_pressed == Some(KeyCode::PageDown) {
+                commands::page_down(context, id);
+            }
+        }
+    }
+}
 
 #[allow(clippy::too_many_arguments, clippy::collapsible_else_if)]
 pub(crate) fn handle_interaction(
@@ -40,18 +103,10 @@ pub(crate) fn handle_interaction(
     }
 
     if gesture_response.is_active() {
-        if user_input.mouse_released {
-            if gesture_response.is_hot() {
-                // interaction.set_inactive(&id);
-                // interaction.focused = Some(id);
-                os_events.push(OsEvent::FocusWindow);
-            } else {
-                // interaction.set_inactive(&id);
-            }
+        if user_input.mouse_released && gesture_response.is_hot() {
+            os_events.push(OsEvent::FocusWindow);
         }
     } else if user_input.mouse_left_pressed && gesture_response.is_hot() {
-        // interaction.set_active(&id);
-        // interaction.focused = Some(id);
         os_events.push(OsEvent::FocusWindow);
     }
 
@@ -65,9 +120,25 @@ pub(crate) fn handle_interaction(
 
         view_config.should_update_cursor_each_frame = true;
 
-        let select_modifier = shortcuts_manager.has_modifier(TextInputModifier::Select);
-        let word_modifier = shortcuts_manager.has_modifier(TextInputModifier::Word);
-        let paragraph_modifier = shortcuts_manager.has_modifier(TextInputModifier::Paragraph);
+        let select_modifier = user_input.is_shift_pressed();
+        let word_modifier = if cfg!(target_os = "macos") {
+            if state.macos_cmd_modifier {
+                user_input.is_super_pressed()
+            } else {
+                user_input.is_ctrl_pressed()
+            }
+        } else {
+            user_input.is_ctrl_pressed()
+        };
+        let paragraph_modifier = if cfg!(target_os = "macos") {
+            if state.macos_cmd_modifier {
+                user_input.is_super_pressed()
+            } else {
+                user_input.is_ctrl_pressed()
+            }
+        } else {
+            user_input.is_ctrl_pressed()
+        };
 
         // List of shortcuts that modifies text
         let edit_shortcuts: &[ShortcutId] = &[
@@ -100,146 +171,6 @@ pub(crate) fn handle_interaction(
             }
         };
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::Delete)
-            && let Some(id) = state.text_id
-        {
-            let editor = text.editor_mut(id);
-
-            let (deleted_text, start, end) = if word_modifier && !has_selection {
-                editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::NextWord),
-                );
-
-                let (start, end) = editor
-                    .selection_bounds()
-                    .expect("Selection should be available");
-                let text = editor
-                    .copy_selection()
-                    .expect("Selection should be available");
-
-                editor.action(&mut fonts.font_system, cosmic_text::Action::Delete);
-                editor.set_selection(cosmic_text::Selection::None);
-
-                (text, start, end)
-            } else if !has_selection {
-                editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::Next),
-                );
-
-                let (start, end) = editor
-                    .selection_bounds()
-                    .expect("Selection should be available");
-                let text = editor
-                    .copy_selection()
-                    .expect("Selection should be available");
-
-                editor.action(&mut fonts.font_system, cosmic_text::Action::Delete);
-                editor.set_selection(cosmic_text::Selection::None);
-
-                (text, start, end)
-            } else {
-                debug_assert!(has_selection);
-
-                let (start, end) = editor
-                    .selection_bounds()
-                    .expect("Selection should be available");
-                let text = editor
-                    .copy_selection()
-                    .expect("Selection should be available");
-
-                editor.action(&mut fonts.font_system, cosmic_text::Action::Delete);
-                editor.set_selection(cosmic_text::Selection::None);
-
-                (text, start, end)
-            };
-
-            on_editable_text_updated(
-                state,
-                view_config,
-                editor,
-                Some(TextEditDelta::Delete {
-                    start,
-                    end,
-                    deleted_text,
-                    direction: TextDeletionDirection::Forward,
-                }),
-            );
-        }
-
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::Backspace)
-            && let Some(id) = state.text_id
-        {
-            let editor = text.editor_mut(id);
-
-            let (deleted_text, start, end) = if word_modifier && !has_selection {
-                editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::PreviousWord),
-                );
-
-                let (start, end) = editor
-                    .selection_bounds()
-                    .expect("Selection should be available");
-                let text = editor
-                    .copy_selection()
-                    .expect("Selection should be available");
-
-                editor.action(&mut fonts.font_system, cosmic_text::Action::Backspace);
-                editor.set_selection(cosmic_text::Selection::None);
-
-                (text, start, end)
-            } else if !has_selection {
-                editor.set_selection(cosmic_text::Selection::Normal(editor.cursor()));
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::Previous),
-                );
-
-                let (start, end) = editor
-                    .selection_bounds()
-                    .expect("Selection should be available");
-                let text = editor
-                    .copy_selection()
-                    .expect("Selection should be available");
-
-                editor.action(&mut fonts.font_system, cosmic_text::Action::Backspace);
-                editor.set_selection(cosmic_text::Selection::None);
-
-                (text, start, end)
-            } else {
-                debug_assert!(has_selection);
-
-                let (start, end) = editor
-                    .selection_bounds()
-                    .expect("Selection should be available");
-                let text = editor
-                    .copy_selection()
-                    .expect("Selection should be available");
-
-                editor.action(&mut fonts.font_system, cosmic_text::Action::Backspace);
-                editor.set_selection(cosmic_text::Selection::None);
-
-                (text, start, end)
-            };
-
-            on_editable_text_updated(
-                state,
-                view_config,
-                editor,
-                Some(TextEditDelta::Delete {
-                    start,
-                    end,
-                    deleted_text,
-                    direction: TextDeletionDirection::Backward,
-                }),
-            );
-        }
-
         if shortcuts_manager.is_shortcut(TextEditingShortcut::NextLine) && state.multi_line {
             user_input.text_input.push('\n');
             user_input.text_input_actions.push(TextInputAction::Insert);
@@ -248,279 +179,11 @@ pub(crate) fn handle_interaction(
             shortcuts_manager.reset();
         }
 
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveStart)
-            && let Some(id) = state.text_id
-        {
-            if state.multi_line {
-                let editor = text.editor_mut(id);
-                let cursor = editor.cursor();
-
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::SoftHome),
-                );
-                let home = editor.cursor();
-
-                if cursor.line == home.line && cursor.index == home.index {
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::Home),
-                    );
-                }
-
-                if !select_modifier {
-                    editor.set_selection(cosmic_text::Selection::None);
-                }
-
-                on_editable_text_cursor_moved(state, view_config, editor);
-            } else {
-                let editor = text.editor_mut(id);
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::Home),
-                );
-
-                if !select_modifier {
-                    editor.set_selection(cosmic_text::Selection::None);
-                }
-
-                on_editable_text_cursor_moved(state, view_config, editor);
-            }
-        }
-
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveEnd)
-            && let Some(id) = state.text_id
-        {
-            let editor = text.editor_mut(id);
-            editor.action(
-                &mut fonts.font_system,
-                cosmic_text::Action::Motion(cosmic_text::Motion::ParagraphEnd),
-            );
-
-            if !select_modifier {
-                editor.set_selection(cosmic_text::Selection::None);
-            }
-
-            on_editable_text_cursor_moved(state, view_config, editor);
-        }
-
-        if state.multi_line {
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveUp)
-                && let Some(id) = state.text_id
-            {
-                let editor = text.editor_mut(id);
-
-                if !has_selection || select_modifier {
-                    if paragraph_modifier {
-                        move_paragraph(fonts, editor, ParagraphMotionDirection::Up);
-                    } else {
-                        editor.action(
-                            &mut fonts.font_system,
-                            cosmic_text::Action::Motion(cosmic_text::Motion::Up),
-                        );
-                    }
-                } else {
-                    if let Some((start, _)) = editor.selection_bounds() {
-                        editor.set_cursor(start);
-                    }
-
-                    editor.set_selection(cosmic_text::Selection::None);
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::Up),
-                    );
-                }
-
-                on_editable_text_cursor_moved(state, view_config, editor);
-            }
-
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveDown)
-                && let Some(id) = state.text_id
-            {
-                let editor = text.editor_mut(id);
-
-                if !has_selection || select_modifier {
-                    if paragraph_modifier {
-                        move_paragraph(fonts, editor, ParagraphMotionDirection::Down);
-                    } else {
-                        editor.action(
-                            &mut fonts.font_system,
-                            cosmic_text::Action::Motion(cosmic_text::Motion::Down),
-                        );
-                    }
-                } else {
-                    if let Some((_, end)) = editor.selection_bounds() {
-                        editor.set_cursor(end);
-                    }
-
-                    editor.set_selection(cosmic_text::Selection::None);
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::Down),
-                    );
-                }
-
-                on_editable_text_cursor_moved(state, view_config, editor);
-            }
-
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::PageUp)
-                && let Some(id) = state.text_id
-            {
-                let editor = text.editor_mut(id);
-
-                if !select_modifier {
-                    editor.set_selection(cosmic_text::Selection::None);
-                }
-
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::PageUp),
-                );
-
-                on_editable_text_cursor_moved(state, view_config, editor);
-            }
-
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::PageDown)
-                && let Some(id) = state.text_id
-            {
-                let editor = text.editor_mut(id);
-
-                if !select_modifier {
-                    editor.set_selection(cosmic_text::Selection::None);
-                }
-
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::PageDown),
-                );
-
-                on_editable_text_cursor_moved(state, view_config, editor);
-            }
-
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::BufferStart)
-                && let Some(id) = state.text_id
-            {
-                let editor = text.editor_mut(id);
-
-                if !select_modifier {
-                    editor.set_selection(cosmic_text::Selection::None);
-                }
-
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::BufferStart),
-                );
-
-                on_editable_text_cursor_moved(state, view_config, editor);
-            }
-
-            if shortcuts_manager.is_shortcut(TextEditingShortcut::BufferEnd)
-                && let Some(id) = state.text_id
-            {
-                let editor = text.editor_mut(id);
-
-                if !select_modifier {
-                    editor.set_selection(cosmic_text::Selection::None);
-                }
-
-                editor.action(
-                    &mut fonts.font_system,
-                    cosmic_text::Action::Motion(cosmic_text::Motion::BufferEnd),
-                );
-
-                on_editable_text_cursor_moved(state, view_config, editor);
-            }
-        }
-
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::MovePrev)
-            && let Some(id) = state.text_id
-        {
-            let editor = text.editor_mut(id);
-
-            if !has_selection || select_modifier {
-                if has_selection && !state.direction_decided {
-                    state.direction_decided = true;
-                    decide_editable_text_direction_prev(state, view_config, editor);
-                }
-
-                if word_modifier {
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::LeftWord),
-                    );
-                } else {
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::Left),
-                    );
-                }
-            } else {
-                let bounds = editor.selection_bounds();
-
-                if let Some((start, end)) = bounds {
-                    match view_config.layout_direction {
-                        LayoutDirection::LTR => editor.set_cursor(start),
-                        LayoutDirection::RTL => editor.set_cursor(end),
-                    }
-                }
-
-                editor.set_selection(cosmic_text::Selection::None);
-
-                if word_modifier {
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::LeftWord),
-                    );
-                }
-            }
-
-            on_editable_text_cursor_moved(state, view_config, editor);
-        }
-
-        if shortcuts_manager.is_shortcut(TextEditingShortcut::MoveNext)
-            && let Some(id) = state.text_id
-        {
-            let editor = text.editor_mut(id);
-
-            if !has_selection || select_modifier {
-                if has_selection && !state.direction_decided {
-                    state.direction_decided = true;
-                    decide_editable_text_direction_next(state, view_config, editor);
-                }
-
-                if word_modifier {
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::RightWord),
-                    );
-                } else {
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::Right),
-                    );
-                }
-            } else {
-                let bounds = editor.selection_bounds();
-
-                if let Some((start, end)) = bounds {
-                    match view_config.layout_direction {
-                        LayoutDirection::LTR => editor.set_cursor(end),
-                        LayoutDirection::RTL => editor.set_cursor(start),
-                    }
-                }
-
-                editor.set_selection(cosmic_text::Selection::None);
-
-                if word_modifier {
-                    editor.action(
-                        &mut fonts.font_system,
-                        cosmic_text::Action::Motion(cosmic_text::Motion::RightWord),
-                    );
-                }
-            }
-
-            on_editable_text_cursor_moved(state, view_config, editor);
-        }
+        let prevent_insert = /* !shortcuts_manager.last_sequence.is_empty()
+            && shortcuts_manager.candidates > 0
+            || */
+        //shortcuts_manager.last_active_shortcut_id().is_some();
+            word_modifier || paragraph_modifier;
 
         if shortcuts_manager.is_shortcut(TextEditingShortcut::SelectAll)
             && let Some(id) = state.text_id
@@ -688,6 +351,7 @@ pub(crate) fn handle_interaction(
                 TextInputAction::Insert => {
                     if !user_input.text_input.is_empty()
                         && shortcuts_manager.active_shortcut_id().is_none()
+                        && !prevent_insert
                         && let Some(id) = state.text_id
                     {
                         let editor = text.editor_mut(id);
@@ -912,12 +576,12 @@ pub(crate) fn handle_interaction(
 }
 
 #[derive(Copy, Clone)]
-enum ParagraphMotionDirection {
+pub(crate) enum ParagraphMotionDirection {
     Up,
     Down,
 }
 
-fn move_paragraph(
+pub(crate) fn move_paragraph(
     fonts: &mut FontResources,
     editor: &mut cosmic_text::Editor,
     direction: ParagraphMotionDirection,

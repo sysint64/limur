@@ -64,6 +64,7 @@ impl WidgetState for State {
 
 #[derive(Default, Clone, PartialEq)]
 pub struct GestureDetectorResponse {
+    pub id: WidgetId,
     pub clicked: bool,
     pub is_active: bool,
     pub is_hot: bool,
@@ -150,6 +151,7 @@ impl GestureDetectorBuilder {
         }
 
         let response = GestureDetectorResponse {
+            id,
             clicked: state.clicked,
             is_active: state.is_active,
             is_hot: state.is_hot,
@@ -186,6 +188,22 @@ pub fn gesture_detector() -> GestureDetectorBuilder {
         clickable: false,
         dragable: false,
         focusable: false,
+    }
+}
+
+pub fn set_active(context: &mut BuildContext, id: WidgetId, value: bool) {
+    let state = context.widgets_states.gesture_detector.get_mut(id);
+
+    if let Some(state) = state {
+        state.is_active = value;
+    }
+}
+
+pub fn set_clicked(context: &mut BuildContext, id: WidgetId, value: bool) {
+    let state = context.widgets_states.gesture_detector.get_mut(id);
+
+    if let Some(state) = state {
+        state.clicked = value;
     }
 }
 

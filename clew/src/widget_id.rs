@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use rustc_hash::FxHasher;
 
-#[derive(Clone, Copy, Debug, Eq)]
+#[derive(Default, Clone, Copy, Debug, Eq)]
 pub struct WidgetId {
     base: u64, // hash of file/line/column
     seed: Option<u64>,

@@ -24,8 +24,12 @@ pub struct UserInput {
     pub mouse_left_click_count: u32,
 
     // Keyboard state
-    pub key_pressed: SmallVec<[(Option<KeyModifiers>, Option<KeyCode>); 4]>,
-    pub key_pressed_repeat: SmallVec<[(Option<KeyModifiers>, Option<KeyCode>); 4]>,
+    pub modifiers: Option<KeyModifiers>,
+    pub key_pressed: Option<KeyCode>,
+    pub key_released: Option<KeyCode>,
+
+    pub keys_pressed: SmallVec<[(Option<KeyModifiers>, Option<KeyCode>); 4]>,
+    pub keys_pressed_repeat: SmallVec<[(Option<KeyModifiers>, Option<KeyCode>); 4]>,
 
     pub is_key_pressed: bool,
     pub is_key_released: bool,
@@ -111,6 +115,22 @@ impl ClickTracker {
 }
 
 impl UserInput {
+    pub fn is_shift_pressed(&self) -> bool {
+        self.modifiers.unwrap_or_default() & KeyModifiers::SHIFT == KeyModifiers::SHIFT
+    }
+
+    pub fn is_ctrl_pressed(&self) -> bool {
+        self.modifiers.unwrap_or_default() & KeyModifiers::CONTROL == KeyModifiers::CONTROL
+    }
+
+    pub fn is_alt_pressed(&self) -> bool {
+        self.modifiers.unwrap_or_default() & KeyModifiers::ALT == KeyModifiers::ALT
+    }
+
+    pub fn is_super_pressed(&self) -> bool {
+        self.modifiers.unwrap_or_default() & KeyModifiers::SUPER == KeyModifiers::SUPER
+    }
+
     pub fn reset(&mut self) {
         self.mouse_pressed = false;
         self.mouse_released = false;
@@ -120,6 +140,7 @@ impl UserInput {
         self.mouse_left_released = false;
         self.mouse_right_released = false;
         self.mouse_middle_released = false;
+        self.key_pressed = None;
     }
 
     pub fn clear_frame_events(&mut self) {

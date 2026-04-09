@@ -305,10 +305,6 @@ impl<'a, 'b> BuildContext<'a, 'b> {
         None
     }
 
-    pub fn is_shortcut_down<T: Into<ShortcutId>>(&self, shortcut_id: T) -> bool {
-        self.shortcuts_manager.is_shortcut(shortcut_id)
-    }
-
     pub fn is_shortcut<T: Into<ShortcutId>>(&self, shortcut_id: T) -> bool {
         self.shortcuts_manager.is_shortcut(shortcut_id)
     }

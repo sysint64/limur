@@ -53,12 +53,6 @@ impl Window<DemoApplication, ()> for MainWindow {
             .build(ctx, |ctx| {
                 let response = scroll_area()
                     .fill_max_size()
-                    // .background(
-                    //     ui::decoration()
-                    //         .color(ui::ColorRgba::from_hex(0xFFFF0000).with_opacity(0.2))
-                    //         .border_radius(ui::BorderRadius::all(16.))
-                    //         .build(ctx),
-                    // )
                     .build(ctx, |ctx| {
                         ui::vstack().fill_max_width().build(ctx, |ctx| {
                             ui::text("Header").build(ctx);
@@ -73,7 +67,7 @@ impl Window<DemoApplication, ()> for MainWindow {
                                         .border_radius(ui::BorderRadius::all(16.))
                                         .build(ctx),
                                 )
-                                .items_count(10_000_000)
+                                .items_count(10_000_000_000)
                                 .item_size(64.)
                                 .build(ctx, |ctx, index| {
                                     ui::text(&format!("List 1: Item {index}"))
@@ -115,29 +109,6 @@ impl Window<DemoApplication, ()> for MainWindow {
                         clew_widgets::vertical_scroll_bar().build(ctx);
                     });
                 }
-                // let response = ui::virtual_list()
-                //     .fill_max_size()
-                //     .background(
-                //         ui::decoration()
-                //             .color(ui::ColorRgba::from_hex(0xFFFF0000).with_opacity(0.2))
-                //             .border_radius(ui::BorderRadius::all(16.))
-                //             .build(ctx),
-                //     )
-                //     .items_count(10_000_000_000)
-                //     .item_size(32.)
-                //     .build(ctx, |ctx, index| {
-                //         ui::text(&format!("Item {index}"))
-                //             .padding(ui::EdgeInsets::symmetric(16., 0.))
-                //             .height(32.)
-                //             .fill_max_width()
-                //             .build(ctx);
-                //     });
-
-                // if response.overflow_y {
-                //     ctx.provide(response.clone(), |ctx| {
-                //         clew_widgets::vertical_scroll_bar().build(ctx);
-                //     });
-                // }
             });
     }
 }
