@@ -14,4 +14,3 @@ categories = ["gui"]
 log = { workspace = true }
 clew = { version = "0.0.2", path = "../clew" }
 clew-derive = { version = "0.0.1", path = "../clew-derive" }
-profiling = { workspace = true }

@@ -15,8 +15,6 @@ vello = "0.6.0"
 clew = { version = "0.0.2", path = "../clew" }
 cosmic-text = { workspace = true }
 raw-window-handle = { workspace = true }
-profiling = { workspace = true }
-tracy-client = { workspace = true }
 log = { workspace = true }
 vello_svg = { version = "0.8" }
 skrifa = "0.39.0"

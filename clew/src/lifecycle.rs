@@ -1,13 +1,15 @@
+use std::time::Instant;
+
 use crate::{io::Cursor, state::UiState};
 
 pub fn init_cycle(state: &mut UiState) {
     state.animations_stepped_this_frame.clear();
-    state.layout_commands.clear();
     state.render_state.commands.clear();
     state.widget_placements.clear();
-    state.layout_items.clear();
+    state.clipped_layout_items.clear();
     state.non_interactable.clear();
     state.user_input.cursor = Cursor::Default;
+    state.cycle_timer = Instant::now();
 
     state.shortcuts_manager.init_cycle(&state.user_input);
 
@@ -22,5 +24,8 @@ pub fn init_cycle(state: &mut UiState) {
 
 pub fn finalize_cycle(state: &mut UiState) {
     state.shortcuts_manager.finalize_cycle(&state.user_input);
-    state.user_input.reset();
+    state.cycle_time = state.cycle_timer.elapsed();
+    state.widgets_states.sweep();
+    state.phase_allocator.reset();
+    state.layers.sweep();
 }

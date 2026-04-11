@@ -1,4 +1,8 @@
-use std::{any::Any, sync::Arc};
+use std::{
+    any::Any,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 #[cfg(feature = "clipboard")]
 use arboard::Clipboard;
@@ -6,14 +10,15 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 
 use crate::{
+    LayoutDirection, Rect, ShortcutsRegistry, Vec2, View, WidgetId, WidgetRef,
     editable_text::{self, OsEvent},
     interaction::InteractionState,
     io::UserInput,
+    layer::Layer,
     layout::{LayoutCommand, LayoutItem, LayoutMeasure, LayoutState, WidgetPlacement},
     render::RenderState,
     shortcuts::ShortcutsManager,
     widgets::{decorated_box, gesture_detector, scroll_area, svg, text},
-    LayoutDirection, Rect, ShortcutsRegistry, View, WidgetId, WidgetRef,
 };
 
 pub trait WidgetState: Any + Send + 'static {
@@ -25,16 +30,20 @@ pub trait WidgetState: Any + Send + 'static {
 }
 
 pub struct UiState {
-    pub view: View,
-    pub render_state: RenderState,
-    pub layout_commands: Vec<LayoutCommand>,
-    pub phase_allocator: bumpalo::Bump,
-    pub(crate) layout_state: LayoutState,
+    pub root_layer: Layer,
+    pub cycle_timer: Instant,
+    pub cycle_time: Duration,
     pub current_event_queue: Vec<Arc<dyn Any + Send>>,
     pub next_event_queue: Vec<Arc<dyn Any + Send>>,
+    pub view: View,
+    pub render_state: RenderState,
+    // pub layout_commands: Vec<LayoutCommand>,
+    pub phase_allocator: bumpalo::Bump,
+    // pub(crate) layout_state: LayoutState,
     pub(crate) widgets_states: WidgetsStates,
     pub(crate) widget_placements: Vec<WidgetPlacement>,
-    pub(crate) layout_items: Vec<LayoutItem>,
+    // pub(crate) layout_items: Vec<LayoutItem>,
+    pub(crate) clipped_layout_items: Vec<LayoutItem>,
     pub interaction_state: InteractionState,
     pub last_interaction_state: InteractionState,
     pub user_input: UserInput,
@@ -52,6 +61,7 @@ pub struct UiState {
     pub view_config: ViewConfig,
     #[cfg(feature = "clipboard")]
     pub(crate) clipboard: Option<Clipboard>,
+    pub(crate) layers: TypedWidgetStates<Layer>,
 }
 
 #[derive(Default)]
@@ -207,17 +217,20 @@ impl UiState {
             }
         };
 
+        let root_layer = Layer::new(view.size());
+
         Self {
             view,
             render_state: Default::default(),
             phase_allocator,
-            layout_commands: Vec::new(),
+            // layout_commands: Vec::new(),
             current_event_queue: Vec::new(),
             next_event_queue: Vec::new(),
             widgets_states: WidgetsStates::default(),
-            layout_state: LayoutState::default(),
+            // layout_state: LayoutState::default(),
             widget_placements: Vec::new(),
-            layout_items: Vec::new(),
+            clipped_layout_items: Vec::new(),
+            // layout_items: Vec::new(),
             backgrounds: SmallVec::new(),
             foregrounds: SmallVec::new(),
             interaction_state: InteractionState::default(),
@@ -234,12 +247,15 @@ impl UiState {
             view_config: ViewConfig::default(),
             #[cfg(feature = "clipboard")]
             clipboard,
+            layers: TypedWidgetStates::default(),
+            cycle_timer: Instant::now(),
+            cycle_time: Duration::new(0, 0),
+            root_layer,
         }
     }
 }
 
 impl WidgetsStates {
-    #[profiling::function]
     pub fn get_or_insert_custom<T: WidgetState, F>(&mut self, id: WidgetId, create: F) -> &mut T
     where
         F: FnOnce() -> T,
@@ -354,7 +370,6 @@ impl WidgetsStates {
     //         .and_then(|b| b.as_any_mut().downcast_mut::<T>())
     // }
 
-    #[profiling::function]
     pub fn update_last<T>(&mut self, _id: WidgetId) -> bool
     where
         T: WidgetState + Clone + PartialEq,
@@ -391,7 +406,6 @@ impl WidgetsStates {
     //     self.data.contains_key(&id)
     // }
 
-    #[profiling::function]
     pub fn sweep(&mut self) {
         self.decorated_box.clear();
         self.svg.clear();

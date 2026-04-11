@@ -31,7 +31,6 @@ pub enum ButtonShortcut {
 }
 
 impl<'a> ButtonBuilder<'a> {
-    #[profiling::function]
     pub fn build(mut self, ctx: &mut ui::BuildContext) -> ButtonResponse {
         let layout = self.frame.take_layout();
 
@@ -76,14 +75,6 @@ impl<'a> ButtonBuilder<'a> {
                     ui::shortcut_scope(ShortcutScopeButton)
                         .active(response.is_focused())
                         .build(ctx, |ctx| {
-                            if ctx.is_shortcut(ButtonShortcut::Activate) {
-                                ui::gesture_detector::set_active(ctx, gesture_id, true);
-                            }
-
-                            if ctx.is_shortcut(ButtonShortcut::Click) {
-                                ui::gesture_detector::set_clicked(ctx, gesture_id, true);
-                            }
-
                             ui::text(self.text)
                                 .background(
                                     ui::decoration()
@@ -220,7 +211,6 @@ impl VerticalScrollBarBuilder {
         self
     }
 
-    #[profiling::function]
     pub fn build(self, ctx: &mut ui::BuildContext) {
         ui::stateful::<VerticalScrollBar>()
             .frame(self.frame)

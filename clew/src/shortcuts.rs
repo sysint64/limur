@@ -4,7 +4,7 @@ use std::{
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 
 use crate::{
     io::UserInput,
@@ -39,6 +39,27 @@ fn remove_modifiers(sequence: &[KeyBinding], modifiers: KeyModifiers) -> Vec<Key
 
 impl KeyBinding {
     pub fn new(key: KeyCode) -> Self {
+        Self {
+            modifiers: KeyModifiers::empty(),
+            key,
+        }
+    }
+
+    pub fn up(key: KeyCode) -> Self {
+        Self {
+            modifiers: KeyModifiers::empty(),
+            key,
+        }
+    }
+
+    pub fn down(key: KeyCode) -> Self {
+        Self {
+            modifiers: KeyModifiers::empty(),
+            key,
+        }
+    }
+
+    pub fn repeat(key: KeyCode) -> Self {
         Self {
             modifiers: KeyModifiers::empty(),
             key,
@@ -127,30 +148,6 @@ impl ShortcutScope {
         self
     }
 
-    pub fn add_repeat<T: Into<ShortcutId>>(
-        &mut self,
-        id: T,
-        shortcut: KeyBinding,
-    ) -> &mut ShortcutScope {
-        let key = id.into();
-
-        let config = ShortcutConfig {
-            sequence: vec![shortcut],
-            repeat: true,
-        };
-
-        match self.shortcuts.entry(key) {
-            Entry::Occupied(mut occupied_entry) => {
-                *occupied_entry.get_mut() = config;
-            }
-            Entry::Vacant(_) => {
-                self.shortcuts.insert(key, config);
-            }
-        }
-
-        self
-    }
-
     pub fn add_sequence<T: Into<ShortcutId>>(
         &mut self,
         id: T,
@@ -196,16 +193,17 @@ impl ShortcutScope {
 }
 
 pub struct ShortcutsManager {
-    last_sequence: Vec<KeyBinding>,
+    pub(crate) last_sequence: Vec<KeyBinding>,
     last_found_candidate: Option<Instant>,
     chord_timeout: Duration,
-    candidates: u32,
+    pub(crate) candidates: u32,
 
     pub(crate) current_path: SmallVec<[ShortcutScopeId; 4]>,
     pub(crate) active_path: SmallVec<[ShortcutScopeId; 4]>,
     pub(crate) branches: SmallVec<[SmallVec<[ShortcutScopeId; 4]>; 4]>,
     pub(crate) depth_before_pop: usize,
     pub(crate) current_active_shortcuts: FxHashMap<SmallVec<[ShortcutScopeId; 4]>, ShortcutId>,
+    pub(crate) last_active_shortcuts: FxHashMap<SmallVec<[ShortcutScopeId; 4]>, ShortcutId>,
     pub(crate) next_active_shortcuts: FxHashMap<SmallVec<[ShortcutScopeId; 4]>, ShortcutId>,
     pub(crate) current_active_modifiers:
         FxHashMap<SmallVec<[ShortcutScopeId; 4]>, FxHashSet<ShortcutModifierId>>,
@@ -224,6 +222,7 @@ impl Default for ShortcutsManager {
             depth_before_pop: 1,
             last_sequence: Default::default(),
             current_active_shortcuts: Default::default(),
+            last_active_shortcuts: Default::default(),
             next_active_shortcuts: Default::default(),
             current_active_modifiers: Default::default(),
             next_active_modifiers: Default::default(),
@@ -239,6 +238,26 @@ impl ShortcutsManager {
         } else {
             false
         }
+    }
+
+    pub fn is_shortcut_up<T: Into<ShortcutId>>(&self, id: T) -> bool {
+        if let Some(active_shortcut_id) = self.current_active_shortcuts.get(&self.current_path) {
+            *active_shortcut_id == id.into()
+        } else {
+            false
+        }
+    }
+
+    pub fn is_shortcut_down<T: Into<ShortcutId>>(&self, id: T) -> bool {
+        if let Some(active_shortcut_id) = self.current_active_shortcuts.get(&self.current_path) {
+            *active_shortcut_id == id.into()
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn last_active_shortcut_id(&self) -> Option<ShortcutId> {
+        self.last_active_shortcuts.get(&self.current_path).copied()
     }
 
     pub(crate) fn active_shortcut_id(&self) -> Option<ShortcutId> {
@@ -286,7 +305,26 @@ impl ShortcutsManager {
     ) -> Option<ShortcutId> {
         let mut shortcut_id = None;
 
-        for (modifiers, _) in user_input.key_pressed.iter() {
+        // Resolve modifiers only
+        if user_input.keys_pressed.is_empty() && user_input.keys_pressed_repeat.is_empty() {
+            let modifiers = user_input.modifiers.unwrap_or_default();
+
+            let (candidates, resolved_shortcut_id, active_path) = Self::resolve(
+                registry,
+                modifiers,
+                &self.current_path,
+                &mut self.next_active_modifiers,
+                &self.last_sequence,
+                false,
+            );
+
+            shortcut_id = resolved_shortcut_id;
+
+            self.active_path = active_path;
+            self.candidates += candidates;
+        }
+
+        for (modifiers, _) in user_input.keys_pressed.iter() {
             let modifiers = modifiers.unwrap_or_default();
 
             let (candidates, resolved_shortcut_id, active_path) = Self::resolve(
@@ -305,7 +343,7 @@ impl ShortcutsManager {
         }
 
         if shortcut_id.is_none() {
-            for (modifiers, key) in user_input.key_pressed_repeat.iter() {
+            for (modifiers, key) in user_input.keys_pressed_repeat.iter() {
                 let modifiers = modifiers.unwrap_or_default();
 
                 if let Some(key) = key {
@@ -332,6 +370,7 @@ impl ShortcutsManager {
     }
 
     pub(crate) fn init_cycle(&mut self, user_input: &UserInput) {
+        self.last_active_shortcuts = std::mem::take(&mut self.current_active_shortcuts);
         self.current_active_shortcuts = std::mem::take(&mut self.next_active_shortcuts);
         self.current_active_modifiers = std::mem::take(&mut self.next_active_modifiers);
 
@@ -339,20 +378,20 @@ impl ShortcutsManager {
         self.next_active_shortcuts.clear();
         self.next_active_modifiers.clear();
 
-        for (modifiers, key) in user_input.key_pressed.iter() {
+        if let Some(time) = self.last_found_candidate {
+            let duration = time.elapsed();
+
+            if duration > self.chord_timeout {
+                self.last_sequence.clear();
+            }
+        } else {
+            self.last_sequence.clear();
+        }
+
+        for (modifiers, key) in user_input.keys_pressed.iter() {
             let modifiers = modifiers.unwrap_or_default();
 
             self.candidates = 0;
-
-            if let Some(time) = self.last_found_candidate {
-                let duration = time.elapsed();
-
-                if duration > self.chord_timeout {
-                    self.last_sequence.clear();
-                }
-            } else {
-                self.last_sequence.clear();
-            }
 
             if let Some(key) = key {
                 self.last_sequence.push(KeyBinding {
@@ -363,7 +402,7 @@ impl ShortcutsManager {
         }
     }
 
-    pub(crate) fn finalize_cycle(&mut self) {
+    pub(crate) fn finalize_cycle(&mut self, user_input: &UserInput) {
         let has_not_active_shortcut = self.next_active_shortcuts.is_empty();
 
         if has_not_active_shortcut && self.candidates == 0 {

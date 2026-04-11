@@ -23,8 +23,6 @@ usvg = "0.45"
 resvg = "0.45"
 bumpalo = { version = "3.19", features = ["collections", "boxed"] }
 smallvec = "1.15.1"
-profiling = "1.0"
-tracy-client = "0.18.3"
 strum = "0.27"
 strum_macros = "0.27"
 

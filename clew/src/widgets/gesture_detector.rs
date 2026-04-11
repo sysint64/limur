@@ -1,5 +1,7 @@
 use crate::{
-    View, WidgetId, WidgetRef, WidgetType, impl_id, interaction::InteractionState, io::UserInput,
+    View, WidgetId, WidgetRef, WidgetType, impl_id,
+    interaction::{InteractionContext, InteractionState},
+    io::UserInput,
     state::WidgetState,
 };
 use std::any::Any;
@@ -127,7 +129,6 @@ impl GestureDetectorBuilder {
         self
     }
 
-    #[profiling::function]
     pub fn build<F>(self, context: &mut BuildContext, callback: F) -> GestureDetectorResponse
     where
         F: FnOnce(&mut BuildContext),
@@ -143,12 +144,6 @@ impl GestureDetectorBuilder {
         state.clickable = self.clickable;
         state.dragable = self.dragable;
         state.focusable = self.focusable;
-
-        if context.pre_layout {
-            handle_interaction(id, context.input, context.view, context.interaction, state);
-        } else {
-            state.clicked = false;
-        }
 
         let response = GestureDetectorResponse {
             id,
@@ -207,13 +202,11 @@ pub fn set_clicked(context: &mut BuildContext, id: WidgetId, value: bool) {
     }
 }
 
-pub fn handle_interaction(
-    id: WidgetId,
-    input: &UserInput,
-    view: &View,
-    interaction: &mut InteractionState,
-    widget_state: &mut State,
-) {
+pub fn handle_interaction(ctx: &mut InteractionContext, id: WidgetId) -> bool {
+    let widget_state = ctx.widgets_states.gesture_detector.get_mut(id).unwrap();
+
+    let state = widget_state.clone();
+
     widget_state.clicked = false;
 
     if widget_state.dragable {
@@ -226,37 +219,37 @@ pub fn handle_interaction(
     }
 
     if widget_state.clickable || widget_state.dragable {
-        if interaction.is_active(&id) {
-            if input.mouse_released {
-                if interaction.is_hot(&id) {
-                    interaction.set_inactive(&id);
+        if ctx.interaction_state.is_active(&id) {
+            if ctx.user_input.mouse_released {
+                if ctx.interaction_state.is_hot(&id) {
+                    ctx.interaction_state.set_inactive(&id);
                     widget_state.clicked = widget_state.clickable;
 
                     if widget_state.focusable {
-                        interaction.set_focused(id);
+                        ctx.interaction_state.set_focused(id);
                     }
                 } else {
-                    interaction.set_inactive(&id);
+                    ctx.interaction_state.set_inactive(&id);
                 }
 
                 if widget_state.dragable && widget_state.drag_state == DragState::Update {
                     widget_state.drag_state = DragState::End;
                 }
             }
-        } else if input.mouse_left_pressed
-            && interaction.is_hot(&id)
-            && interaction.active.is_none()
+        } else if ctx.user_input.mouse_left_pressed
+            && ctx.interaction_state.is_hot(&id)
+            && ctx.interaction_state.active.is_none()
         {
             if widget_state.dragable && widget_state.drag_state == DragState::None {
                 widget_state.drag_state = DragState::Start;
             }
 
             if widget_state.focusable {
-                interaction.set_focused(id);
+                ctx.interaction_state.set_focused(id);
             }
 
-            interaction.set_active(&id);
-            interaction.block_hover = widget_state.dragable;
+            ctx.interaction_state.set_active(&id);
+            ctx.interaction_state.block_hover = widget_state.dragable;
         }
     }
 
@@ -271,20 +264,20 @@ pub fn handle_interaction(
                 widget_state.drag_delta_y = 0.;
             }
             DragState::Start => {
-                widget_state.drag_start_x = input.mouse_x / view.scale_factor;
-                widget_state.drag_start_y = input.mouse_y / view.scale_factor;
-                widget_state.last_x = input.mouse_x / view.scale_factor;
-                widget_state.last_y = input.mouse_y / view.scale_factor;
+                widget_state.drag_start_x = ctx.user_input.mouse_x / ctx.view.scale_factor;
+                widget_state.drag_start_y = ctx.user_input.mouse_y / ctx.view.scale_factor;
+                widget_state.last_x = ctx.user_input.mouse_x / ctx.view.scale_factor;
+                widget_state.last_y = ctx.user_input.mouse_y / ctx.view.scale_factor;
                 widget_state.drag_delta_x = 0.;
                 widget_state.drag_delta_y = 0.;
             }
             DragState::Update => {
-                widget_state.drag_x = input.mouse_x / view.scale_factor;
-                widget_state.drag_y = input.mouse_y / view.scale_factor;
+                widget_state.drag_x = ctx.user_input.mouse_x / ctx.view.scale_factor;
+                widget_state.drag_y = ctx.user_input.mouse_y / ctx.view.scale_factor;
                 widget_state.drag_delta_x = widget_state.drag_x - widget_state.last_x;
                 widget_state.drag_delta_y = widget_state.drag_y - widget_state.last_y;
-                widget_state.last_x = input.mouse_x / view.scale_factor;
-                widget_state.last_y = input.mouse_y / view.scale_factor;
+                widget_state.last_x = ctx.user_input.mouse_x / ctx.view.scale_factor;
+                widget_state.last_y = ctx.user_input.mouse_y / ctx.view.scale_factor;
             }
             DragState::End => {
                 widget_state.drag_start_x = 0.;
@@ -297,8 +290,10 @@ pub fn handle_interaction(
         }
     }
 
-    widget_state.is_active = interaction.is_active(&id);
-    widget_state.is_hot = interaction.is_hot(&id);
-    widget_state.is_focused = interaction.is_focused(&id);
-    widget_state.was_focused = interaction.was_focused(&id);
+    widget_state.is_active = ctx.interaction_state.is_active(&id);
+    widget_state.is_hot = ctx.interaction_state.is_hot(&id);
+    widget_state.is_focused = ctx.interaction_state.is_focused(&id);
+    widget_state.was_focused = ctx.interaction_state.was_focused(&id);
+
+    state != *widget_state
 }

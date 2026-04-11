@@ -1,11 +1,12 @@
 use rustc_hash::FxHashSet;
 
 use crate::{
-    Vec2, View, WidgetId,
+    Vec2, View, WidgetId, WidgetType,
     io::UserInput,
     layout::LayoutItem,
     point_with_rect_hit_test,
-    text::{FontResources, TextsResources},
+    state::{UiState, WidgetsStates},
+    widgets,
 };
 
 #[derive(Default, Clone, PartialEq)]
@@ -89,43 +90,84 @@ pub fn handle_interaction_before_build(user_input: &mut UserInput, view: &View) 
     }
 }
 
-pub fn handle_interaction(
-    user_input: &mut UserInput,
-    interaction_state: &mut InteractionState,
-    non_interactable: &FxHashSet<WidgetId>,
-    view: &View,
-    _text: &mut TextsResources,
-    _fonts: &mut FontResources,
-    layout_items: &[LayoutItem],
-) -> bool {
-    let unscaled_mouse_x = user_input.mouse_x / view.scale_factor;
-    let unscaled_mouse_y = user_input.mouse_y / view.scale_factor;
+pub struct InteractionContext<'a> {
+    pub(crate) user_input: &'a mut UserInput,
+    pub(crate) view: &'a View,
+    pub(crate) interaction_state: &'a mut InteractionState,
+    pub(crate) last_interaction_state: &'a mut InteractionState,
+    pub(crate) layout_items: &'a [LayoutItem],
+    pub(crate) non_interactable: &'a FxHashSet<WidgetId>,
+    pub(crate) widgets_states: &'a mut WidgetsStates,
+}
+
+impl<'a> InteractionContext<'a> {
+    pub fn new(state: &'a mut UiState) -> Self {
+        Self {
+            user_input: &mut state.user_input,
+            view: &state.view,
+            interaction_state: &mut state.interaction_state,
+            last_interaction_state: &mut state.last_interaction_state,
+            layout_items: &state.clipped_layout_items,
+            non_interactable: &state.non_interactable,
+            widgets_states: &mut state.widgets_states,
+        }
+    }
+}
+
+pub fn handle_interaction(ctx: &mut InteractionContext) -> bool {
+    let unscaled_mouse_x = ctx.user_input.mouse_x / ctx.view.scale_factor;
+    let unscaled_mouse_y = ctx.user_input.mouse_y / ctx.view.scale_factor;
 
     let mouse_point = Vec2::new(unscaled_mouse_x, unscaled_mouse_y);
 
-    interaction_state.hot = None;
-    interaction_state.hover.clear();
+    ctx.interaction_state.hot = None;
+    ctx.interaction_state.hover.clear();
 
-    for layout_item in layout_items.iter() {
+    for layout_item in ctx.layout_items.iter() {
         if let LayoutItem::Placement(placement) = layout_item
             && point_with_rect_hit_test(mouse_point, placement.boundary)
         {
-            interaction_state.hover.insert(placement.widget_ref.id);
+            ctx.interaction_state.hover.insert(placement.widget_ref.id);
         }
     }
 
-    for layout_item in layout_items.iter().rev() {
+    for layout_item in ctx.layout_items.iter().rev() {
         if let LayoutItem::Placement(placement) = layout_item
-            && !non_interactable.contains(&placement.widget_ref.id)
-            && (!interaction_state.block_hover
-                || interaction_state.active.is_none()
-                || interaction_state.active == Some(placement.widget_ref.id))
+            && !ctx.non_interactable.contains(&placement.widget_ref.id)
+            && (!ctx.interaction_state.block_hover
+                || ctx.interaction_state.active.is_none()
+                || ctx.interaction_state.active == Some(placement.widget_ref.id))
             && point_with_rect_hit_test(mouse_point, placement.boundary)
         {
-            interaction_state.hot = Some(placement.widget_ref.id);
+            ctx.interaction_state.hot = Some(placement.widget_ref.id);
             break;
         }
     }
 
-    true
+    let mut is_dirty = false;
+
+    for layout_item in ctx.layout_items.iter() {
+        match layout_item {
+            LayoutItem::Placement(placement) => {
+                if placement.widget_ref.widget_type
+                    == WidgetType::of::<widgets::gesture_detector::GestureDetector>()
+                {
+                    is_dirty = is_dirty
+                        || widgets::gesture_detector::handle_interaction(
+                            ctx,
+                            placement.widget_ref.id,
+                        );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let state_updated = ctx.interaction_state != ctx.last_interaction_state;
+    *ctx.last_interaction_state = ctx.interaction_state.clone();
+
+    ctx.user_input.reset();
+    ctx.user_input.clear_frame_events();
+
+    is_dirty || state_updated
 }

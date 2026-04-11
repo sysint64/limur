@@ -57,7 +57,7 @@ pub enum Text<'buffer> {
 }
 
 pub struct TextsResources<'a> {
-    items: SlotMap<TextId, Text<'a>>,
+    pub(crate) items: SlotMap<TextId, Text<'a>>,
 }
 
 impl<'a> Default for TextsResources<'a> {

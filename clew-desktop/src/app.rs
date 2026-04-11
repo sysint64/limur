@@ -4,11 +4,11 @@ use std::time::Instant;
 
 use clew::assets::Assets;
 use clew::editable_text::OsEvent;
-use clew::interaction::handle_interaction_before_build;
+use clew::interaction::{InteractionContext, handle_interaction, handle_interaction_before_build};
 use clew::io::{Cursor, TextInputAction};
 use clew::keyboard::{KeyCode, KeyModifiers};
 use clew::lifecycle::{finalize_cycle, init_cycle};
-use clew::render::Renderer;
+use clew::render::{Renderer, layout_pass2};
 use clew::shortcuts::ShortcutsManager;
 use clew::text::{FontResources, StringInterner};
 use clew::widgets::builder::{ApplicationEvent, ApplicationEventLoopProxy, BuildContext};
@@ -56,8 +56,6 @@ pub struct Application<'a, T: ApplicationDelegate<Event>, Event = ()> {
     broadcast_async_tx: tokio::sync::mpsc::UnboundedSender<Box<dyn Any + Send>>,
     broadcast_async_rx: tokio::sync::mpsc::UnboundedReceiver<Box<dyn Any + Send>>,
     event_loop_proxy: Arc<WinitEventLoopProxy>,
-    force_redraw: bool,
-    needs_redraw: bool,
     shortcuts_registry: ShortcutsRegistry,
 }
 
@@ -81,8 +79,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
     broadcast_async_tx: &mut tokio::sync::mpsc::UnboundedSender<Box<dyn Any + Send>>,
     window_state: &mut WindowState<'a, T, Event>,
     event_loop_proxy: Arc<WinitEventLoopProxy>,
-    force_redraw: bool,
-) -> bool {
+) {
     init_cycle(&mut window_state.ui_state);
 
     for event_box in window_state.ui_state.current_event_queue.iter() {
@@ -116,6 +113,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         broadcast_async_tx,
         event_loop_proxy.clone(),
         window_state.delta_time_timer.elapsed().as_secs_f64(),
+        assets,
         true,
     );
 
@@ -123,14 +121,24 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
 
     window_state.window.build(app, &mut build_context);
 
-    clew::pre_layout(
+    // clew::layer_layout(
+    //     &mut window_state.ui_state,
+    //     &mut window_state.texts,
+    //     fonts,
+    //     assets,
+    // );
+
+    layout_pass2(
         &mut window_state.ui_state,
         &mut window_state.texts,
         fonts,
         assets,
     );
 
-    window_state.ui_state.layout_commands.clear();
+    let mut context = InteractionContext::new(&mut window_state.ui_state);
+    handle_interaction(&mut context);
+
+    window_state.ui_state.root_layer.layout_commands.clear();
 
     let mut build_context = BuildContext::new(
         &mut window_state.ui_state,
@@ -140,24 +148,28 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         broadcast_async_tx,
         event_loop_proxy,
         window_state.delta_time_timer.elapsed().as_secs_f64(),
+        assets,
         false,
     );
 
     window_state.window.build(app, &mut build_context);
 
-    let redraw = clew::layout_and_render(
+    layout_pass2(
         &mut window_state.ui_state,
         &mut window_state.texts,
         fonts,
         assets,
+    );
+
+    clew::render(
+        &mut window_state.ui_state,
+        &mut window_state.texts,
+        fonts,
         string_interner,
         &mut window_state.strings,
-        force_redraw,
     );
 
     finalize_cycle(&mut window_state.ui_state);
-
-    redraw
 }
 
 impl<T: ApplicationDelegate<Event>, Event: 'static>
@@ -193,14 +205,18 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
     }
 
     fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
 
         // Request redraw for all windows that need it
         for (_, window) in self.window_manager.windows.iter_mut() {
-            // if self.needs_redraw {
-            window.winit_window.request_redraw();
+            let mut context = InteractionContext::new(&mut window.ui_state);
+            let state_updated = handle_interaction(&mut context);
+
             handle_os_events(window);
-            // }
+
+            if state_updated {
+                window.winit_window.request_redraw();
+            }
         }
     }
 
@@ -264,7 +280,6 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
             }
             winit::event::WindowEvent::Resized(size) => {
                 window.ui_state.view.physical_size = PhysicalSize::new(size.width, size.height);
-                self.force_redraw = true;
 
                 window.ui_state.user_input.mouse_left_pressed = false;
                 window.ui_state.user_input.mouse_right_pressed = false;
@@ -279,8 +294,6 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 window.ui_state.user_input.mouse_wheel_delta_x = 0.;
                 window.ui_state.user_input.mouse_wheel_delta_y = 0.;
                 window.ui_state.user_input.mouse_left_click_count = 0;
-
-                self.window_manager.request_redraw(window_id);
             }
             winit::event::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 window.ui_state.view.scale_factor = scale_factor;
@@ -288,7 +301,6 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                     .texts
                     .update_view(&window.ui_state.view, &mut self.fonts);
 
-                self.force_redraw = true;
                 self.window_manager.request_redraw(window_id);
             }
             winit::event::WindowEvent::RedrawRequested => {
@@ -296,7 +308,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 self.key_event_handled = true;
                 self.key_code = None;
 
-                let need_to_redraw = build(
+                build(
                     &mut self.app,
                     &mut self.fonts,
                     &self.assets,
@@ -305,35 +317,26 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                     &mut self.broadcast_async_tx,
                     window,
                     self.event_loop_proxy.clone(),
-                    self.force_redraw,
                 );
 
                 window.ui_state.user_input.text_input.clear();
                 window.ui_state.user_input.keys_pressed.clear();
                 window.ui_state.user_input.keys_pressed_repeat.clear();
 
-                if need_to_redraw {
-                    window.renderer.process_commands(
-                        &window.ui_state.view,
-                        &window.ui_state.render_state,
-                        window.fill_color,
-                        &mut self.fonts,
-                        &mut window.texts,
-                        &self.assets,
-                    );
-
-                    window.winit_window.request_redraw();
-                    self.force_redraw = false;
-                }
+                window.renderer.process_commands(
+                    &window.ui_state.view,
+                    &window.ui_state.render_state,
+                    window.fill_color,
+                    &mut self.fonts,
+                    &mut window.texts,
+                    &self.assets,
+                );
             }
             winit::event::WindowEvent::MouseInput {
                 state: btn_state,
                 button,
                 ..
             } => {
-                // window.winit_window.request_redraw();
-                self.needs_redraw = true;
-
                 window.ui_state.user_input.mouse_pressed =
                     btn_state == winit::event::ElementState::Pressed;
                 window.ui_state.user_input.mouse_released =
@@ -364,9 +367,6 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
 
             // Mouse wheel scrolling
             winit::event::WindowEvent::MouseWheel { delta, .. } => {
-                self.needs_redraw = true;
-                // window.winit_window.request_redraw();
-
                 match delta {
                     winit::event::MouseScrollDelta::LineDelta(x, y) => {
                         // Scale line delta
@@ -382,17 +382,12 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
 
             // Mouse movement
             winit::event::WindowEvent::CursorMoved { position, .. } => {
-                // window.winit_window.request_redraw();
-                self.needs_redraw = true;
-
                 window.ui_state.user_input.mouse_x = position.x;
                 window.ui_state.user_input.mouse_y = position.y;
             }
 
             // Focus events
             winit::event::WindowEvent::Focused(focused) => {
-                window.winit_window.request_redraw();
-
                 if !focused {
                     // Clear input state when window loses focus
                     // input.keys_pressed.clear();
@@ -674,8 +669,6 @@ impl<T: ApplicationDelegate<Event>, Event: 'static> Application<'_, T, Event> {
             broadcast_event_queue: Vec::new(),
             broadcast_async_rx,
             broadcast_async_tx,
-            force_redraw: false,
-            needs_redraw: false,
             event_loop_proxy: Arc::new(WinitEventLoopProxy { proxy: event_proxy }),
             assets,
             shortcuts_registry: ShortcutsRegistry::default(),

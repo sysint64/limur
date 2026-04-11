@@ -40,7 +40,6 @@ impl ListViewBuilder {
         self
     }
 
-    #[profiling::function]
     pub fn build<F>(mut self, context: &mut BuildContext, item_build: F)
     where
         F: Fn(&mut BuildContext, u64),

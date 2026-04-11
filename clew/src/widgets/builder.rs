@@ -2,6 +2,7 @@ use std::{
     any::Any,
     hash::{Hash, Hasher},
     sync::Arc,
+    time::Duration,
 };
 
 #[cfg(feature = "clipboard")]
@@ -12,11 +13,13 @@ use smallvec::SmallVec;
 
 use crate::{
     Animation, Constraints, ShortcutId, ShortcutModifierId, ShortcutsManager, ShortcutsRegistry,
-    Size, Value, View, ViewId, WidgetId, WidgetRef,
+    Size, Value, Vec2, View, ViewId, WidgetId, WidgetRef,
+    assets::Assets,
     interaction::InteractionState,
     io::UserInput,
-    layout::LayoutCommand,
-    state::{UiState, ViewConfig, WidgetsStates},
+    layer::Layer,
+    layout::{LayoutCommand, LayoutItem},
+    state::{TypedWidgetStates, UiState, ViewConfig, WidgetsStates},
     text::{FontResources, TextsResources},
 };
 
@@ -54,7 +57,9 @@ pub struct MutUserDataStack<'a> {
     parent: Option<&'a mut MutUserDataStack<'a>>,
 }
 
-pub struct BuildContext<'a, 'b> {
+pub struct BuildContext<'a, 'b, 'c> {
+    pub(crate) bound_size: Vec2,
+    pub(crate) cycle_time: Duration,
     pub(crate) pre_layout: bool,
     pub(crate) ignore_pointer: bool,
     pub(crate) layout_commands: &'a mut Vec<LayoutCommand>,
@@ -90,6 +95,10 @@ pub struct BuildContext<'a, 'b> {
     #[cfg(feature = "clipboard")]
     pub(crate) clipboard: &'a mut Option<Clipboard>,
     pub(crate) view_config: &'a mut ViewConfig,
+    pub(crate) assets: &'a Assets<'c>,
+    pub(crate) clipped_layout_items: &'a mut Vec<LayoutItem>,
+    pub(crate) layers: &'a mut TypedWidgetStates<Layer>,
+    pub(crate) last_interaction_state: &'a mut InteractionState,
 }
 
 pub trait Resolve<V> {
@@ -112,7 +121,7 @@ where
     }
 }
 
-impl<'a, 'b> BuildContext<'a, 'b> {
+impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         ui_state: &'a mut UiState,
@@ -122,13 +131,16 @@ impl<'a, 'b> BuildContext<'a, 'b> {
         broadcast_async_tx: &'a mut tokio::sync::mpsc::UnboundedSender<Box<dyn Any + Send>>,
         event_loop_proxy: Arc<dyn ApplicationEventLoopProxy>,
         delta_time: f64,
+        assets: &'a Assets<'c>,
         pre_layout: bool,
-    ) -> BuildContext<'a, 'b> {
+    ) -> BuildContext<'a, 'b, 'c> {
         BuildContext {
             pre_layout,
+            cycle_time: ui_state.cycle_time,
+            bound_size: ui_state.view.size(),
             child_index: 0,
             ignore_pointer: false,
-            layout_commands: &mut ui_state.layout_commands,
+            layout_commands: &mut ui_state.root_layer.layout_commands,
             widgets_states: &mut ui_state.widgets_states,
             event_queue: &mut ui_state.current_event_queue,
             next_event_queue: &mut ui_state.next_event_queue,
@@ -159,7 +171,15 @@ impl<'a, 'b> BuildContext<'a, 'b> {
             #[cfg(feature = "clipboard")]
             clipboard: &mut ui_state.clipboard,
             view_config: &mut ui_state.view_config,
+            assets: assets,
+            clipped_layout_items: &mut ui_state.clipped_layout_items,
+            layers: &mut ui_state.layers,
+            last_interaction_state: &mut ui_state.last_interaction_state,
         }
+    }
+
+    pub fn cycle_time(&self) -> Duration {
+        self.cycle_time
     }
 
     /// Advances an animation by the current frame's delta time.
@@ -356,7 +376,6 @@ impl<'a, 'b> BuildContext<'a, 'b> {
     //     None
     // }
 
-    #[profiling::function]
     pub fn push_layout_command(&mut self, command: LayoutCommand) {
         match command {
             LayoutCommand::BeginContainer { .. } => {

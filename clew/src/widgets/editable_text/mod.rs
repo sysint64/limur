@@ -219,7 +219,6 @@ impl<'a> EditableTextBuilder<'a> {
         self
     }
 
-    #[profiling::function]
     pub fn build(mut self, context: &mut BuildContext) {
         context
             .shortcuts_manager

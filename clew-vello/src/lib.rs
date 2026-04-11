@@ -137,8 +137,6 @@ impl VelloRenderer {
 
     /// End frame and present
     pub fn end_frame(&mut self, fill_color: &ColorRgb) {
-        profiling::scope!("end_frame");
-
         let Some(surface) = &self.surface else { return };
         let Some(renderer) = &mut self.renderer else {
             return;
@@ -155,7 +153,6 @@ impl VelloRenderer {
         };
 
         {
-            profiling::scope!("render_to_texture");
             renderer
                 .render_to_texture(
                     device,
@@ -168,8 +165,6 @@ impl VelloRenderer {
         }
 
         let surface_texture = {
-            profiling::scope!("get_current_texture");
-
             surface
                 .surface
                 .get_current_texture()
@@ -177,8 +172,6 @@ impl VelloRenderer {
         };
 
         {
-            profiling::scope!("blit_and_present");
-
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Surface Blit"),
             });
@@ -420,8 +413,6 @@ impl Renderer for VelloRenderer {
         text: &mut TextsResources,
         assets: &Assets,
     ) {
-        profiling::scope!("clew :: Vello - Render");
-
         let width = view.physical_size.width;
         let height = view.physical_size.height;
 
@@ -577,7 +568,6 @@ impl Renderer for VelloRenderer {
         }
 
         self.end_frame(&fill_color);
-        tracy_client::frame_mark();
     }
 }
 

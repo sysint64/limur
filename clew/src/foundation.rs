@@ -581,6 +581,12 @@ pub struct Vec2<T: Scalar = f64> {
     pub y: T,
 }
 
+impl<T: Scalar> Default for Vec2<T> {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
 impl<T: Scalar> Vec2<T> {
     pub const ZERO: Self = Vec2 {
         x: T::ZERO,

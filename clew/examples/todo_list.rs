@@ -111,6 +111,7 @@ impl Window<TodoApplication, ()> for MainWindow {
                             .padding(ui::EdgeInsets::symmetric(8., 4.))
                             .truncate_lines(false)
                             .multi_line(true)
+                            .virtualize(true)
                             .background(
                                 ui::decoration()
                                     .border_radius(ui::BorderRadius::all(3.))

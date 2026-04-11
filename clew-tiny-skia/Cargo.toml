@@ -20,5 +20,3 @@ usvg = { workspace = true }
 resvg = { workspace = true }
 log = { workspace = true }
 glam = { workspace = true }
-profiling = { workspace = true }
-tracy-client = { workspace = true }

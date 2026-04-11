@@ -12,7 +12,7 @@ use smallvec::SmallVec;
 pub(crate) const RENDER_CONTAINER_DEBUG_BOUNDARIES: bool = false;
 pub(crate) const RENDER_CHILD_DEBUG_BOUNDARIES: bool = false;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct WidgetPlacement {
     pub widget_ref: WidgetRef,
     pub zindex: i32,
@@ -20,7 +20,7 @@ pub struct WidgetPlacement {
     pub rect: Rect,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum LayoutItem {
     Placement(WidgetPlacement),
     PushClip { rect: Rect, clip: Clip, zindex: i32 },
@@ -287,7 +287,7 @@ impl LayoutState {
             self.flex_sum_x[self.cursor] = 0.;
             self.flex_sum_y[self.cursor] = 0.;
             self.constraints[self.cursor] = Constraints::default();
-            self.margins.push(EdgeInsets::ZERO);
+            self.margins[self.cursor] = EdgeInsets::ZERO;
         }
 
         self.cursor += 1;
@@ -353,6 +353,8 @@ impl LayoutState {
 
     #[inline]
     fn pop_container(&mut self) -> LayoutContainer {
+        debug_assert!(self.containers_stack_cursor > 0);
+
         self.containers_stack_cursor -= 1;
 
         self.containers_stack[self.containers_stack_cursor].clone()
@@ -612,9 +614,11 @@ fn apply_constraints(size: Vec2, constraints: Constraints) -> Vec2 {
 
 pub fn layout(
     layout_state: &mut LayoutState,
-    view: &View,
+    root_size: Vec2,
+    scale_factor: f64,
     commands: &[LayoutCommand],
     layout_items: &mut Vec<LayoutItem>,
+    clipped_layout_items: &mut Vec<LayoutItem>,
     layout_measures: &mut TypedWidgetStates<LayoutMeasure>,
     text: &mut TextsResources,
     assets: &Assets,
@@ -624,7 +628,6 @@ pub fn layout(
     // Pass 1 - Calculate fixed sizes and flex sum -------------------------------------------------
     // Root container
     layout_state.push_boundary();
-    let root_size = view.size();
     layout_state.actual_sizes[0] = root_size;
 
     for command in commands {
@@ -815,8 +818,8 @@ pub fn layout(
                         let text_size = text.get_mut(*text_id).calculate_size();
 
                         Vec2::new(
-                            (text_size.x / view.scale_factor).ceil(),
-                            (text_size.y / view.scale_factor).ceil(),
+                            (text_size.x / scale_factor).ceil(),
+                            (text_size.y / scale_factor).ceil(),
                         )
                     }
                     DeriveWrapSize::Svg(asset_id) => {
@@ -855,6 +858,7 @@ pub fn layout(
     let mut current_position = Vec2::ZERO;
 
     layout_items.clear();
+    clipped_layout_items.clear();
 
     layout_state.push_position(current_position);
     layout_state.pass2_parent_container = Pass2LayoutContainer {
@@ -1105,7 +1109,7 @@ pub fn layout(
                 let current_container_position = current_position + offset;
 
                 if RENDER_CONTAINER_DEBUG_BOUNDARIES {
-                    layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
                         widget_ref: WidgetRef {
                             widget_type: WidgetType::of::<DebugBoundary>(),
                             id: WidgetId::auto(),
@@ -1115,7 +1119,7 @@ pub fn layout(
                         rect: Rect::from_pos_size(current_container_position, widget_size),
                     }));
 
-                    layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
                         widget_ref: WidgetRef {
                             widget_type: WidgetType::of::<DebugBoundary>(),
                             id: WidgetId::auto(),
@@ -1130,16 +1134,20 @@ pub fn layout(
                 let decorator_rect = Rect::from_pos_size(current_position + offset, inside_size);
 
                 for widget_ref in backgrounds {
+                    let item = LayoutItem::Placement(WidgetPlacement {
+                        widget_ref: *widget_ref,
+                        zindex: *zindex,
+                        boundary: decorator_rect,
+                        rect: decorator_rect,
+                    });
+
+                    layout_items.push(item.clone());
+
                     if rects_overlap(
                         Rect::from_pos_size(position + offset, inside_size),
                         Rect::from_pos_size(Vec2::ZERO, root_size),
                     ) {
-                        layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                            widget_ref: *widget_ref,
-                            zindex: *zindex,
-                            boundary: decorator_rect,
-                            rect: decorator_rect,
-                        }));
+                        clipped_layout_items.push(item);
                     }
                 }
 
@@ -1149,8 +1157,14 @@ pub fn layout(
                         clip: *clip,
                         zindex: *zindex,
                     });
+                    clipped_layout_items.push(LayoutItem::PushClip {
+                        rect: decorator_rect,
+                        clip: *clip,
+                        zindex: *zindex,
+                    });
                 } else {
                     layout_items.push(LayoutItem::BeginGroup { zindex: *zindex });
+                    clipped_layout_items.push(LayoutItem::BeginGroup { zindex: *zindex });
                 }
 
                 current_position.x += padding.left;
@@ -1317,17 +1331,22 @@ pub fn layout(
 
                 if container.clipping {
                     layout_items.push(LayoutItem::PopClip);
+                    clipped_layout_items.push(LayoutItem::PopClip);
                 } else {
                     layout_items.push(LayoutItem::EndGroup);
+                    clipped_layout_items.push(LayoutItem::EndGroup);
                 }
 
                 for widget_ref in &container.foregrounds {
-                    layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                    let item = LayoutItem::Placement(WidgetPlacement {
                         widget_ref: *widget_ref,
                         zindex: container.zindex,
                         boundary: container.decorator_rect,
                         rect: container.decorator_rect,
-                    }));
+                    });
+
+                    layout_items.push(item.clone());
+                    clipped_layout_items.push(item);
                 }
             }
             LayoutCommand::Leaf {
@@ -1413,14 +1432,18 @@ pub fn layout(
                 let should_render =
                     rects_overlap(decorators_rect, Rect::from_pos_size(Vec2::ZERO, root_size));
 
-                if should_render {
-                    for widget_ref in backgrounds {
-                        layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                            widget_ref: *widget_ref,
-                            zindex: *zindex,
-                            boundary: decorators_rect,
-                            rect: decorators_rect,
-                        }));
+                for widget_ref in backgrounds {
+                    let item = LayoutItem::Placement(WidgetPlacement {
+                        widget_ref: *widget_ref,
+                        zindex: *zindex,
+                        boundary: decorators_rect,
+                        rect: decorators_rect,
+                    });
+
+                    layout_items.push(item.clone());
+
+                    if should_render {
+                        clipped_layout_items.push(item.clone());
                     }
                 }
 
@@ -1429,16 +1452,35 @@ pub fn layout(
                     decorators_rect.size() - Vec2::new(padding.horizontal(), padding.vertical()),
                 );
 
+                if *clip != Clip::None {
+                    layout_items.push(LayoutItem::PushClip {
+                        rect: decorators_rect,
+                        clip: *clip,
+                        zindex: *zindex,
+                    });
+                }
+
+                layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                    widget_ref: *widget_ref,
+                    zindex: *zindex,
+                    boundary: decorators_rect,
+                    rect,
+                }));
+
+                if *clip != Clip::None {
+                    layout_items.push(LayoutItem::PopClip);
+                }
+
                 if should_render {
                     if *clip != Clip::None {
-                        layout_items.push(LayoutItem::PushClip {
+                        clipped_layout_items.push(LayoutItem::PushClip {
                             rect: decorators_rect,
                             clip: *clip,
                             zindex: *zindex,
                         });
                     }
 
-                    layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
                         widget_ref: *widget_ref,
                         zindex: *zindex,
                         boundary: decorators_rect,
@@ -1446,18 +1488,22 @@ pub fn layout(
                     }));
 
                     if *clip != Clip::None {
-                        layout_items.push(LayoutItem::PopClip);
+                        clipped_layout_items.push(LayoutItem::PopClip);
                     }
                 }
 
-                if should_render {
-                    for widget_ref in foregrounds {
-                        layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                            widget_ref: *widget_ref,
-                            zindex: *zindex,
-                            boundary: decorators_rect,
-                            rect: decorators_rect,
-                        }));
+                for widget_ref in foregrounds {
+                    let item = LayoutItem::Placement(WidgetPlacement {
+                        widget_ref: *widget_ref,
+                        zindex: *zindex,
+                        boundary: decorators_rect,
+                        rect: decorators_rect,
+                    });
+
+                    layout_items.push(item.clone());
+
+                    if should_render {
+                        clipped_layout_items.push(item);
                     }
                 }
 
@@ -1469,13 +1515,10 @@ pub fn layout(
                 {
                     layout_state.texts.push(TextLayout {
                         width: if size.width.constrained() && *derive_width {
-                            Some(rect.width * view.scale_factor)
+                            Some(rect.width * scale_factor)
                         } else if *derive_width {
                             if constraints.max_width != f64::INFINITY {
-                                Some(
-                                    (constraints.max_width - padding.horizontal())
-                                        * view.scale_factor,
-                                )
+                                Some((constraints.max_width - padding.horizontal()) * scale_factor)
                             } else {
                                 None
                             }
@@ -1483,13 +1526,10 @@ pub fn layout(
                             None
                         },
                         height: if size.height.constrained() && *derive_height {
-                            Some(rect.height * view.scale_factor)
+                            Some(rect.height * scale_factor)
                         } else if *derive_height {
                             if constraints.max_height != f64::INFINITY {
-                                Some(
-                                    (constraints.max_height - padding.vertical())
-                                        * view.scale_factor,
-                                )
+                                Some((constraints.max_height - padding.vertical()) * scale_factor)
                             } else {
                                 None
                             }
@@ -1501,7 +1541,7 @@ pub fn layout(
                 };
 
                 if RENDER_CHILD_DEBUG_BOUNDARIES {
-                    layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
                         widget_ref: WidgetRef {
                             widget_type: WidgetType::of::<DebugBoundary>(),
                             id: WidgetId::auto(),
@@ -1511,7 +1551,7 @@ pub fn layout(
                         rect: boundary,
                     }));
 
-                    layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
                         widget_ref: WidgetRef {
                             widget_type: WidgetType::of::<DebugBoundary>(),
                             id: WidgetId::auto(),
@@ -1521,7 +1561,7 @@ pub fn layout(
                         rect,
                     }));
 
-                    layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
                         widget_ref: WidgetRef {
                             widget_type: WidgetType::of::<DebugBoundary>(),
                             id: WidgetId::auto(),

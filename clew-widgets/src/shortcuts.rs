@@ -2,51 +2,74 @@ use clew::ShortcutsRegistry;
 use clew::{self as ui, SHORTCUTS_ROOT_SCOPE_ID};
 
 pub fn init_shortcuts(shortcuts_registry: &mut ShortcutsRegistry) {
+    // let scope = shortcuts_registry
+    //     .scope(ui::ShortcutScopes::GestureDetector)
+    //     .add(
+    //         ui::GestureDetectorShortcut::Activate,
+    //         ui::KeyBinding::down(ui::keyboard::KeyCode::Space),
+    //     )
+    //     .add(
+    //         ui::GestureDetectorShortcut::Click,
+    //         ui::KeyBinding::up(ui::keyboard::KeyCode::Space),
+    //     )
+    //     .add(
+    //         ui::GestureDetectorShortcut::Activate,
+    //         ui::KeyBinding::down(ui::keyboard::KeyCode::Enter),
+    //     )
+    //     .add(
+    //         ui::GestureDetectorShortcut::Click,
+    //         ui::KeyBinding::up(ui::keyboard::KeyCode::Enter),
+    //     );
+
     let scope = shortcuts_registry
         .scope(ui::ShortcutScopes::TextEditing)
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::Delete,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::Delete),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::Delete),
         )
-        .add_repeat(
+        .add(
+            ui::TextEditingShortcut::Delete,
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::Delete),
+        )
+        .add(
             ui::TextEditingShortcut::Backspace,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::Backspace),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::Backspace),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::MoveNext,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowRight),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::ArrowRight),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::MovePrev,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowLeft),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::ArrowLeft),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::MoveUp,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowUp),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::ArrowUp),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::MoveDown,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowDown),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::ArrowDown),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::NextLine,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::Enter),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::Enter),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::MoveStart,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::Home),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::Home),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::MoveEnd,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::End),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::End),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::PageUp,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::PageUp),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::PageUp),
         )
-        .add_repeat(
+        .add(
             ui::TextEditingShortcut::PageDown,
-            ui::KeyBinding::new(ui::keyboard::KeyCode::PageDown),
+            ui::KeyBinding::repeat(ui::keyboard::KeyCode::PageDown),
         )
         .add_modifier(
             ui::TextInputModifier::Select,
@@ -55,9 +78,9 @@ pub fn init_shortcuts(shortcuts_registry: &mut ShortcutsRegistry) {
 
     if cfg!(target_os = "macos") {
         scope
-            .add_repeat(
+            .add(
                 ui::TextEditingShortcut::BufferStart,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Home).with_super(),
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::Home).with_super(),
             )
             .add(
                 ui::TextEditingShortcut::BufferEnd,
@@ -75,13 +98,13 @@ pub fn init_shortcuts(shortcuts_registry: &mut ShortcutsRegistry) {
                 ui::TextInputModifier::Paragraph,
                 ui::keyboard::KeyModifiers::alt(),
             )
-            .add_repeat(
+            .add(
                 ui::TextEditingShortcut::MoveStart,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Home).with_super(),
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::Home).with_super(),
             )
-            .add_repeat(
+            .add(
                 ui::TextEditingShortcut::MoveEnd,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::End).with_super(),
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::End).with_super(),
             );
 
         shortcuts_registry
@@ -94,30 +117,37 @@ pub fn init_shortcuts(shortcuts_registry: &mut ShortcutsRegistry) {
                 ui::CommonShortcut::Cut,
                 ui::KeyBinding::new(ui::keyboard::KeyCode::KeyX).with_super(),
             )
-            .add_repeat(
+            .add(
                 ui::CommonShortcut::Paste,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyV).with_super(),
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::KeyV).with_super(),
             )
-            .add_repeat(
+            .add(
                 ui::CommonShortcut::Undo,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyZ).with_super(),
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::KeyZ).with_super(),
             )
-            .add_repeat(
+            .add(
                 ui::CommonShortcut::Redo,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyZ)
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::KeyZ)
                     .with_super()
                     .with_shift(),
             );
     } else {
         scope
-            .add_repeat(
+            .add(
                 ui::TextEditingShortcut::BufferStart,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Home).with_ctrl(),
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::Home).with_ctrl(),
             )
             .add(
                 ui::TextEditingShortcut::BufferEnd,
                 ui::KeyBinding::new(ui::keyboard::KeyCode::End).with_ctrl(),
             )
+            // .add_sequence(
+            //     ui::TextEditingShortcut::SelectAll,
+            //     &[
+            //         ui::KeyBinding::new(ui::keyboard::KeyCode::KeyA).with_ctrl(),
+            //         ui::KeyBinding::new(ui::keyboard::KeyCode::KeyA),
+            //     ],
+            // )
             .add(
                 ui::TextEditingShortcut::SelectAll,
                 ui::KeyBinding::new(ui::keyboard::KeyCode::KeyA).with_ctrl(),
@@ -141,17 +171,17 @@ pub fn init_shortcuts(shortcuts_registry: &mut ShortcutsRegistry) {
                 ui::CommonShortcut::Cut,
                 ui::KeyBinding::new(ui::keyboard::KeyCode::KeyX).with_ctrl(),
             )
-            .add_repeat(
+            .add(
                 ui::CommonShortcut::Paste,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyV).with_ctrl(),
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::KeyV).with_ctrl(),
             )
-            .add_repeat(
+            .add(
                 ui::CommonShortcut::Undo,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyZ).with_ctrl(),
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::KeyZ).with_ctrl(),
             )
-            .add_repeat(
+            .add(
                 ui::CommonShortcut::Redo,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyZ)
+                ui::KeyBinding::repeat(ui::keyboard::KeyCode::KeyZ)
                     .with_ctrl()
                     .with_shift(),
             );

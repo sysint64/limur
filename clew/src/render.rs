@@ -6,8 +6,9 @@ use crate::{
     assets::Assets,
     interaction::{InteractionState, handle_interaction},
     io::UserInput,
+    layer::Layer,
     layout::{LayoutItem, WidgetPlacement, layout},
-    state::UiState,
+    state::{UiState, WidgetsStates},
     text::{FontResources, StringId, StringInterner, TextId, TextsResources},
     widgets,
 };
@@ -465,25 +466,34 @@ fn sort_segment(commands: &mut [RenderCommandUnsorted], start: usize, end: usize
 //     }
 // }
 
-pub fn pre_layout(
+pub struct LayoutContext<'a, 'b, 'c> {
+    pub(crate) text_resources: &'a mut TextsResources<'b>,
+    pub(crate) fonts: &'a mut FontResources,
+    pub(crate) assets: &'a Assets<'c>,
+    pub(crate) view: &'a View,
+    pub(crate) clipped_layout_items: &'a mut Vec<LayoutItem>,
+    pub(crate) widgets_states: &'a mut WidgetsStates,
+}
+
+pub fn layout_pass2(
     state: &mut UiState,
     text_resources: &mut TextsResources,
     fonts: &mut FontResources,
     assets: &Assets,
 ) {
-    profiling::scope!("clew :: PreLayout");
-
     layout(
-        &mut state.layout_state,
-        &state.view,
-        &state.layout_commands,
-        &mut state.layout_items,
+        &mut state.root_layer.layout_state,
+        state.view.size(),
+        state.view.scale_factor,
+        &state.root_layer.layout_commands,
+        &mut state.root_layer.layout_items,
+        &mut state.clipped_layout_items,
         &mut state.widgets_states.layout_measures,
         text_resources,
         assets,
     );
 
-    for layout_text in &state.layout_state.texts {
+    for layout_text in &state.root_layer.layout_state.texts {
         let text = text_resources.get_mut(layout_text.text_id);
 
         text.with_buffer_mut(|buffer| {
@@ -498,261 +508,186 @@ pub fn pre_layout(
     }
 
     layout(
-        &mut state.layout_state,
-        &state.view,
-        &state.layout_commands,
-        &mut state.layout_items,
+        &mut state.root_layer.layout_state,
+        state.view.size(),
+        state.view.scale_factor,
+        &state.root_layer.layout_commands,
+        &mut state.root_layer.layout_items,
+        &mut state.clipped_layout_items,
         &mut state.widgets_states.layout_measures,
         text_resources,
         assets,
     );
 }
 
-pub fn layout_and_render(
+// pub fn layer_layout(ctx: &mut LayoutContext, layer: &mut Layer, commands: &[LayoutCommand]) {
+//     layout(
+//         &mut layer.layout_state,
+//         layer.bound_size,
+//         ctx.view.scale_factor,
+//         commands,
+//         &mut layer.layout_items,
+//         &mut ctx.clipped_layout_items,
+//         &mut ctx.widgets_states.layout_measures,
+//         ctx.text_resources,
+//         ctx.assets,
+//     );
+
+//     for layout_text in &layer.layout_state.texts {
+//         let text = ctx.text_resources.get_mut(layout_text.text_id);
+
+//         text.with_buffer_mut(|buffer| {
+//             buffer.set_size(
+//                 &mut ctx.fonts.font_system,
+//                 layout_text.width.map(|it| it as f32),
+//                 layout_text.height.map(|it| it as f32),
+//             );
+//         });
+
+//         ctx.text_resources
+//             .shape_as_needed(layout_text.text_id, &mut ctx.fonts.font_system, false);
+//     }
+
+//     layout(
+//         &mut layer.layout_state,
+//         layer.bound_size,
+//         ctx.view.scale_factor,
+//         commands,
+//         &mut layer.layout_items,
+//         &mut ctx.clipped_layout_items,
+//         &mut ctx.widgets_states.layout_measures,
+//         ctx.text_resources,
+//         ctx.assets,
+//     );
+// }
+
+pub fn render(
     state: &mut UiState,
     text_resources: &mut TextsResources,
     fonts: &mut FontResources,
-    assets: &Assets,
     string_interner: &mut StringInterner,
     strings: &mut HashMap<StringId, TextId>,
-    force_redraw: bool,
-) -> bool {
-    let mut need_to_redraw = false;
-
-    // let layout_time = std::time::Instant::now();
-    {
-        profiling::scope!("clew :: Layout");
-
-        layout(
-            &mut state.layout_state,
-            &state.view,
-            &state.layout_commands,
-            &mut state.layout_items,
-            &mut state.widgets_states.layout_measures,
-            text_resources,
-            assets,
-        );
-
-        for layout_text in &state.layout_state.texts {
-            let text = text_resources.get_mut(layout_text.text_id);
-
-            text.with_buffer_mut(|buffer| {
-                buffer.set_size(
-                    &mut fonts.font_system,
-                    layout_text.width.map(|it| it as f32),
-                    layout_text.height.map(|it| it as f32),
-                );
-            });
-
-            text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);
-        }
-
-        layout(
-            &mut state.layout_state,
-            &state.view,
-            &state.layout_commands,
-            &mut state.layout_items,
-            &mut state.widgets_states.layout_measures,
-            text_resources,
-            assets,
-        );
-    }
-
-    tracy_client::plot!(
-        "clew :: Layout commands",
-        state.layout_commands.len() as f64
-    );
-
-    {
-        profiling::scope!("clew :: Interaction");
-
-        need_to_redraw = need_to_redraw
-            || handle_interaction(
-                &mut state.user_input,
-                &mut state.interaction_state,
-                &state.non_interactable,
-                &state.view,
-                text_resources,
-                fonts,
-                &state.layout_items,
-            );
-
-        need_to_redraw = need_to_redraw || state.interaction_state != state.last_interaction_state;
-        state.last_interaction_state = state.interaction_state.clone();
-    }
-
+) {
     state.render_state.unsorted_commands.clear();
 
-    if force_redraw || need_to_redraw {
-        profiling::scope!("clew :: Collect Render Commands");
+    for layout_item in &state.clipped_layout_items {
+        let mut render_context = RenderContext {
+            interaction: &state.interaction_state,
+            input: &state.user_input,
+            view: &state.view,
+            text: text_resources,
+            fonts,
+            string_interner,
+            strings,
+            layout_direction: state.layout_direction,
+            unsorted_commands: &mut state.render_state.unsorted_commands,
+        };
 
-        for layout_item in &state.layout_items {
-            let mut render_context = RenderContext {
-                interaction: &state.interaction_state,
-                input: &state.user_input,
-                view: &state.view,
-                text: text_resources,
-                fonts,
-                string_interner,
-                strings,
-                layout_direction: state.layout_direction,
-                unsorted_commands: &mut state.render_state.unsorted_commands,
-            };
-
-            match layout_item {
-                LayoutItem::Placement(placement) => {
-                    if placement.widget_ref.widget_type
-                        == WidgetType::of::<widgets::text::TextWidget>()
-                    {
-                        widgets::text::render(
-                            &mut render_context,
-                            placement,
-                            state
-                                .widgets_states
-                                .text
-                                .get(placement.widget_ref.id)
-                                .unwrap(),
-                        );
-                    }
-
-                    if placement.widget_ref.widget_type
-                        == WidgetType::of::<widgets::decorated_box::DecoratedBox>()
-                    {
-                        widgets::decorated_box::render(
-                            &mut render_context,
-                            placement,
-                            state
-                                .widgets_states
-                                .decorated_box
-                                .get(placement.widget_ref.id)
-                                .unwrap(),
-                            // state
-                            //     .widgets_states
-                            //     .get_mut::<widgets::decorated_box::State>(placement.widget_ref.id)
-                            //     .unwrap(),
-                        );
-                    }
-
-                    if placement.widget_ref.widget_type
-                        == WidgetType::of::<widgets::svg::SvgWidget>()
-                    {
-                        widgets::svg::render(
-                            &mut render_context,
-                            placement,
-                            state
-                                .widgets_states
-                                .svg
-                                .get(placement.widget_ref.id)
-                                .unwrap(),
-                            // state
-                            //     .widgets_states
-                            //     .get_mut::<widgets::svg::State>(placement.widget_ref.id)
-                            //     .unwrap(),
-                        );
-                    }
-
-                    if placement.widget_ref.widget_type
-                        == WidgetType::of::<widgets::editable_text::EditableTextWidget>()
-                    {
-                        widgets::editable_text::render(
-                            &mut render_context,
-                            placement,
-                            state
-                                .widgets_states
-                                .editable_text
-                                .get_mut(placement.widget_ref.id)
-                                .unwrap(),
-                            &mut state.view_config,
-                            true,
-                        );
-                    }
-
-                    if placement.widget_ref.widget_type == WidgetType::of::<DebugBoundary>() {
-                        render_debug_boundary(&mut render_context, placement);
-                    }
-                }
-                LayoutItem::PushClip { rect, clip, zindex } => {
-                    let shape = clip
-                        .to_shape()
-                        .expect("Cannot push clip without a shape")
-                        .px(&render_context);
-
-                    let rect = rect.px(&render_context);
-
-                    state.render_state.unsorted_commands.push(
-                        RenderCommandUnsorted::RenderCommand {
-                            zindex: *zindex,
-                            command: RenderCommand::PushClip { rect, shape },
-                        },
-                    )
-                }
-                LayoutItem::PopClip => {
-                    state.render_state.unsorted_commands.push(
-                        RenderCommandUnsorted::RenderCommand {
-                            zindex: 0,
-                            command: RenderCommand::PopClip,
-                        },
+        match layout_item {
+            LayoutItem::Placement(placement) => {
+                if placement.widget_ref.widget_type == WidgetType::of::<widgets::text::TextWidget>()
+                {
+                    widgets::text::render(
+                        &mut render_context,
+                        placement,
+                        state
+                            .widgets_states
+                            .text
+                            .get(placement.widget_ref.id)
+                            .unwrap(),
                     );
                 }
-                LayoutItem::BeginGroup { zindex } => {
-                    state
-                        .render_state
-                        .unsorted_commands
-                        .push(RenderCommandUnsorted::BeginGroup { zindex: *zindex });
-                }
-                LayoutItem::EndGroup => {
-                    // state.render_state.commands.push(RenderCommand::EndGroup);
 
-                    state
-                        .render_state
-                        .unsorted_commands
-                        .push(RenderCommandUnsorted::EndGroup);
+                if placement.widget_ref.widget_type
+                    == WidgetType::of::<widgets::decorated_box::DecoratedBox>()
+                {
+                    widgets::decorated_box::render(
+                        &mut render_context,
+                        placement,
+                        state
+                            .widgets_states
+                            .decorated_box
+                            .get(placement.widget_ref.id)
+                            .unwrap(),
+                    );
+                }
+
+                if placement.widget_ref.widget_type == WidgetType::of::<widgets::svg::SvgWidget>() {
+                    widgets::svg::render(
+                        &mut render_context,
+                        placement,
+                        state
+                            .widgets_states
+                            .svg
+                            .get(placement.widget_ref.id)
+                            .unwrap(),
+                    );
+                }
+
+                if placement.widget_ref.widget_type
+                    == WidgetType::of::<widgets::editable_text::EditableTextWidget>()
+                {
+                    widgets::editable_text::render(
+                        &mut render_context,
+                        placement,
+                        state
+                            .widgets_states
+                            .editable_text
+                            .get_mut(placement.widget_ref.id)
+                            .unwrap(),
+                        &mut state.view_config,
+                        true,
+                    );
+                }
+
+                if placement.widget_ref.widget_type == WidgetType::of::<DebugBoundary>() {
+                    render_debug_boundary(&mut render_context, placement);
                 }
             }
+            LayoutItem::PushClip { rect, clip, zindex } => {
+                let shape = clip
+                    .to_shape()
+                    .expect("Cannot push clip without a shape")
+                    .px(&render_context);
+
+                let rect = rect.px(&render_context);
+
+                state
+                    .render_state
+                    .unsorted_commands
+                    .push(RenderCommandUnsorted::RenderCommand {
+                        zindex: *zindex,
+                        command: RenderCommand::PushClip { rect, shape },
+                    })
+            }
+            LayoutItem::PopClip => {
+                state
+                    .render_state
+                    .unsorted_commands
+                    .push(RenderCommandUnsorted::RenderCommand {
+                        zindex: 0,
+                        command: RenderCommand::PopClip,
+                    });
+            }
+            LayoutItem::BeginGroup { zindex } => {
+                state
+                    .render_state
+                    .unsorted_commands
+                    .push(RenderCommandUnsorted::BeginGroup { zindex: *zindex });
+            }
+            LayoutItem::EndGroup => {
+                state
+                    .render_state
+                    .unsorted_commands
+                    .push(RenderCommandUnsorted::EndGroup);
+            }
         }
-
-        tracy_client::plot!("clew :: Layout Items", state.layout_items.len() as f64);
-
-        tracy_client::plot!(
-            "clew :: Render Commands",
-            state.render_state.unsorted_commands.len() as f64
-        );
     }
 
-    state.widgets_states.sweep();
-    state.user_input.clear_frame_events();
-
-    {
-        profiling::scope!("clew :: Sort commands by zindex");
-
-        // println!("Before sort:");
-        // for (i, cmd) in state.render_state.commands.iter().enumerate() {
-        //     println!("  {}: {:?}", i, cmd);
-        // }
-
-        sort_render_commands(
-            &mut state.render_state.unsorted_commands,
-            &mut state.render_state.commands,
-        );
-
-        // println!("After sort:");
-        // for (i, cmd) in state.render_state.commands.iter().enumerate() {
-        //     println!("  {}: {:?}", i, cmd);
-        // }
-
-        // sort_render_commands(&mut state.render_state.commands);
-        // state
-        //     .render_state
-        //     .commands
-        //     .sort_by_key(|cmd| cmd.zindex().unwrap_or(i32::MAX));
-    }
-
-    {
-        profiling::scope!("clew :: Reset phase allocator");
-        state.phase_allocator.reset();
-    }
-
-    force_redraw || need_to_redraw
+    sort_render_commands(
+        &mut state.render_state.unsorted_commands,
+        &mut state.render_state.commands,
+    );
 }
 
 fn render_debug_boundary(ctx: &mut RenderContext, placement: &WidgetPlacement) {

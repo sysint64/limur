@@ -83,7 +83,6 @@ impl ScrollAreaBuilder {
         self
     }
 
-    #[profiling::function]
     pub fn build<F>(mut self, context: &mut BuildContext, callback: F) -> ScrollAreaResponse
     where
         F: FnOnce(&mut BuildContext),

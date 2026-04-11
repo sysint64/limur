@@ -75,7 +75,6 @@ impl<'a> TextBuilder<'a> {
         self
     }
 
-    #[profiling::function]
     pub fn build(mut self, context: &mut BuildContext) {
         let id = self.frame.id.with_seed(context.id_seed);
 
