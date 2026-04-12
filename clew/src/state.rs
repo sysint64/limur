@@ -79,6 +79,7 @@ pub(crate) struct WidgetsStates {
     #[allow(dead_code)]
     pub(crate) components: TypedWidgetStates<Box<dyn Any>>,
     pub(crate) custom: TypedWidgetStates<Option<Box<dyn WidgetState>>>,
+    pub(crate) accessed_this_frame: FxHashSet<WidgetId>,
 }
 
 #[derive(Default)]
@@ -93,7 +94,6 @@ pub struct TypedWidgetStates<T> {
     id_to_index: FxHashMap<WidgetId, u32>,
     states: Vec<T>,
     ids: Vec<WidgetId>,
-    pub accessed_this_frame: FxHashSet<WidgetId>,
 }
 
 impl<T> Default for TypedWidgetStates<T> {
@@ -102,7 +102,6 @@ impl<T> Default for TypedWidgetStates<T> {
             id_to_index: FxHashMap::default(),
             states: Vec::new(),
             ids: Vec::new(),
-            accessed_this_frame: FxHashSet::default(),
         }
     }
 }
@@ -156,11 +155,11 @@ impl<T> TypedWidgetStates<T> {
         }
     }
 
-    pub fn sweep(&mut self) {
+    pub fn sweep(&mut self, accessed_this_frame: &FxHashSet<WidgetId>) {
         let mut i = 0;
 
         while i < self.states.len() {
-            if self.accessed_this_frame.contains(&self.ids[i]) {
+            if accessed_this_frame.contains(&self.ids[i]) {
                 i += 1;
             } else {
                 // Swap-remove from both parallel arrays
@@ -175,15 +174,12 @@ impl<T> TypedWidgetStates<T> {
                 }
             }
         }
-
-        self.accessed_this_frame.clear();
     }
 
     pub fn clear(&mut self) {
         self.id_to_index.clear();
         self.states.clear();
         self.ids.clear();
-        self.accessed_this_frame.clear();
     }
 }
 
@@ -407,13 +403,15 @@ impl WidgetsStates {
     // }
 
     pub fn sweep(&mut self) {
-        self.decorated_box.sweep();
-        self.svg.sweep();
-        self.gesture_detector.sweep();
-        self.custom.sweep();
-        self.text.sweep();
-        self.scroll_area.sweep();
-        self.layout_measures.sweep();
+        self.decorated_box.sweep(&self.accessed_this_frame);
+        self.svg.sweep(&self.accessed_this_frame);
+        self.gesture_detector.sweep(&self.accessed_this_frame);
+        self.custom.sweep(&self.accessed_this_frame);
+        self.text.sweep(&self.accessed_this_frame);
+        self.scroll_area.sweep(&self.accessed_this_frame);
+        self.layout_measures.sweep(&self.accessed_this_frame);
+
+        self.accessed_this_frame.clear();
 
         // self.data
         //     .retain(|id, _| self.accessed_this_frame.contains(id));
@@ -423,7 +421,5 @@ impl WidgetsStates {
         //         interaction.focused = None;
         //     }
         // }
-
-        // self.accessed_this_frame.clear();
     }
 }

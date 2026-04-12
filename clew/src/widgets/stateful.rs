@@ -69,7 +69,7 @@ impl<T: WidgetState + StatefulWidget + Default> StatefulWidgetBuilder
             }
         }
 
-        context.widgets_states.custom.accessed_this_frame.insert(id);
+        context.accessed_this_frame(id);
         state.build(context, self.frame);
 
         context.widgets_states.restore(idx, state);
@@ -95,7 +95,7 @@ impl<T: WidgetState + StatefulWidget + Default> StatefulWidgetAutoStateBuilder<T
             }
         }
 
-        context.widgets_states.custom.accessed_this_frame.insert(id);
+        context.accessed_this_frame(id);
         state.build(context, self.frame);
 
         context.widgets_states.restore(idx, state);
@@ -117,7 +117,7 @@ impl<'a, T: WidgetState + StatefulWidget + Default> StatefulWidgetBuilder
             }
         }
 
-        context.widgets_states.custom.accessed_this_frame.insert(id);
+        context.accessed_this_frame(id);
         self.state.build(context, self.frame);
     }
 }

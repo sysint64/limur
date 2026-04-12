@@ -51,12 +51,12 @@ impl LayerBuilder {
             layer.parent_layer_id = context.layer_id;
             let last_layer_id = context.layer_id;
             context.layer_id = Some(id);
+            layer.accessed_this_frame.clear();
+            layer.layout_commands.clear();
+            layer.is_dirty = false;
 
             context.handle_decoration_defer(callback);
             context.layer_id = last_layer_id;
-
-            let layer = context.layers.get_mut(id).unwrap();
-            layer.is_dirty = false;
         } else {
             context.push_layer_commands(id);
         }
@@ -68,7 +68,7 @@ impl LayerBuilder {
         }
 
         if !context.pre_layout {
-            context.layers.accessed_this_frame.insert(id);
+            context.widgets_states.accessed_this_frame.insert(id);
         }
     }
 }

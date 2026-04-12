@@ -1,9 +1,8 @@
-use clew_derive::WidgetState;
+use rustc_hash::FxHashSet;
 
 use crate::{
     Vec2, WidgetId,
     layout::{LayoutCommand, LayoutItem, LayoutState},
-    state::WidgetsStates,
 };
 
 pub struct Layer {
@@ -13,7 +12,7 @@ pub struct Layer {
     pub layout_commands: Vec<LayoutCommand>,
     pub(crate) layout_items: Vec<LayoutItem>,
     pub(crate) layout_state: LayoutState,
-    pub(crate) widgets_state: WidgetsStates,
+    pub(crate) accessed_this_frame: FxHashSet<WidgetId>,
 }
 
 impl Default for Layer {
@@ -25,7 +24,7 @@ impl Default for Layer {
             layout_commands: Default::default(),
             layout_items: Default::default(),
             layout_state: Default::default(),
-            widgets_state: Default::default(),
+            accessed_this_frame: FxHashSet::default(),
         }
     }
 }
@@ -39,7 +38,7 @@ impl Layer {
             layout_commands: Vec::new(),
             layout_items: Vec::new(),
             layout_state: LayoutState::default(),
-            widgets_state: Default::default(),
+            accessed_this_frame: FxHashSet::default(),
         }
     }
 }

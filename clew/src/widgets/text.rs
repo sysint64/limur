@@ -155,7 +155,7 @@ impl<'a> TextBuilder<'a> {
         });
 
         if !context.pre_layout {
-            context.widgets_states.text.accessed_this_frame.insert(id);
+            context.accessed_this_frame(id);
         }
 
         let state = context.widgets_states.text.get_or_insert(id, || State {

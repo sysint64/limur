@@ -226,6 +226,16 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
         self.view
     }
 
+    pub fn accessed_this_frame(&mut self, id: WidgetId) {
+        // if let Some(layer_id) = self.layer_id
+        //     && let Some(layer) = self.layers.get_mut(layer_id)
+        // {
+        //     layer.accessed_this_frame.insert(id);
+        // }
+
+        self.widgets_states.accessed_this_frame.insert(id);
+    }
+
     #[inline]
     pub fn handle_decoration_defer<F>(&mut self, callback: F)
     where
@@ -385,34 +395,40 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
         self.root_layer
             .layout_commands
             .extend(layer.layout_commands.iter().cloned());
+
+        self.widgets_states
+            .accessed_this_frame
+            .extend(layer.accessed_this_frame.iter());
     }
 
     pub fn push_layout_command(&mut self, command: LayoutCommand) {
-        match command {
-            LayoutCommand::BeginContainer { .. } => {
-                self.child_index += 1;
-                self.child_index_stack.push(self.child_index);
-                self.child_index = 0;
-            }
-            LayoutCommand::EndContainer => {
-                self.child_index = self.child_index_stack.pop().unwrap_or(0);
-            }
-            LayoutCommand::Leaf { .. } => self.child_index += 1,
-            _ => {}
-        }
+        self.root_layer.layout_commands.push(command);
 
-        if let Some(layer_id) = self.layer_id {
-            let layer = self.layers.get_mut(layer_id);
+        // match command {
+        //     LayoutCommand::BeginContainer { .. } => {
+        //         self.child_index += 1;
+        //         self.child_index_stack.push(self.child_index);
+        //         self.child_index = 0;
+        //     }
+        //     LayoutCommand::EndContainer => {
+        //         self.child_index = self.child_index_stack.pop().unwrap_or(0);
+        //     }
+        //     LayoutCommand::Leaf { .. } => self.child_index += 1,
+        //     _ => {}
+        // }
 
-            if let Some(layer) = layer {
-                self.root_layer.layout_commands.push(command.clone());
-                layer.layout_commands.push(command);
-            } else {
-                self.root_layer.layout_commands.push(command);
-            }
-        } else {
-            self.root_layer.layout_commands.push(command);
-        }
+        // if let Some(layer_id) = self.layer_id {
+        //     let layer = self.layers.get_mut(layer_id);
+
+        //     if let Some(layer) = layer {
+        //         self.root_layer.layout_commands.push(command.clone());
+        //         layer.layout_commands.push(command);
+        //     } else {
+        //         self.root_layer.layout_commands.push(command);
+        //     }
+        // } else {
+        //     self.root_layer.layout_commands.push(command);
+        // }
     }
 
     pub fn scope<F, T>(&mut self, key: impl Hash, callback: F) -> T

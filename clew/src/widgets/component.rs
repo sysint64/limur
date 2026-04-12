@@ -49,7 +49,7 @@ impl<'a, V: Component + Default + WidgetState> ComponentBuilder<'a, V> {
             }
         }
 
-        context.widgets_states.custom.accessed_this_frame.insert(id);
+        context.accessed_this_frame(id);
 
         scope(id).build(context, |context| {
             state.build(self.app, context);

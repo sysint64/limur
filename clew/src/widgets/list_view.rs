@@ -131,11 +131,7 @@ impl ListViewBuilder {
 
         context.push_layout_command(LayoutCommand::EndContainer);
 
-        context
-            .widgets_states
-            .layout_measures
-            .accessed_this_frame
-            .insert(id);
+        context.accessed_this_frame(id);
     }
 }
 

@@ -9,7 +9,7 @@ use clew::interaction::{InteractionContext, handle_interaction, handle_interacti
 use clew::io::{Cursor, TextInputAction};
 use clew::keyboard::{KeyCode, KeyModifiers};
 use clew::lifecycle::{finalize_cycle, init_cycle};
-use clew::render::{Renderer, layout_pass2};
+use clew::render::{Renderer, layout_pass1, layout_pass2};
 use clew::shortcuts::ShortcutsManager;
 use clew::text::{FontResources, StringInterner};
 use clew::widgets::builder::{ApplicationEvent, ApplicationEventLoopProxy, BuildContext};
@@ -130,7 +130,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
     //         window_state.window.build(app, ctx);
     //     });
 
-    layout_pass2(
+    layout_pass1(
         &mut window_state.ui_state,
         &mut window_state.texts,
         fonts,

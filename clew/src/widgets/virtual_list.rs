@@ -194,17 +194,7 @@ impl VirtualListBuilder {
 
         context.push_layout_command(LayoutCommand::EndContainer);
 
-        context
-            .widgets_states
-            .scroll_area
-            .accessed_this_frame
-            .insert(id);
-        context
-            .widgets_states
-            .layout_measures
-            .accessed_this_frame
-            .insert(id);
-
+        context.accessed_this_frame(id);
         response
     }
 }

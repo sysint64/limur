@@ -281,11 +281,7 @@ impl<'a> EditableTextBuilder<'a> {
 
                 interaction::handle_interaction(context, id, &gesture_response);
 
-                context
-                    .widgets_states
-                    .editable_text
-                    .accessed_this_frame
-                    .insert(id);
+                context.accessed_this_frame(id);
             }
         }
 

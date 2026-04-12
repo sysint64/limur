@@ -165,14 +165,7 @@ impl GestureDetectorBuilder {
 
         context.foregrounds.push(widget_ref);
         context.provide(response.clone(), callback);
-
-        // if !context.pre_layout {
-        //     context
-        //         .widgets_states
-        //         .gesture_detector
-        //         .accessed_this_frame
-        //         .insert(id);
-        // }
+        context.accessed_this_frame(id);
 
         response
     }
@@ -205,7 +198,9 @@ pub fn set_clicked(context: &mut BuildContext, id: WidgetId, value: bool) {
 }
 
 pub fn handle_interaction(ctx: &mut InteractionContext, id: WidgetId) -> bool {
-    let widget_state = ctx.widgets_states.gesture_detector.get_mut(id).unwrap();
+    let Some(widget_state) = ctx.widgets_states.gesture_detector.get_mut(id) else {
+        return false;
+    };
 
     let state = widget_state.clone();
 

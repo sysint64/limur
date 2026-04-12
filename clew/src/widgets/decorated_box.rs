@@ -229,6 +229,7 @@ impl DecoratedBoxBuilder {
                 border: self.border,
             },
         );
+        context.accessed_this_frame(id);
     }
 }
 

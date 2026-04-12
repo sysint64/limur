@@ -48,7 +48,7 @@ impl<T: WidgetState + Widget + Default> WidgetBuilder<T> {
             }
         }
 
-        context.widgets_states.custom.accessed_this_frame.insert(id);
+        context.accessed_this_frame(id);
         self.frame.build(context, |ctx| state.build(ctx));
 
         context.widgets_states.restore(idx, state);
@@ -68,7 +68,7 @@ impl<'a, T: WidgetState + Widget + Default> WidgetWithStateBuilder<'a, T> {
             }
         }
 
-        context.widgets_states.custom.accessed_this_frame.insert(id);
+        context.accessed_this_frame(id);
         self.frame.build(context, |ctx| self.state.build(ctx));
     }
 }

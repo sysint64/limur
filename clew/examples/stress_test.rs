@@ -63,26 +63,28 @@ impl Window<TodoApplication, ()> for MainWindow {
 
                     ui::text("1000 Buttons per layer").build(ctx);
 
-                    for li in 0..2 {
-                        ui::hstack().fill_max_size().build(ctx, |ctx| {
-                            for lj in 0..2 {
-                                ui::layer()
-                                    .margin(ui::EdgeInsets::all(4.))
-                                    .padding(ui::EdgeInsets::all(8.))
-                                    .background(
-                                        ui::decoration()
-                                            .color(ui::ColorRgba::from_hex(0x00000000))
-                                            .border(ui::Border::all(ui::BorderSide::new(
-                                                2.,
-                                                ui::ColorRgba::from_hex(0xFF00FF00),
-                                            )))
-                                            .build(ctx),
-                                    )
-                                    .id(li * 2 + lj)
-                                    .build(ctx, |ctx| layer_body(ctx, li * 2 + lj));
-                            }
-                        });
-                    }
+                    layer_body(ctx, 1);
+                    // for li in 0..2 {
+                    //     ui::hstack().fill_max_size().build(ctx, |ctx| {
+                    //         for lj in 0..2 {
+                    //             layer_body(ctx, li * 2 + lj);
+                    //     //         ui::layer()
+                    //     //             .margin(ui::EdgeInsets::all(4.))
+                    //     //             .padding(ui::EdgeInsets::all(8.))
+                    //     //             .background(
+                    //     //                 ui::decoration()
+                    //     //                     .color(ui::ColorRgba::from_hex(0x00000000))
+                    //     //                     .border(ui::Border::all(ui::BorderSide::new(
+                    //     //                         2.,
+                    //     //                         ui::ColorRgba::from_hex(0xFF00FF00),
+                    //     //                     )))
+                    //     //                     .build(ctx),
+                    //     //             )
+                    //     //             .id(li * 2 + lj)
+                    //     //             .build(ctx, |ctx| layer_body(ctx, li * 2 + lj));
+                    //         }
+                    //     });
+                    // }
                 });
             });
 
@@ -118,7 +120,11 @@ fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
                 for j in 0..32 {
                     let title = format!("Button {layer_id}: {i}_{j}");
 
-                    if clew_widgets::button(&title).id(&title).build(ctx).clicked() {
+                    if clew_widgets::button(&title)
+                        .id(layer_id + i * 32 + j)
+                        .build(ctx)
+                        .clicked()
+                    {
                         // if ui::button_id("Button", (i, j)).show(ctx) {
                         println!("Button {layer_id}: {i}_{j} Clicked");
                     }
