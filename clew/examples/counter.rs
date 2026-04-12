@@ -76,8 +76,6 @@ impl Window<CounterApplication, ()> for MainWindow {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracy_client::Client::start();
-
     env_logger::Builder::new()
         .filter(None, log::LevelFilter::Info)
         .init();

@@ -217,7 +217,7 @@ impl UiState {
             }
         };
 
-        let root_layer = Layer::new(view.size());
+        let root_layer = Layer::new(WidgetId::default(), view.size());
 
         Self {
             view,

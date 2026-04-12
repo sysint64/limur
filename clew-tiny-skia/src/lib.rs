@@ -42,8 +42,6 @@ impl<D: HasDisplayHandle, W: HasWindowHandle> Renderer for TinySkiaRenderer<D, W
         assets: &Assets,
     ) {
         let surface_buffer = {
-            profiling::scope!("clew :: Tiny Skia - Render");
-
             let width = view.physical_size.width;
             let height = view.physical_size.height;
 
@@ -205,13 +203,7 @@ impl<D: HasDisplayHandle, W: HasWindowHandle> Renderer for TinySkiaRenderer<D, W
             surface_buffer
         };
 
-        {
-            profiling::scope!("clew :: Tiny Skia - Softbuffer Preset");
-
-            surface_buffer.present().unwrap();
-        }
-
-        tracy_client::frame_mark();
+        surface_buffer.present().unwrap();
     }
 }
 
@@ -409,7 +401,10 @@ fn create_paint_from_fill(fill: &Fill, rect: Rect<f32>) -> Option<tiny_skia::Pai
     }
 }
 
-fn create_gradient_shader(gradient: &Gradient, rect: Rect<f32>) -> Option<tiny_skia::Shader<'static>> {
+fn create_gradient_shader(
+    gradient: &Gradient,
+    rect: Rect<f32>,
+) -> Option<tiny_skia::Shader<'static>> {
     match gradient {
         Gradient::Linear(linear) => {
             let stops: Vec<tiny_skia::GradientStop> = linear

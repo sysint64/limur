@@ -31,7 +31,7 @@ pub use frame::FrameBuilder;
 pub use gap::gap;
 pub use gesture_detector::{DragState, GestureDetectorResponse, gesture_detector};
 pub use hstack::hstack;
-pub use layer::layer;
+pub use layer::{ROOT_LAYER_WIDGET_ID, layer};
 pub use list_view::list_view;
 pub use scope::scope;
 pub use scroll_area::{ScrollAreaResponse, scroll_area};

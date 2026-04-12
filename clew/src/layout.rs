@@ -614,21 +614,23 @@ fn apply_constraints(size: Vec2, constraints: Constraints) -> Vec2 {
 
 pub fn layout(
     layout_state: &mut LayoutState,
-    root_size: Vec2,
-    scale_factor: f64,
+    view: &View,
     commands: &[LayoutCommand],
     layout_items: &mut Vec<LayoutItem>,
     clipped_layout_items: &mut Vec<LayoutItem>,
     layout_measures: &mut TypedWidgetStates<LayoutMeasure>,
     text: &mut TextsResources,
     assets: &Assets,
-) {
+) -> Vec2 {
     layout_state.clear();
+
+    let view_size = view.size();
+    let scale_factor = view.scale_factor;
 
     // Pass 1 - Calculate fixed sizes and flex sum -------------------------------------------------
     // Root container
-    layout_state.push_boundary();
-    layout_state.actual_sizes[0] = root_size;
+    // layout_state.push_boundary();
+    // layout_state.actual_sizes[0] = root_size;
 
     for command in commands {
         match command {
@@ -854,7 +856,7 @@ pub fn layout(
     layout_state.flex_sum_y[layout_state.cursor - 1] = 0.;
 
     // Pass 2 - Widget placements ------------------------------------------------------------------
-    let mut current_idx = 1; // Skip root container
+    let mut current_idx = 0; // Skip root container
     let mut current_position = Vec2::ZERO;
 
     layout_items.clear();
@@ -1145,7 +1147,7 @@ pub fn layout(
 
                     if rects_overlap(
                         Rect::from_pos_size(position + offset, inside_size),
-                        Rect::from_pos_size(Vec2::ZERO, root_size),
+                        Rect::from_pos_size(Vec2::ZERO, view_size),
                     ) {
                         clipped_layout_items.push(item);
                     }
@@ -1430,7 +1432,7 @@ pub fn layout(
 
                 // Don't render anything outside the screen view
                 let should_render =
-                    rects_overlap(decorators_rect, Rect::from_pos_size(Vec2::ZERO, root_size));
+                    rects_overlap(decorators_rect, Rect::from_pos_size(Vec2::ZERO, view_size));
 
                 for widget_ref in backgrounds {
                     let item = LayoutItem::Placement(WidgetPlacement {
@@ -1601,4 +1603,6 @@ pub fn layout(
     }
 
     debug_assert!(layout_state.containers_stack_cursor == 0);
+
+    layout_state.actual_sizes[0]
 }

@@ -1,4 +1,7 @@
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    u64,
+};
 
 use rustc_hash::FxHasher;
 

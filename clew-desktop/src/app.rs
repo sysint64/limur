@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use clew::assets::Assets;
+use clew::builder::WidgetBuilder;
 use clew::editable_text::OsEvent;
 use clew::interaction::{InteractionContext, handle_interaction, handle_interaction_before_build};
 use clew::io::{Cursor, TextInputAction};
@@ -12,7 +13,8 @@ use clew::render::{Renderer, layout_pass2};
 use clew::shortcuts::ShortcutsManager;
 use clew::text::{FontResources, StringInterner};
 use clew::widgets::builder::{ApplicationEvent, ApplicationEventLoopProxy, BuildContext};
-use clew::{PhysicalSize, ShortcutsRegistry};
+use clew::widgets::layer;
+use clew::{PhysicalSize, ROOT_LAYER_WIDGET_ID, ShortcutsRegistry};
 
 use crate::keyboard::{from_winit_key_code, from_winit_modifiers};
 use crate::window_manager::WindowManager;
@@ -105,6 +107,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         &window_state.ui_state.view,
     );
 
+    let view_size = window_state.ui_state.view.size();
     let mut build_context = BuildContext::new(
         &mut window_state.ui_state,
         &mut window_state.texts,
@@ -119,26 +122,12 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
 
     window_state.delta_time_timer = Instant::now();
 
-    window_state.window.build(app, &mut build_context);
-
-    // clew::layer_layout(
-    //     &mut window_state.ui_state,
-    //     &mut window_state.texts,
-    //     fonts,
-    //     assets,
-    // );
-
-    layout_pass2(
-        &mut window_state.ui_state,
-        &mut window_state.texts,
-        fonts,
-        assets,
-    );
-
-    let mut context = InteractionContext::new(&mut window_state.ui_state);
-    handle_interaction(&mut context);
-
-    window_state.ui_state.root_layer.layout_commands.clear();
+    layer()
+        .id(ROOT_LAYER_WIDGET_ID)
+        .size(view_size)
+        .build(&mut build_context, |ctx| {
+            window_state.window.build(app, ctx);
+        });
 
     let mut build_context = BuildContext::new(
         &mut window_state.ui_state,
@@ -146,20 +135,18 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         fonts,
         broadcast_event_queue,
         broadcast_async_tx,
-        event_loop_proxy,
+        event_loop_proxy.clone(),
         window_state.delta_time_timer.elapsed().as_secs_f64(),
         assets,
         false,
     );
 
-    window_state.window.build(app, &mut build_context);
-
-    layout_pass2(
-        &mut window_state.ui_state,
-        &mut window_state.texts,
-        fonts,
-        assets,
-    );
+    layer()
+        .id(ROOT_LAYER_WIDGET_ID)
+        .size(view_size)
+        .build(&mut build_context, |ctx| {
+            window_state.window.build(app, ctx);
+        });
 
     clew::render(
         &mut window_state.ui_state,

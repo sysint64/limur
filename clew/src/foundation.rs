@@ -84,6 +84,12 @@ impl SizeConstraint {
     }
 }
 
+impl From<Vec2<f64>> for Size {
+    fn from(value: Vec2<f64>) -> Self {
+        Size::fixed(value.x, value.y)
+    }
+}
+
 impl From<f32> for SizeConstraint {
     fn from(value: f32) -> Self {
         SizeConstraint::Fixed(value as f64)
@@ -520,7 +526,9 @@ impl Constraints {
         }
     }
 
-    pub fn exact_size(size: Size) -> Self {
+    pub fn exact_size(size: impl Into<Size>) -> Self {
+        let size = size.into();
+
         let width = match size.width {
             SizeConstraint::Fill(_) => f64::INFINITY,
             SizeConstraint::Wrap => 0.,

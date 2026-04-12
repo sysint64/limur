@@ -63,24 +63,23 @@ impl Window<TodoApplication, ()> for MainWindow {
 
                     ui::text("1000 Buttons per layer").build(ctx);
 
-                    for li in 0..1 {
-                        ui::hstack().build(ctx, |ctx| {
-                            for lj in 0..1 {
-                                layer_body(ctx, li * 2 + lj);
-                                // ui::layer()
-                                //     .margin(ui::EdgeInsets::all(4.))
-                                //     .padding(ui::EdgeInsets::all(8.))
-                                //     .background(
-                                //         ui::decoration()
-                                //             .color(ui::ColorRgba::from_hex(0x00000000))
-                                //             .border(ui::Border::all(ui::BorderSide::new(
-                                //                 2.,
-                                //                 ui::ColorRgba::from_hex(0xFF00FF00),
-                                //             )))
-                                //             .build(ctx),
-                                //     )
-                                //     .id(li * 2 + lj)
-                                //     .build(ctx, |ctx| layer_body(ctx, li * 2 + lj));
+                    for li in 0..2 {
+                        ui::hstack().fill_max_size().build(ctx, |ctx| {
+                            for lj in 0..2 {
+                                ui::layer()
+                                    .margin(ui::EdgeInsets::all(4.))
+                                    .padding(ui::EdgeInsets::all(8.))
+                                    .background(
+                                        ui::decoration()
+                                            .color(ui::ColorRgba::from_hex(0x00000000))
+                                            .border(ui::Border::all(ui::BorderSide::new(
+                                                2.,
+                                                ui::ColorRgba::from_hex(0xFF00FF00),
+                                            )))
+                                            .build(ctx),
+                                    )
+                                    .id(li * 2 + lj)
+                                    .build(ctx, |ctx| layer_body(ctx, li * 2 + lj));
                             }
                         });
                     }

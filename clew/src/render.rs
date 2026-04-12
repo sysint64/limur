@@ -7,7 +7,7 @@ use crate::{
     interaction::{InteractionState, handle_interaction},
     io::UserInput,
     layer::Layer,
-    layout::{LayoutItem, WidgetPlacement, layout},
+    layout::{LayoutCommand, LayoutItem, WidgetPlacement, layout},
     state::{UiState, WidgetsStates},
     text::{FontResources, StringId, StringInterner, TextId, TextsResources},
     widgets,
@@ -483,8 +483,7 @@ pub fn layout_pass2(
 ) {
     layout(
         &mut state.root_layer.layout_state,
-        state.view.size(),
-        state.view.scale_factor,
+        &state.view,
         &state.root_layer.layout_commands,
         &mut state.root_layer.layout_items,
         &mut state.clipped_layout_items,
@@ -509,8 +508,7 @@ pub fn layout_pass2(
 
     layout(
         &mut state.root_layer.layout_state,
-        state.view.size(),
-        state.view.scale_factor,
+        &state.view,
         &state.root_layer.layout_commands,
         &mut state.root_layer.layout_items,
         &mut state.clipped_layout_items,
@@ -520,46 +518,44 @@ pub fn layout_pass2(
     );
 }
 
-// pub fn layer_layout(ctx: &mut LayoutContext, layer: &mut Layer, commands: &[LayoutCommand]) {
-//     layout(
-//         &mut layer.layout_state,
-//         layer.bound_size,
-//         ctx.view.scale_factor,
-//         commands,
-//         &mut layer.layout_items,
-//         &mut ctx.clipped_layout_items,
-//         &mut ctx.widgets_states.layout_measures,
-//         ctx.text_resources,
-//         ctx.assets,
-//     );
+pub fn layer_layout(ctx: &mut LayoutContext, layer: &mut Layer) -> Vec2 {
+    layout(
+        &mut layer.layout_state,
+        &ctx.view,
+        &layer.layout_commands,
+        &mut layer.layout_items,
+        &mut ctx.clipped_layout_items,
+        &mut ctx.widgets_states.layout_measures,
+        ctx.text_resources,
+        ctx.assets,
+    );
 
-//     for layout_text in &layer.layout_state.texts {
-//         let text = ctx.text_resources.get_mut(layout_text.text_id);
+    for layout_text in &layer.layout_state.texts {
+        let text = ctx.text_resources.get_mut(layout_text.text_id);
 
-//         text.with_buffer_mut(|buffer| {
-//             buffer.set_size(
-//                 &mut ctx.fonts.font_system,
-//                 layout_text.width.map(|it| it as f32),
-//                 layout_text.height.map(|it| it as f32),
-//             );
-//         });
+        text.with_buffer_mut(|buffer| {
+            buffer.set_size(
+                &mut ctx.fonts.font_system,
+                layout_text.width.map(|it| it as f32),
+                layout_text.height.map(|it| it as f32),
+            );
+        });
 
-//         ctx.text_resources
-//             .shape_as_needed(layout_text.text_id, &mut ctx.fonts.font_system, false);
-//     }
+        ctx.text_resources
+            .shape_as_needed(layout_text.text_id, &mut ctx.fonts.font_system, false);
+    }
 
-//     layout(
-//         &mut layer.layout_state,
-//         layer.bound_size,
-//         ctx.view.scale_factor,
-//         commands,
-//         &mut layer.layout_items,
-//         &mut ctx.clipped_layout_items,
-//         &mut ctx.widgets_states.layout_measures,
-//         ctx.text_resources,
-//         ctx.assets,
-//     );
-// }
+    layout(
+        &mut layer.layout_state,
+        &ctx.view,
+        &layer.layout_commands,
+        &mut layer.layout_items,
+        &mut ctx.clipped_layout_items,
+        &mut ctx.widgets_states.layout_measures,
+        ctx.text_resources,
+        ctx.assets,
+    )
+}
 
 pub fn render(
     state: &mut UiState,

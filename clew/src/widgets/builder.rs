@@ -58,11 +58,13 @@ pub struct MutUserDataStack<'a> {
 }
 
 pub struct BuildContext<'a, 'b, 'c> {
+    pub(crate) root_layer: &'a mut Layer,
     pub(crate) bound_size: Vec2,
     pub(crate) cycle_time: Duration,
     pub(crate) pre_layout: bool,
     pub(crate) ignore_pointer: bool,
-    pub(crate) layout_commands: &'a mut Vec<LayoutCommand>,
+    pub(crate) layer_id: WidgetId,
+    // pub(crate) layout_commands: &'a mut Vec<LayoutCommand>,
     pub(crate) widgets_states: &'a mut WidgetsStates,
     pub(crate) event_queue: &'a mut Vec<Arc<dyn Any + Send>>,
     pub(crate) next_event_queue: &'a mut Vec<Arc<dyn Any + Send>>,
@@ -136,11 +138,12 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     ) -> BuildContext<'a, 'b, 'c> {
         BuildContext {
             pre_layout,
+            root_layer: &mut ui_state.root_layer,
             cycle_time: ui_state.cycle_time,
             bound_size: ui_state.view.size(),
             child_index: 0,
             ignore_pointer: false,
-            layout_commands: &mut ui_state.root_layer.layout_commands,
+            layer_id: WidgetId::default(),
             widgets_states: &mut ui_state.widgets_states,
             event_queue: &mut ui_state.current_event_queue,
             next_event_queue: &mut ui_state.next_event_queue,
@@ -390,7 +393,13 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             _ => {}
         }
 
-        self.layout_commands.push(command);
+        let layer = self.layers.get_mut(self.layer_id);
+
+        if let Some(layer) = layer {
+            layer.layout_commands.push(command);
+        } else {
+            self.root_layer.layout_commands.push(command);
+        }
     }
 
     pub fn scope<F, T>(&mut self, key: impl Hash, callback: F) -> T
