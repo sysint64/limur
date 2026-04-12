@@ -3,9 +3,10 @@ use rustc_hash::FxHashSet;
 use crate::{
     Vec2, View, WidgetId, WidgetType,
     io::UserInput,
+    layer::Layer,
     layout::LayoutItem,
     point_with_rect_hit_test,
-    state::{UiState, WidgetsStates},
+    state::{TypedWidgetStates, UiState, WidgetsStates},
     widgets,
 };
 
@@ -98,6 +99,8 @@ pub struct InteractionContext<'a> {
     pub(crate) layout_items: &'a [LayoutItem],
     pub(crate) non_interactable: &'a FxHashSet<WidgetId>,
     pub(crate) widgets_states: &'a mut WidgetsStates,
+    pub(crate) layers: &'a mut TypedWidgetStates<Layer>,
+    pub(crate) root_layer: &'a mut Layer,
 }
 
 impl<'a> InteractionContext<'a> {
@@ -110,6 +113,8 @@ impl<'a> InteractionContext<'a> {
             layout_items: &state.clipped_layout_items,
             non_interactable: &state.non_interactable,
             widgets_states: &mut state.widgets_states,
+            layers: &mut state.layers,
+            root_layer: &mut state.root_layer,
         }
     }
 }

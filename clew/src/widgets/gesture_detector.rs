@@ -17,6 +17,7 @@ pub struct GestureDetectorBuilder {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct State {
+    layer_id: Option<WidgetId>,
     clicked: bool,
     is_active: bool,
     is_hot: bool,
@@ -141,6 +142,7 @@ impl GestureDetectorBuilder {
             .gesture_detector
             .get_or_insert(id, State::default);
 
+        state.layer_id = context.layer_id;
         state.clickable = self.clickable;
         state.dragable = self.dragable;
         state.focusable = self.focusable;
@@ -164,13 +166,13 @@ impl GestureDetectorBuilder {
         context.foregrounds.push(widget_ref);
         context.provide(response.clone(), callback);
 
-        if !context.pre_layout {
-            context
-                .widgets_states
-                .gesture_detector
-                .accessed_this_frame
-                .insert(id);
-        }
+        // if !context.pre_layout {
+        //     context
+        //         .widgets_states
+        //         .gesture_detector
+        //         .accessed_this_frame
+        //         .insert(id);
+        // }
 
         response
     }
@@ -295,5 +297,17 @@ pub fn handle_interaction(ctx: &mut InteractionContext, id: WidgetId) -> bool {
     widget_state.is_focused = ctx.interaction_state.is_focused(&id);
     widget_state.was_focused = ctx.interaction_state.was_focused(&id);
 
-    state != *widget_state
+    let has_changed = state != *widget_state;
+
+    if has_changed {
+        let mut layer_id_option: Option<WidgetId> = widget_state.layer_id;
+
+        while let Some(layer_id) = layer_id_option {
+            let layer = ctx.layers.get_mut(layer_id).unwrap();
+            layer.is_dirty = true;
+            layer_id_option = layer.parent_layer_id;
+        }
+    }
+
+    has_changed
 }

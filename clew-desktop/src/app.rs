@@ -122,12 +122,25 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
 
     window_state.delta_time_timer = Instant::now();
 
-    layer()
-        .id(ROOT_LAYER_WIDGET_ID)
-        .size(view_size)
-        .build(&mut build_context, |ctx| {
-            window_state.window.build(app, ctx);
-        });
+    window_state.window.build(app, &mut build_context);
+    // layer()
+    //     .id(ROOT_LAYER_WIDGET_ID)
+    //     .size(view_size)
+    //     .build(&mut build_context, |ctx| {
+    //         window_state.window.build(app, ctx);
+    //     });
+
+    layout_pass2(
+        &mut window_state.ui_state,
+        &mut window_state.texts,
+        fonts,
+        assets,
+    );
+
+    let mut context = InteractionContext::new(&mut window_state.ui_state);
+    handle_interaction(&mut context);
+
+    window_state.ui_state.root_layer.layout_commands.clear();
 
     let mut build_context = BuildContext::new(
         &mut window_state.ui_state,
@@ -141,12 +154,20 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         false,
     );
 
-    layer()
-        .id(ROOT_LAYER_WIDGET_ID)
-        .size(view_size)
-        .build(&mut build_context, |ctx| {
-            window_state.window.build(app, ctx);
-        });
+    window_state.window.build(app, &mut build_context);
+    // layer()
+    //     .id(ROOT_LAYER_WIDGET_ID)
+    //     .size(view_size)
+    //     .build(&mut build_context, |ctx| {
+    //         window_state.window.build(app, ctx);
+    //     });
+
+    layout_pass2(
+        &mut window_state.ui_state,
+        &mut window_state.texts,
+        fonts,
+        assets,
+    );
 
     clew::render(
         &mut window_state.ui_state,

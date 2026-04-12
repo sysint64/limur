@@ -217,7 +217,7 @@ impl UiState {
             }
         };
 
-        let root_layer = Layer::new(WidgetId::default(), view.size());
+        let root_layer = Layer::default();
 
         Self {
             view,
@@ -407,8 +407,8 @@ impl WidgetsStates {
     // }
 
     pub fn sweep(&mut self) {
-        self.decorated_box.clear();
-        self.svg.clear();
+        self.decorated_box.sweep();
+        self.svg.sweep();
         self.gesture_detector.sweep();
         self.custom.sweep();
         self.text.sweep();

@@ -63,7 +63,7 @@ pub struct BuildContext<'a, 'b, 'c> {
     pub(crate) cycle_time: Duration,
     pub(crate) pre_layout: bool,
     pub(crate) ignore_pointer: bool,
-    pub(crate) layer_id: WidgetId,
+    pub(crate) layer_id: Option<WidgetId>,
     // pub(crate) layout_commands: &'a mut Vec<LayoutCommand>,
     pub(crate) widgets_states: &'a mut WidgetsStates,
     pub(crate) event_queue: &'a mut Vec<Arc<dyn Any + Send>>,
@@ -143,7 +143,7 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             bound_size: ui_state.view.size(),
             child_index: 0,
             ignore_pointer: false,
-            layer_id: WidgetId::default(),
+            layer_id: None,
             widgets_states: &mut ui_state.widgets_states,
             event_queue: &mut ui_state.current_event_queue,
             next_event_queue: &mut ui_state.next_event_queue,
@@ -379,6 +379,14 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     //     None
     // }
 
+    pub fn push_layer_commands(&mut self, layer_id: WidgetId) {
+        let layer = self.layers.get(layer_id).unwrap();
+
+        self.root_layer
+            .layout_commands
+            .extend(layer.layout_commands.iter().cloned());
+    }
+
     pub fn push_layout_command(&mut self, command: LayoutCommand) {
         match command {
             LayoutCommand::BeginContainer { .. } => {
@@ -393,10 +401,15 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             _ => {}
         }
 
-        let layer = self.layers.get_mut(self.layer_id);
+        if let Some(layer_id) = self.layer_id {
+            let layer = self.layers.get_mut(layer_id);
 
-        if let Some(layer) = layer {
-            layer.layout_commands.push(command);
+            if let Some(layer) = layer {
+                self.root_layer.layout_commands.push(command.clone());
+                layer.layout_commands.push(command);
+            } else {
+                self.root_layer.layout_commands.push(command);
+            }
         } else {
             self.root_layer.layout_commands.push(command);
         }

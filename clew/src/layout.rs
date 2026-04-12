@@ -629,8 +629,8 @@ pub fn layout(
 
     // Pass 1 - Calculate fixed sizes and flex sum -------------------------------------------------
     // Root container
-    // layout_state.push_boundary();
-    // layout_state.actual_sizes[0] = root_size;
+    layout_state.push_boundary();
+    layout_state.actual_sizes[0] = view_size;
 
     for command in commands {
         match command {
@@ -856,7 +856,7 @@ pub fn layout(
     layout_state.flex_sum_y[layout_state.cursor - 1] = 0.;
 
     // Pass 2 - Widget placements ------------------------------------------------------------------
-    let mut current_idx = 0; // Skip root container
+    let mut current_idx = 1; // Skip root container
     let mut current_position = Vec2::ZERO;
 
     layout_items.clear();
