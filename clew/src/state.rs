@@ -16,6 +16,7 @@ use crate::{
     io::UserInput,
     layer::Layer,
     layout::{LayoutCommand, LayoutItem, LayoutMeasure, LayoutState, WidgetPlacement},
+    profiler,
     render::RenderState,
     shortcuts::ShortcutsManager,
     widgets::{decorated_box, gesture_detector, scroll_area, svg, text},
@@ -29,10 +30,22 @@ pub trait WidgetState: Any + Send + 'static {
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct PerformanceMetrics {
+    pub build_time_pass1: Duration,
+    pub build_time_pass2: Duration,
+    pub build_total: Duration,
+    pub layout_pass1: Duration,
+    pub layout_pass2: Duration,
+    pub layout_total: Duration,
+    pub render: Duration,
+    pub cycle: Duration,
+}
+
 pub struct UiState {
     pub root_layer: Layer,
     pub cycle_timer: Instant,
-    pub cycle_time: Duration,
+    pub performance_metrics: PerformanceMetrics,
     pub current_event_queue: Vec<Arc<dyn Any + Send>>,
     pub next_event_queue: Vec<Arc<dyn Any + Send>>,
     pub view: View,
@@ -245,7 +258,7 @@ impl UiState {
             clipboard,
             layers: TypedWidgetStates::default(),
             cycle_timer: Instant::now(),
-            cycle_time: Duration::new(0, 0),
+            performance_metrics: PerformanceMetrics::default(),
             root_layer,
         }
     }
@@ -403,6 +416,8 @@ impl WidgetsStates {
     // }
 
     pub fn sweep(&mut self) {
+        let _g = profiler::scope();
+
         self.decorated_box.sweep(&self.accessed_this_frame);
         self.svg.sweep(&self.accessed_this_frame);
         self.gesture_detector.sweep(&self.accessed_this_frame);

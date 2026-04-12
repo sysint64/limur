@@ -120,6 +120,7 @@ impl DecorationBuilder {
 
     pub fn build(self, context: &mut BuildContext) -> WidgetRef {
         let id = self.id.with_seed(context.id_seed);
+        context.accessed_this_frame(id);
 
         context.widgets_states.decorated_box.set(
             id,

@@ -1,8 +1,10 @@
 use std::time::Instant;
 
-use crate::{io::Cursor, state::UiState};
+use crate::{io::Cursor, profiler, state::UiState};
 
 pub fn init_cycle(state: &mut UiState) {
+    profiler::start_cycle();
+
     state.animations_stepped_this_frame.clear();
     state.render_state.commands.clear();
     state.widget_placements.clear();
@@ -24,10 +26,12 @@ pub fn init_cycle(state: &mut UiState) {
 
 pub fn finalize_cycle(state: &mut UiState) {
     state.shortcuts_manager.finalize_cycle(&state.user_input);
-    state.cycle_time = state.cycle_timer.elapsed();
-    // state
-        // .layers
-        // .sweep(&state.widgets_states.accessed_this_frame);
+    state.performance_metrics.cycle = state.cycle_timer.elapsed();
+    state
+        .layers
+        .sweep(&state.widgets_states.accessed_this_frame);
     state.widgets_states.sweep();
     state.phase_allocator.reset();
+
+    profiler::end_cycle();
 }

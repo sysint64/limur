@@ -14,7 +14,7 @@ use clew::shortcuts::ShortcutsManager;
 use clew::text::{FontResources, StringInterner};
 use clew::widgets::builder::{ApplicationEvent, ApplicationEventLoopProxy, BuildContext};
 use clew::widgets::layer;
-use clew::{PhysicalSize, ROOT_LAYER_WIDGET_ID, ShortcutsRegistry};
+use clew::{PhysicalSize, ROOT_LAYER_WIDGET_ID, ShortcutsRegistry, profiler};
 
 use crate::keyboard::{from_winit_key_code, from_winit_modifiers};
 use crate::window_manager::WindowManager;
@@ -107,22 +107,66 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         &window_state.ui_state.view,
     );
 
-    let view_size = window_state.ui_state.view.size();
-    let mut build_context = BuildContext::new(
-        &mut window_state.ui_state,
-        &mut window_state.texts,
-        fonts,
-        broadcast_event_queue,
-        broadcast_async_tx,
-        event_loop_proxy.clone(),
-        window_state.delta_time_timer.elapsed().as_secs_f64(),
-        assets,
-        true,
-    );
+    {
+        let _g = profiler::scope_named("Build Pass 1");
+        let mut build_context = BuildContext::new(
+            &mut window_state.ui_state,
+            &mut window_state.texts,
+            fonts,
+            broadcast_event_queue,
+            broadcast_async_tx,
+            event_loop_proxy.clone(),
+            window_state.delta_time_timer.elapsed().as_secs_f64(),
+            assets,
+            true,
+        );
 
-    window_state.delta_time_timer = Instant::now();
+        window_state.delta_time_timer = Instant::now();
 
-    window_state.window.build(app, &mut build_context);
+        window_state.window.build(app, &mut build_context);
+        // layer()
+        //     .id(ROOT_LAYER_WIDGET_ID)
+        //     .size(view_size)
+        //     .build(&mut build_context, |ctx| {
+        //         window_state.window.build(app, ctx);
+        //     });
+    }
+
+    {
+        let _g = profiler::scope_named("Layout Pass 1");
+        layout_pass1(
+            &mut window_state.ui_state,
+            &mut window_state.texts,
+            fonts,
+            assets,
+        );
+    }
+
+    {
+        let _g = profiler::scope_named("Handle interaction");
+
+        let mut context = InteractionContext::new(&mut window_state.ui_state);
+        handle_interaction(&mut context);
+    }
+
+    {
+        let _ = profiler::scope_named("Build Pass 2");
+        window_state.ui_state.root_layer.layout_commands.clear();
+
+        let mut build_context = BuildContext::new(
+            &mut window_state.ui_state,
+            &mut window_state.texts,
+            fonts,
+            broadcast_event_queue,
+            broadcast_async_tx,
+            event_loop_proxy.clone(),
+            window_state.delta_time_timer.elapsed().as_secs_f64(),
+            assets,
+            false,
+        );
+
+        window_state.window.build(app, &mut build_context);
+    }
     // layer()
     //     .id(ROOT_LAYER_WIDGET_ID)
     //     .size(view_size)
@@ -130,52 +174,26 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
     //         window_state.window.build(app, ctx);
     //     });
 
-    layout_pass1(
-        &mut window_state.ui_state,
-        &mut window_state.texts,
-        fonts,
-        assets,
-    );
+    {
+        let _g = profiler::scope_named("Layout Pass 2");
+        layout_pass2(
+            &mut window_state.ui_state,
+            &mut window_state.texts,
+            fonts,
+            assets,
+        );
+    }
 
-    let mut context = InteractionContext::new(&mut window_state.ui_state);
-    handle_interaction(&mut context);
-
-    window_state.ui_state.root_layer.layout_commands.clear();
-
-    let mut build_context = BuildContext::new(
-        &mut window_state.ui_state,
-        &mut window_state.texts,
-        fonts,
-        broadcast_event_queue,
-        broadcast_async_tx,
-        event_loop_proxy.clone(),
-        window_state.delta_time_timer.elapsed().as_secs_f64(),
-        assets,
-        false,
-    );
-
-    window_state.window.build(app, &mut build_context);
-    // layer()
-    //     .id(ROOT_LAYER_WIDGET_ID)
-    //     .size(view_size)
-    //     .build(&mut build_context, |ctx| {
-    //         window_state.window.build(app, ctx);
-    //     });
-
-    layout_pass2(
-        &mut window_state.ui_state,
-        &mut window_state.texts,
-        fonts,
-        assets,
-    );
-
-    clew::render(
-        &mut window_state.ui_state,
-        &mut window_state.texts,
-        fonts,
-        string_interner,
-        &mut window_state.strings,
-    );
+    {
+        let _g = profiler::scope_named("Render");
+        clew::render(
+            &mut window_state.ui_state,
+            &mut window_state.texts,
+            fonts,
+            string_interner,
+            &mut window_state.strings,
+        );
+    }
 
     finalize_cycle(&mut window_state.ui_state);
 }

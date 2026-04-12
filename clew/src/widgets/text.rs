@@ -154,9 +154,7 @@ impl<'a> TextBuilder<'a> {
             clip: self.frame.clip,
         });
 
-        if !context.pre_layout {
-            context.accessed_this_frame(id);
-        }
+        context.accessed_this_frame(id);
 
         let state = context.widgets_states.text.get_or_insert(id, || State {
             text_id,

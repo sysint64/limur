@@ -19,7 +19,8 @@ use crate::{
     io::UserInput,
     layer::Layer,
     layout::{LayoutCommand, LayoutItem},
-    state::{TypedWidgetStates, UiState, ViewConfig, WidgetsStates},
+    profiler,
+    state::{PerformanceMetrics, TypedWidgetStates, UiState, ViewConfig, WidgetsStates},
     text::{FontResources, TextsResources},
 };
 
@@ -60,7 +61,7 @@ pub struct MutUserDataStack<'a> {
 pub struct BuildContext<'a, 'b, 'c> {
     pub(crate) root_layer: &'a mut Layer,
     pub(crate) bound_size: Vec2,
-    pub(crate) cycle_time: Duration,
+    pub(crate) performance_metrics: PerformanceMetrics,
     pub(crate) pre_layout: bool,
     pub(crate) ignore_pointer: bool,
     pub(crate) layer_id: Option<WidgetId>,
@@ -139,7 +140,7 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
         BuildContext {
             pre_layout,
             root_layer: &mut ui_state.root_layer,
-            cycle_time: ui_state.cycle_time,
+            performance_metrics: ui_state.performance_metrics,
             bound_size: ui_state.view.size(),
             child_index: 0,
             ignore_pointer: false,
@@ -181,8 +182,8 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
         }
     }
 
-    pub fn cycle_time(&self) -> Duration {
-        self.cycle_time
+    pub fn performance_metrics(&self) -> PerformanceMetrics {
+        self.performance_metrics
     }
 
     /// Advances an animation by the current frame's delta time.
@@ -227,11 +228,11 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     }
 
     pub fn accessed_this_frame(&mut self, id: WidgetId) {
-        // if let Some(layer_id) = self.layer_id
-        //     && let Some(layer) = self.layers.get_mut(layer_id)
-        // {
-        //     layer.accessed_this_frame.insert(id);
-        // }
+        if let Some(layer_id) = self.layer_id
+            && let Some(layer) = self.layers.get_mut(layer_id)
+        {
+            layer.accessed_this_frame.insert(id);
+        }
 
         self.widgets_states.accessed_this_frame.insert(id);
     }
@@ -390,11 +391,17 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     // }
 
     pub fn push_layer_commands(&mut self, layer_id: WidgetId) {
+        let _g = profiler::scope();
+
         let layer = self.layers.get(layer_id).unwrap();
+
+        // self.root_layer
+        //     .layout_commands
+        //     .extend(layer.layout_commands.iter().cloned());
 
         self.root_layer
             .layout_commands
-            .extend(layer.layout_commands.iter().cloned());
+            .extend_from_slice(&layer.layout_commands);
 
         self.widgets_states
             .accessed_this_frame
@@ -402,33 +409,31 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     }
 
     pub fn push_layout_command(&mut self, command: LayoutCommand) {
-        self.root_layer.layout_commands.push(command);
+        match command {
+            LayoutCommand::BeginContainer { .. } => {
+                self.child_index += 1;
+                self.child_index_stack.push(self.child_index);
+                self.child_index = 0;
+            }
+            LayoutCommand::EndContainer => {
+                self.child_index = self.child_index_stack.pop().unwrap_or(0);
+            }
+            LayoutCommand::Leaf { .. } => self.child_index += 1,
+            _ => {}
+        }
 
-        // match command {
-        //     LayoutCommand::BeginContainer { .. } => {
-        //         self.child_index += 1;
-        //         self.child_index_stack.push(self.child_index);
-        //         self.child_index = 0;
-        //     }
-        //     LayoutCommand::EndContainer => {
-        //         self.child_index = self.child_index_stack.pop().unwrap_or(0);
-        //     }
-        //     LayoutCommand::Leaf { .. } => self.child_index += 1,
-        //     _ => {}
-        // }
+        if let Some(layer_id) = self.layer_id {
+            let layer = self.layers.get_mut(layer_id);
 
-        // if let Some(layer_id) = self.layer_id {
-        //     let layer = self.layers.get_mut(layer_id);
-
-        //     if let Some(layer) = layer {
-        //         self.root_layer.layout_commands.push(command.clone());
-        //         layer.layout_commands.push(command);
-        //     } else {
-        //         self.root_layer.layout_commands.push(command);
-        //     }
-        // } else {
-        //     self.root_layer.layout_commands.push(command);
-        // }
+            if let Some(layer) = layer {
+                self.root_layer.layout_commands.push(command.clone());
+                layer.layout_commands.push(command);
+            } else {
+                self.root_layer.layout_commands.push(command);
+            }
+        } else {
+            self.root_layer.layout_commands.push(command);
+        }
     }
 
     pub fn scope<F, T>(&mut self, key: impl Hash, callback: F) -> T

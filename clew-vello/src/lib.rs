@@ -1,6 +1,7 @@
 use clew::{
     Border, BorderRadius, BorderSide, ClipShape, ColorRgb, ColorRgba, Gradient, Rect, View,
     assets::Assets,
+    profiler,
     render::{Fill, RenderCommand, RenderState, Renderer},
     text::{FontResources, TextsResources},
 };
@@ -253,7 +254,12 @@ impl VelloRenderer {
     }
 
     /// Draw an oval/ellipse with optional border
-    pub fn draw_oval(&mut self, boundary: Rect<f32>, fill: Option<&Fill>, border: Option<&BorderSide>) {
+    pub fn draw_oval(
+        &mut self,
+        boundary: Rect<f32>,
+        fill: Option<&Fill>,
+        border: Option<&BorderSide>,
+    ) {
         let ellipse = vello::kurbo::Ellipse::new(
             (
                 (boundary.x + boundary.width / 2.0) as f64,
@@ -336,7 +342,12 @@ impl VelloRenderer {
     }
 
     /// Draw an SVG asset
-    pub fn draw_svg(&mut self, tree: &usvg::Tree, boundary: Rect<f32>, tint_color: Option<ColorRgba>) {
+    pub fn draw_svg(
+        &mut self,
+        tree: &usvg::Tree,
+        boundary: Rect<f32>,
+        tint_color: Option<ColorRgba>,
+    ) {
         let sx = boundary.width / tree.size().width();
         let sy = boundary.height / tree.size().height();
 
@@ -413,6 +424,8 @@ impl Renderer for VelloRenderer {
         text: &mut TextsResources,
         assets: &Assets,
     ) {
+        let _g = profiler::scope_named("Vello Render");
+
         let width = view.physical_size.width;
         let height = view.physical_size.height;
 

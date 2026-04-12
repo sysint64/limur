@@ -61,42 +61,33 @@ impl Window<TodoApplication, ()> for MainWindow {
                         .font_size(24.)
                         .build(ctx);
 
-                    ui::text("1000 Buttons per layer").build(ctx);
+                    ui::text("1024 Buttons per layer").build(ctx);
 
-                    layer_body(ctx, 1);
-                    // for li in 0..2 {
-                    //     ui::hstack().fill_max_size().build(ctx, |ctx| {
-                    //         for lj in 0..2 {
-                    //             layer_body(ctx, li * 2 + lj);
-                    //     //         ui::layer()
-                    //     //             .margin(ui::EdgeInsets::all(4.))
-                    //     //             .padding(ui::EdgeInsets::all(8.))
-                    //     //             .background(
-                    //     //                 ui::decoration()
-                    //     //                     .color(ui::ColorRgba::from_hex(0x00000000))
-                    //     //                     .border(ui::Border::all(ui::BorderSide::new(
-                    //     //                         2.,
-                    //     //                         ui::ColorRgba::from_hex(0xFF00FF00),
-                    //     //                     )))
-                    //     //                     .build(ctx),
-                    //     //             )
-                    //     //             .id(li * 2 + lj)
-                    //     //             .build(ctx, |ctx| layer_body(ctx, li * 2 + lj));
-                    //         }
-                    //     });
-                    // }
+                    for li in 0..10 {
+                        ui::hstack().fill_max_size().build(ctx, |ctx| {
+                            for lj in 0..10 {
+                                let _g = ui::profiler::scope_named("layer");
+                                ui::layer()
+                                    .margin(ui::EdgeInsets::all(4.))
+                                    .padding(ui::EdgeInsets::all(8.))
+                                    .background(
+                                        ui::decoration()
+                                            .color(ui::ColorRgba::from_hex(0x00000000))
+                                            .border(ui::Border::all(ui::BorderSide::new(
+                                                2.,
+                                                ui::ColorRgba::from_hex(0xFF00FF00),
+                                            )))
+                                            .build(ctx),
+                                    )
+                                    .id(li * 2 + lj)
+                                    .build(ctx, |ctx| layer_body(ctx, li * 2 + lj));
+                            }
+                        });
+                    }
                 });
             });
 
-        ui::text(&format!("Cycle Time: {:?}", ctx.cycle_time()))
-            .padding(ui::EdgeInsets::all(16.))
-            .color(ui::ColorRgba::from_hex(0xFFFF0000))
-            .background(
-                ui::decoration()
-                    .color(ui::ColorRgba::from_hex(0xFF000000).with_opacity(0.8))
-                    .build(ctx),
-            )
-            .build(ctx);
+        ui::profiler_overlay(ctx);
 
         if response.overflow_x {
             ctx.provide(response.clone(), |ctx| {
@@ -113,6 +104,8 @@ impl Window<TodoApplication, ()> for MainWindow {
 }
 
 fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
+    let _g = ui::profiler::scope_named("layer_body");
+
     // 1024 Buttons
     ui::vstack().build(ctx, |ctx| {
         for i in 0..32 {
@@ -121,7 +114,7 @@ fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
                     let title = format!("Button {layer_id}: {i}_{j}");
 
                     if clew_widgets::button(&title)
-                        .id(layer_id + i * 32 + j)
+                        .id(i * 32 + j)
                         .build(ctx)
                         .clicked()
                     {

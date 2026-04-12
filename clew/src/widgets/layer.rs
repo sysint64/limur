@@ -9,7 +9,7 @@ use crate::{
     render::{LayoutContext, layer_layout},
 };
 
-use super::{FrameBuilder, builder::BuildContext};
+use super::{FrameBuilder, builder::BuildContext, scope};
 
 pub const ROOT_LAYER_WIDGET_ID: &'static str = "limur::root_layer";
 
@@ -55,10 +55,20 @@ impl LayerBuilder {
             layer.layout_commands.clear();
             layer.is_dirty = false;
 
-            context.handle_decoration_defer(callback);
+            scope(id).build(context, |context| {
+                context.handle_decoration_defer(callback);
+            });
+
             context.layer_id = last_layer_id;
+
+            // let layer = context.layers.get(id).unwrap();
+            // println!("{}", layer.layout_commands.len());
+            // println!("{}", layer.accessed_this_frame.len());
         } else {
             context.push_layer_commands(id);
+
+            // let layer = context.layers.get(id).unwrap();
+            // println!("{:?}", layer.layout_commands);
         }
 
         context.push_layout_command(LayoutCommand::EndContainer);
