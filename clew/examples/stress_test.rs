@@ -79,8 +79,8 @@ impl Window<TodoApplication, ()> for MainWindow {
                                             )))
                                             .build(ctx),
                                     )
-                                    .id(li * 2 + lj)
-                                    .build(ctx, |ctx| layer_body(ctx, li * 2 + lj));
+                                    .id(li * 10 + lj)
+                                    .build(ctx, |ctx| layer_body(ctx, li * 10 + lj));
                             }
                         });
                     }

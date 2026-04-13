@@ -485,9 +485,39 @@ pub fn layout_pass1(
         &mut state.root_layer.layout_state,
         &state.view,
         &state.root_layer.layout_commands,
-        &mut state.root_layer.layout_items,
-        &mut state.clipped_layout_items,
         &mut state.widgets_states.layout_measures,
+        &mut state.layers,
+        text_resources,
+        assets,
+    );
+
+    for layout_text in &state.root_layer.layout_state.texts {
+        let text = text_resources.get_mut(layout_text.text_id);
+
+        text.with_buffer_mut(|buffer| {
+            buffer.set_size(
+                &mut fonts.font_system,
+                layout_text.width.map(|it| it as f32),
+                layout_text.height.map(|it| it as f32),
+            );
+        });
+
+        // text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);
+    }
+}
+
+pub fn layout_pass2(
+    state: &mut UiState,
+    text_resources: &mut TextsResources,
+    fonts: &mut FontResources,
+    assets: &Assets,
+) {
+    layout(
+        &mut state.root_layer.layout_state,
+        &state.view,
+        &state.root_layer.layout_commands,
+        &mut state.widgets_states.layout_measures,
+        &mut state.layers,
         text_resources,
         assets,
     );
@@ -507,63 +537,6 @@ pub fn layout_pass1(
     }
 }
 
-pub fn layout_pass2(
-    state: &mut UiState,
-    text_resources: &mut TextsResources,
-    fonts: &mut FontResources,
-    assets: &Assets,
-) {
-    layout(
-        &mut state.root_layer.layout_state,
-        &state.view,
-        &state.root_layer.layout_commands,
-        &mut state.root_layer.layout_items,
-        &mut state.clipped_layout_items,
-        &mut state.widgets_states.layout_measures,
-        text_resources,
-        assets,
-    );
-}
-
-pub fn layer_layout(ctx: &mut LayoutContext, layer: &mut Layer) -> Vec2 {
-    layout(
-        &mut layer.layout_state,
-        &ctx.view,
-        &layer.layout_commands,
-        &mut layer.layout_items,
-        &mut ctx.clipped_layout_items,
-        &mut ctx.widgets_states.layout_measures,
-        ctx.text_resources,
-        ctx.assets,
-    );
-
-    for layout_text in &layer.layout_state.texts {
-        let text = ctx.text_resources.get_mut(layout_text.text_id);
-
-        text.with_buffer_mut(|buffer| {
-            buffer.set_size(
-                &mut ctx.fonts.font_system,
-                layout_text.width.map(|it| it as f32),
-                layout_text.height.map(|it| it as f32),
-            );
-        });
-
-        ctx.text_resources
-            .shape_as_needed(layout_text.text_id, &mut ctx.fonts.font_system, false);
-    }
-
-    layout(
-        &mut layer.layout_state,
-        &ctx.view,
-        &layer.layout_commands,
-        &mut layer.layout_items,
-        &mut ctx.clipped_layout_items,
-        &mut ctx.widgets_states.layout_measures,
-        ctx.text_resources,
-        ctx.assets,
-    )
-}
-
 pub fn render(
     state: &mut UiState,
     text_resources: &mut TextsResources,
@@ -573,7 +546,7 @@ pub fn render(
 ) {
     state.render_state.unsorted_commands.clear();
 
-    for layout_item in &state.clipped_layout_items {
+    for layout_item in &state.root_layer.layout_state.visible_layout_items {
         let mut render_context = RenderContext {
             interaction: &state.interaction_state,
             input: &state.user_input,

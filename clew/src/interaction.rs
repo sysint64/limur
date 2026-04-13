@@ -100,7 +100,7 @@ pub struct InteractionContext<'a> {
     pub(crate) non_interactable: &'a FxHashSet<WidgetId>,
     pub(crate) widgets_states: &'a mut WidgetsStates,
     pub(crate) layers: &'a mut TypedWidgetStates<Layer>,
-    pub(crate) root_layer: &'a mut Layer,
+    // pub(crate) root_layer: &'a mut Layer,
 }
 
 impl<'a> InteractionContext<'a> {
@@ -110,11 +110,11 @@ impl<'a> InteractionContext<'a> {
             view: &state.view,
             interaction_state: &mut state.interaction_state,
             last_interaction_state: &mut state.last_interaction_state,
-            layout_items: &state.clipped_layout_items,
+            layout_items: &state.root_layer.layout_state.visible_layout_items,
             non_interactable: &state.non_interactable,
             widgets_states: &mut state.widgets_states,
             layers: &mut state.layers,
-            root_layer: &mut state.root_layer,
+            // root_layer: &mut state.root_layer,
         }
     }
 }
@@ -175,4 +175,5 @@ pub fn handle_interaction(ctx: &mut InteractionContext) -> bool {
     ctx.user_input.clear_frame_events();
 
     is_dirty || state_updated
+    // true
 }

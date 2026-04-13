@@ -543,8 +543,8 @@ impl Constraints {
 
         Constraints {
             min_width: width,
-            min_height: width,
-            max_width: height,
+            min_height: height,
+            max_width: width,
             max_height: height,
         }
     }

@@ -99,7 +99,6 @@ pub struct BuildContext<'a, 'b, 'c> {
     pub(crate) clipboard: &'a mut Option<Clipboard>,
     pub(crate) view_config: &'a mut ViewConfig,
     pub(crate) assets: &'a Assets<'c>,
-    pub(crate) clipped_layout_items: &'a mut Vec<LayoutItem>,
     pub(crate) layers: &'a mut TypedWidgetStates<Layer>,
     pub(crate) last_interaction_state: &'a mut InteractionState,
 }
@@ -176,7 +175,6 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             clipboard: &mut ui_state.clipboard,
             view_config: &mut ui_state.view_config,
             assets: assets,
-            clipped_layout_items: &mut ui_state.clipped_layout_items,
             layers: &mut ui_state.layers,
             last_interaction_state: &mut ui_state.last_interaction_state,
         }
@@ -390,18 +388,14 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     //     None
     // }
 
-    pub fn push_layer_commands(&mut self, layer_id: WidgetId) {
+    pub fn push_layer_state(&mut self, layer_id: WidgetId) {
         let _g = profiler::scope();
 
         let layer = self.layers.get(layer_id).unwrap();
 
         // self.root_layer
         //     .layout_commands
-        //     .extend(layer.layout_commands.iter().cloned());
-
-        self.root_layer
-            .layout_commands
-            .extend_from_slice(&layer.layout_commands);
+        //     .extend_from_slice(&layer.layout_commands);
 
         self.widgets_states
             .accessed_this_frame
@@ -422,18 +416,7 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             _ => {}
         }
 
-        if let Some(layer_id) = self.layer_id {
-            let layer = self.layers.get_mut(layer_id);
-
-            if let Some(layer) = layer {
-                self.root_layer.layout_commands.push(command.clone());
-                layer.layout_commands.push(command);
-            } else {
-                self.root_layer.layout_commands.push(command);
-            }
-        } else {
-            self.root_layer.layout_commands.push(command);
-        }
+        self.root_layer.layout_commands.push(command);
     }
 
     pub fn scope<F, T>(&mut self, key: impl Hash, callback: F) -> T

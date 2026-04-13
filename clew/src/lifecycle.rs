@@ -8,7 +8,6 @@ pub fn init_cycle(state: &mut UiState) {
     state.animations_stepped_this_frame.clear();
     state.render_state.commands.clear();
     state.widget_placements.clear();
-    state.clipped_layout_items.clear();
     state.non_interactable.clear();
     state.user_input.cursor = Cursor::Default;
     state.cycle_timer = Instant::now();

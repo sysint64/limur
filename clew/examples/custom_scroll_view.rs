@@ -54,6 +54,11 @@ impl Window<DemoApplication, ()> for MainWindow {
                 ui::vstack().fill_max_width().build(ctx, |ctx| {
                     ui::text("Header").build(ctx);
                     ui::text("List 1").build(ctx);
+                    ui::text("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus id convallis metus. Etiam mollis bibendum sapien, vel consequat ante eleifend quis. Nam a lectus in leo imperdiet dignissim sit amet non elit. Donec euismod et tortor sit amet fringilla. Aliquam tincidunt neque velit, ut placerat magna tempus eu. Quisque elementum ex quis egestas tristique. Pellentesque at mauris nisi. Interdum et malesuada fames ac ante ipsum primis in faucibus.
+
+Maecenas ut porttitor lacus. Cras ultricies quam leo, sit amet pretium odio blandit sit amet. Quisque tincidunt consectetur est, a pellentesque lacus dignissim ut. Ut ac lectus ante. Morbi pretium ornare nunc eget fermentum. Nullam malesuada magna non tortor hendrerit, nec ultricies turpis imperdiet. Nam porta sapien ac lectus imperdiet, et placerat turpis sagittis. Etiam non elit suscipit ex dapibus blandit vel eget elit. Suspendisse in velit enim. In hac habitasse platea dictumst. Cras eleifend porttitor nisl, ut vulputate augue sagittis nec. Interdum et malesuada fames ac ante ipsum primis in faucibus. Integer bibendum ultricies urna quis mollis. Mauris quis pulvinar nulla.")
+.fill_max_width()
+.build(ctx);
                     ui::list_view()
                         .fill_max_width()
                         .background(
@@ -103,13 +108,13 @@ impl Window<DemoApplication, ()> for MainWindow {
                 clew_widgets::vertical_scroll_bar().build(ctx);
             });
         }
+
+        ui::profiler_overlay(ctx);
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracy_client::Client::start();
-
     env_logger::Builder::new()
         .filter(None, log::LevelFilter::Info)
         .init();

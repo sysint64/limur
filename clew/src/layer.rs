@@ -8,9 +8,9 @@ use crate::{
 pub struct Layer {
     pub parent_layer_id: Option<WidgetId>,
     pub is_dirty: bool,
-    pub bound_size: Vec2,
+    pub wrap_size: Vec2,
     pub layout_commands: Vec<LayoutCommand>,
-    pub(crate) layout_items: Vec<LayoutItem>,
+    pub(crate) layout_items: Vec<(Vec2, LayoutItem)>,
     pub(crate) layout_state: LayoutState,
     pub(crate) accessed_this_frame: FxHashSet<WidgetId>,
 }
@@ -20,7 +20,7 @@ impl Default for Layer {
         Self {
             parent_layer_id: None,
             is_dirty: true,
-            bound_size: Default::default(),
+            wrap_size: Default::default(),
             layout_commands: Default::default(),
             layout_items: Default::default(),
             layout_state: Default::default(),
@@ -34,7 +34,7 @@ impl Layer {
         Self {
             parent_layer_id: Some(parent_layer_id),
             is_dirty: true,
-            bound_size,
+            wrap_size: bound_size,
             layout_commands: Vec::new(),
             layout_items: Vec::new(),
             layout_state: LayoutState::default(),

@@ -3,6 +3,7 @@ use crate::{
     LayoutDirection, MainAxisAlignment, Rect, Size, SizeConstraint, Vec2, View, WidgetId,
     WidgetRef, WidgetType,
     assets::Assets,
+    layer::Layer,
     rects_overlap,
     state::TypedWidgetStates,
     text::{TextId, TextsResources},
@@ -43,6 +44,9 @@ pub enum LayoutCommand {
         clip: Clip,
     },
     EndContainer,
+    Layer {
+        id: WidgetId,
+    },
     BeginOffset {
         offset_x: f64,
         offset_y: f64,
@@ -106,6 +110,9 @@ pub enum ContainerKind {
     Measure {
         id: WidgetId,
     },
+    Layer {
+        id: WidgetId,
+    },
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -167,6 +174,7 @@ struct Pass2LayoutContainer {
     idx: usize,
     padding: EdgeInsets,
     clipping: bool,
+    is_layer: bool,
     decorator_rect: Rect,
     zindex: i32,
     foregrounds: SmallVec<[WidgetRef; 8]>,
@@ -207,6 +215,9 @@ pub(crate) struct LayoutState {
     position_cursor: usize,
     positions: Vec<Vec2>,
 
+    layer_cursor: usize,
+    layers: Vec<WidgetId>,
+
     containers_stack_cursor: usize,
     pass_2_containers_stack_cursor: usize,
     layout_direction: LayoutDirection,
@@ -219,6 +230,7 @@ pub(crate) struct LayoutState {
     offsets_stack: Vec<Vec2>,
 
     pub(crate) texts: Vec<TextLayout>,
+    pub(crate) visible_layout_items: Vec<LayoutItem>,
 }
 
 impl LayoutState {
@@ -312,6 +324,24 @@ impl LayoutState {
     }
 
     #[inline]
+    fn push_layer(&mut self, layer: WidgetId) {
+        if self.layers.len() <= self.layer_cursor {
+            self.layers.push(layer);
+        } else {
+            self.layers[self.layer_cursor] = layer;
+        }
+
+        self.layer_cursor += 1;
+    }
+
+    #[inline]
+    fn pop_layer(&mut self) -> WidgetId {
+        self.layer_cursor -= 1;
+
+        self.layers[self.layer_cursor]
+    }
+
+    #[inline]
     fn push_offset(&mut self, offset: Vec2) {
         let last_offset = if self.offsets_stack_cursor > 0 {
             self.get_offset()
@@ -389,6 +419,7 @@ impl LayoutState {
         self.position_cursor = 0;
         self.containers_stack_cursor = 0;
         self.offsets_stack_cursor = 0;
+        self.layer_cursor = 0;
 
         self.texts.clear();
     }
@@ -580,6 +611,24 @@ impl LayoutState {
             }
         }
     }
+
+    fn push_layout_item(
+        &mut self,
+        layers: &mut TypedWidgetStates<Layer>,
+        offset: Vec2,
+        is_visible: bool,
+        item: LayoutItem,
+    ) {
+        for i in 0..self.layer_cursor {
+            let layer_id = self.layers[i];
+            let layer = layers.get_mut(layer_id).unwrap();
+            layer.layout_items.push((offset, item.clone()));
+        }
+
+        if is_visible {
+            self.visible_layout_items.push(item);
+        }
+    }
 }
 
 #[inline]
@@ -616,9 +665,8 @@ pub fn layout(
     layout_state: &mut LayoutState,
     view: &View,
     commands: &[LayoutCommand],
-    layout_items: &mut Vec<LayoutItem>,
-    clipped_layout_items: &mut Vec<LayoutItem>,
     layout_measures: &mut TypedWidgetStates<LayoutMeasure>,
+    layers: &mut TypedWidgetStates<Layer>,
     text: &mut TextsResources,
     assets: &Assets,
 ) -> Vec2 {
@@ -748,6 +796,18 @@ pub fn layout(
                             },
                         };
                     }
+                    ContainerKind::Layer { .. } => {
+                        layout_state.parent_container = LayoutContainer {
+                            idx: layout_state.current_idx(),
+                            axis: StackAxis::None,
+                            command: LayoutContainerCommand {
+                                kind: *kind,
+                                constraints: *constraints,
+                                size: *size,
+                                insets,
+                            },
+                        };
+                    }
                 }
             }
             LayoutCommand::EndContainer => {
@@ -778,6 +838,7 @@ pub fn layout(
                     ContainerKind::None => {}
                     ContainerKind::Passthrough => {}
                     ContainerKind::Measure { .. } => {}
+                    ContainerKind::Layer { .. } => {}
                 };
 
                 wrap_size.x += padding.horizontal();
@@ -842,6 +903,16 @@ pub fn layout(
                 layout_state.add_flex_sum(*size);
                 layout_state.add_size(*size, *constraints, Vec2::ZERO, EdgeInsets::ZERO);
             }
+            LayoutCommand::Layer { id } => {
+                let layer = layers.get(*id).unwrap();
+                let size = Size::fixed(layer.wrap_size.x, layer.wrap_size.y);
+                let constraints = Constraints::exact_size(size);
+
+                layout_state.push_boundary();
+                layout_state.set_constraints(constraints);
+                layout_state.add_flex_sum(size);
+                layout_state.add_size(size, constraints, Vec2::ZERO, EdgeInsets::ZERO);
+            }
             LayoutCommand::BeginOffset { .. } | LayoutCommand::EndOffset => {
                 // No-op
             }
@@ -859,8 +930,7 @@ pub fn layout(
     let mut current_idx = 1; // Skip root container
     let mut current_position = Vec2::ZERO;
 
-    layout_items.clear();
-    clipped_layout_items.clear();
+    layout_state.visible_layout_items.clear();
 
     layout_state.push_position(current_position);
     layout_state.pass2_parent_container = Pass2LayoutContainer {
@@ -871,6 +941,7 @@ pub fn layout(
         decorator_rect: Rect::ZERO,
         foregrounds: SmallVec::new(),
         zindex: i32::MIN,
+        is_layer: false,
     };
     layout_state.push_offset(Vec2::new(0., 0.));
 
@@ -1110,30 +1181,52 @@ pub fn layout(
 
                 let current_container_position = current_position + offset;
 
-                if RENDER_CONTAINER_DEBUG_BOUNDARIES {
-                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                        widget_ref: WidgetRef {
-                            widget_type: WidgetType::of::<DebugBoundary>(),
-                            id: WidgetId::auto(),
-                        },
-                        zindex: i32::MAX,
-                        boundary: Rect::ZERO,
-                        rect: Rect::from_pos_size(current_container_position, widget_size),
-                    }));
+                if let ContainerKind::Layer { id } = *kind {
+                    layout_state.push_layer(id);
+                }
 
-                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                        widget_ref: WidgetRef {
-                            widget_type: WidgetType::of::<DebugBoundary>(),
-                            id: WidgetId::auto(),
-                        },
-                        zindex: i32::MAX,
-                        boundary: Rect::ZERO,
-                        rect: Rect::from_pos_size(boundary.position() + offset, boundary.size()),
-                    }));
+                if RENDER_CONTAINER_DEBUG_BOUNDARIES {
+                    layout_state.push_layout_item(
+                        layers,
+                        offset,
+                        true,
+                        LayoutItem::Placement(WidgetPlacement {
+                            widget_ref: WidgetRef {
+                                widget_type: WidgetType::of::<DebugBoundary>(),
+                                id: WidgetId::auto(),
+                            },
+                            zindex: i32::MAX,
+                            boundary: Rect::ZERO,
+                            rect: Rect::from_pos_size(current_container_position, widget_size),
+                        }),
+                    );
+
+                    layout_state.push_layout_item(
+                        layers,
+                        offset,
+                        true,
+                        LayoutItem::Placement(WidgetPlacement {
+                            widget_ref: WidgetRef {
+                                widget_type: WidgetType::of::<DebugBoundary>(),
+                                id: WidgetId::auto(),
+                            },
+                            zindex: i32::MAX,
+                            boundary: Rect::ZERO,
+                            rect: Rect::from_pos_size(
+                                boundary.position() + offset,
+                                boundary.size(),
+                            ),
+                        }),
+                    );
                 }
 
                 let inside_size = widget_size - Vec2::new(margin.horizontal(), margin.vertical());
                 let decorator_rect = Rect::from_pos_size(current_position + offset, inside_size);
+
+                let is_visible = rects_overlap(
+                    Rect::from_pos_size(position + offset, inside_size),
+                    Rect::from_pos_size(Vec2::ZERO, view_size),
+                );
 
                 for widget_ref in backgrounds {
                     let item = LayoutItem::Placement(WidgetPlacement {
@@ -1143,30 +1236,27 @@ pub fn layout(
                         rect: decorator_rect,
                     });
 
-                    layout_items.push(item.clone());
-
-                    if rects_overlap(
-                        Rect::from_pos_size(position + offset, inside_size),
-                        Rect::from_pos_size(Vec2::ZERO, view_size),
-                    ) {
-                        clipped_layout_items.push(item);
-                    }
+                    layout_state.push_layout_item(layers, offset, is_visible, item);
                 }
 
                 if *clip != Clip::None {
-                    layout_items.push(LayoutItem::PushClip {
-                        rect: decorator_rect,
-                        clip: *clip,
-                        zindex: *zindex,
-                    });
-                    clipped_layout_items.push(LayoutItem::PushClip {
-                        rect: decorator_rect,
-                        clip: *clip,
-                        zindex: *zindex,
-                    });
+                    layout_state.push_layout_item(
+                        layers,
+                        offset,
+                        true,
+                        LayoutItem::PushClip {
+                            rect: decorator_rect,
+                            clip: *clip,
+                            zindex: *zindex,
+                        },
+                    );
                 } else {
-                    layout_items.push(LayoutItem::BeginGroup { zindex: *zindex });
-                    clipped_layout_items.push(LayoutItem::BeginGroup { zindex: *zindex });
+                    layout_state.push_layout_item(
+                        layers,
+                        offset,
+                        true,
+                        LayoutItem::BeginGroup { zindex: *zindex },
+                    );
                 }
 
                 current_position.x += padding.left;
@@ -1186,6 +1276,7 @@ pub fn layout(
                             zindex: *zindex,
                             decorator_rect,
                             foregrounds: foregrounds.clone(),
+                            is_layer: false,
                             axis: StackAxisPass2::Vertical {
                                 spacing: *spacing,
                                 rtl_aware: *rtl_aware,
@@ -1214,6 +1305,7 @@ pub fn layout(
                             zindex: *zindex,
                             decorator_rect,
                             foregrounds: foregrounds.clone(),
+                            is_layer: false,
                             axis: StackAxisPass2::Horizontal {
                                 spacing: *spacing,
                                 rtl_aware: *rtl_aware,
@@ -1234,6 +1326,7 @@ pub fn layout(
                             idx: current_idx,
                             decorator_rect,
                             foregrounds: foregrounds.clone(),
+                            is_layer: false,
                             axis: StackAxisPass2::Align {
                                 align_x: *align_x,
                                 align_y: *align_y,
@@ -1251,6 +1344,7 @@ pub fn layout(
                             idx: current_idx,
                             decorator_rect,
                             foregrounds: foregrounds.clone(),
+                            is_layer: false,
                             axis: StackAxisPass2::None,
                         };
 
@@ -1264,6 +1358,7 @@ pub fn layout(
                             clipping,
                             idx: current_idx,
                             decorator_rect,
+                            is_layer: false,
                             foregrounds: foregrounds.clone(),
                             axis: StackAxisPass2::Passthrough {
                                 stretch: match parent_container_axis {
@@ -1306,6 +1401,7 @@ pub fn layout(
                             decorator_rect,
                             foregrounds: foregrounds.clone(),
                             axis: StackAxisPass2::None,
+                            is_layer: false,
                         };
 
                         layout_measures.set(
@@ -1323,6 +1419,25 @@ pub fn layout(
                         current_idx += 1;
                         go_next = false;
                     }
+                    ContainerKind::Layer { id } => {
+                        layout_state.pass2_parent_container = Pass2LayoutContainer {
+                            padding: *padding,
+                            zindex: *zindex,
+                            clipping,
+                            idx: current_idx,
+                            decorator_rect,
+                            foregrounds: foregrounds.clone(),
+                            axis: StackAxisPass2::None,
+                            is_layer: true,
+                        };
+
+                        let layer = layers.get_mut(*id).unwrap();
+                        layer.wrap_size.x = widget_size.x;
+                        layer.wrap_size.y = widget_size.y;
+
+                        current_idx += 1;
+                        go_next = false;
+                    }
                 }
             }
             LayoutCommand::EndContainer => {
@@ -1332,11 +1447,9 @@ pub fn layout(
                 current_position = layout_state.pop_position();
 
                 if container.clipping {
-                    layout_items.push(LayoutItem::PopClip);
-                    clipped_layout_items.push(LayoutItem::PopClip);
+                    layout_state.push_layout_item(layers, offset, true, LayoutItem::PopClip);
                 } else {
-                    layout_items.push(LayoutItem::EndGroup);
-                    clipped_layout_items.push(LayoutItem::EndGroup);
+                    layout_state.push_layout_item(layers, offset, true, LayoutItem::EndGroup);
                 }
 
                 for widget_ref in &container.foregrounds {
@@ -1347,8 +1460,11 @@ pub fn layout(
                         rect: container.decorator_rect,
                     });
 
-                    layout_items.push(item.clone());
-                    clipped_layout_items.push(item);
+                    layout_state.push_layout_item(layers, offset, true, item);
+                }
+
+                if container.is_layer {
+                    layout_state.pop_layer();
                 }
             }
             LayoutCommand::Leaf {
@@ -1431,7 +1547,7 @@ pub fn layout(
                 let boundary = Rect::from_pos_size(boundary.position() + offset, boundary.size());
 
                 // Don't render anything outside the screen view
-                let should_render =
+                let is_visible =
                     rects_overlap(decorators_rect, Rect::from_pos_size(Vec2::ZERO, view_size));
 
                 for widget_ref in backgrounds {
@@ -1442,11 +1558,7 @@ pub fn layout(
                         rect: decorators_rect,
                     });
 
-                    layout_items.push(item.clone());
-
-                    if should_render {
-                        clipped_layout_items.push(item.clone());
-                    }
+                    layout_state.push_layout_item(layers, offset, is_visible, item.clone());
                 }
 
                 let rect = Rect::from_pos_size(
@@ -1455,43 +1567,32 @@ pub fn layout(
                 );
 
                 if *clip != Clip::None {
-                    layout_items.push(LayoutItem::PushClip {
-                        rect: decorators_rect,
-                        clip: *clip,
-                        zindex: *zindex,
-                    });
-                }
-
-                layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                    widget_ref: *widget_ref,
-                    zindex: *zindex,
-                    boundary: decorators_rect,
-                    rect,
-                }));
-
-                if *clip != Clip::None {
-                    layout_items.push(LayoutItem::PopClip);
-                }
-
-                if should_render {
-                    if *clip != Clip::None {
-                        clipped_layout_items.push(LayoutItem::PushClip {
+                    layout_state.push_layout_item(
+                        layers,
+                        offset,
+                        is_visible,
+                        LayoutItem::PushClip {
                             rect: decorators_rect,
                             clip: *clip,
                             zindex: *zindex,
-                        });
-                    }
+                        },
+                    );
+                }
 
-                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
+                layout_state.push_layout_item(
+                    layers,
+                    offset,
+                    is_visible,
+                    LayoutItem::Placement(WidgetPlacement {
                         widget_ref: *widget_ref,
                         zindex: *zindex,
                         boundary: decorators_rect,
                         rect,
-                    }));
+                    }),
+                );
 
-                    if *clip != Clip::None {
-                        clipped_layout_items.push(LayoutItem::PopClip);
-                    }
+                if *clip != Clip::None {
+                    layout_state.push_layout_item(layers, offset, is_visible, LayoutItem::PopClip);
                 }
 
                 for widget_ref in foregrounds {
@@ -1502,11 +1603,7 @@ pub fn layout(
                         rect: decorators_rect,
                     });
 
-                    layout_items.push(item.clone());
-
-                    if should_render {
-                        clipped_layout_items.push(item);
-                    }
+                    layout_state.push_layout_item(layers, offset, is_visible, item);
                 }
 
                 if let DeriveWrapSize::Text {
@@ -1543,41 +1640,91 @@ pub fn layout(
                 };
 
                 if RENDER_CHILD_DEBUG_BOUNDARIES {
-                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                        widget_ref: WidgetRef {
-                            widget_type: WidgetType::of::<DebugBoundary>(),
-                            id: WidgetId::auto(),
-                        },
-                        zindex: i32::MAX,
-                        boundary: Rect::ZERO,
-                        rect: boundary,
-                    }));
+                    layout_state.push_layout_item(
+                        layers,
+                        offset,
+                        true,
+                        LayoutItem::Placement(WidgetPlacement {
+                            widget_ref: WidgetRef {
+                                widget_type: WidgetType::of::<DebugBoundary>(),
+                                id: WidgetId::auto(),
+                            },
+                            zindex: i32::MAX,
+                            boundary: Rect::ZERO,
+                            rect: boundary,
+                        }),
+                    );
 
-                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                        widget_ref: WidgetRef {
-                            widget_type: WidgetType::of::<DebugBoundary>(),
-                            id: WidgetId::auto(),
-                        },
-                        zindex: i32::MAX,
-                        boundary: Rect::ZERO,
-                        rect,
-                    }));
+                    layout_state.push_layout_item(
+                        layers,
+                        offset,
+                        true,
+                        LayoutItem::Placement(WidgetPlacement {
+                            widget_ref: WidgetRef {
+                                widget_type: WidgetType::of::<DebugBoundary>(),
+                                id: WidgetId::auto(),
+                            },
+                            zindex: i32::MAX,
+                            boundary: Rect::ZERO,
+                            rect,
+                        }),
+                    );
 
-                    clipped_layout_items.push(LayoutItem::Placement(WidgetPlacement {
-                        widget_ref: WidgetRef {
-                            widget_type: WidgetType::of::<DebugBoundary>(),
-                            id: WidgetId::auto(),
-                        },
-                        zindex: i32::MAX,
-                        boundary: Rect::ZERO,
-                        rect: decorators_rect,
-                    }));
+                    layout_state.push_layout_item(
+                        layers,
+                        offset,
+                        true,
+                        LayoutItem::Placement(WidgetPlacement {
+                            widget_ref: WidgetRef {
+                                widget_type: WidgetType::of::<DebugBoundary>(),
+                                id: WidgetId::auto(),
+                            },
+                            zindex: i32::MAX,
+                            boundary: Rect::ZERO,
+                            rect: decorators_rect,
+                        }),
+                    );
                 }
 
                 current_idx += 1;
             }
             LayoutCommand::Spacer { .. } => {
                 current_idx += 1;
+            }
+            LayoutCommand::Layer { id } => {
+                current_idx += 1;
+
+                let layer = layers.get(*id).unwrap();
+
+                for item in &layer.layout_items {
+                    if let (initial_offset, LayoutItem::Placement(placement)) = &item {
+                        let boundary = Rect {
+                            x: placement.boundary.x - initial_offset.x + offset.x,
+                            y: placement.boundary.y - initial_offset.y + offset.y,
+                            width: placement.boundary.width,
+                            height: placement.boundary.height,
+                        };
+                        let rect = Rect {
+                            x: placement.rect.x - initial_offset.x + offset.x,
+                            y: placement.rect.y - initial_offset.y + offset.y,
+                            width: placement.rect.width,
+                            height: placement.rect.height,
+                        };
+
+                        if rects_overlap(rect, Rect::from_pos_size(Vec2::ZERO, view_size)) {
+                            layout_state
+                                .visible_layout_items
+                                .push(LayoutItem::Placement(WidgetPlacement {
+                                    widget_ref: placement.widget_ref,
+                                    zindex: placement.zindex,
+                                    boundary,
+                                    rect,
+                                }));
+                        }
+                    } else {
+                        layout_state.visible_layout_items.push(item.1.clone());
+                    }
+                }
             }
         }
 
