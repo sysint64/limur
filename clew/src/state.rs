@@ -417,13 +417,13 @@ impl WidgetsStates {
     pub fn sweep(&mut self) {
         let _g = profiler::scope();
 
-        self.decorated_box.sweep(&self.accessed_this_frame);
-        self.svg.sweep(&self.accessed_this_frame);
-        self.gesture_detector.sweep(&self.accessed_this_frame);
-        self.custom.sweep(&self.accessed_this_frame);
-        self.text.sweep(&self.accessed_this_frame);
-        self.scroll_area.sweep(&self.accessed_this_frame);
-        self.layout_measures.sweep(&self.accessed_this_frame);
+        // self.decorated_box.sweep(&self.accessed_this_frame);
+        // self.svg.sweep(&self.accessed_this_frame);
+        // self.gesture_detector.sweep(&self.accessed_this_frame);
+        // self.custom.sweep(&self.accessed_this_frame);
+        // self.text.sweep(&self.accessed_this_frame);
+        // self.scroll_area.sweep(&self.accessed_this_frame);
+        // self.layout_measures.sweep(&self.accessed_this_frame);
 
         self.accessed_this_frame.clear();
 

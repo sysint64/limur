@@ -68,24 +68,9 @@ impl LayerBuilder {
 
             context.layer_id = last_layer_id;
         } else {
-            let layer = context.layers.get_mut(id).unwrap();
-            let size = Size::fixed(layer.wrap_size.x, layer.wrap_size.y);
-
-            // context.push_layout_command(LayoutCommand::BeginContainer {
-            //     backgrounds: SmallVec::new(),
-            //     foregrounds: SmallVec::new(),
-            //     zindex: 0,
-            //     padding: EdgeInsets::ZERO,
-            //     margin: EdgeInsets::ZERO,
-            //     kind: ContainerKind::None,
-            //     size,
-            //     constraints: Constraints::exact_size(size),
-            //     clip: Clip::None,
-            // });
             context.push_layout_command(LayoutCommand::Layer { id });
-            // context.push_layout_command(LayoutCommand::EndContainer);
 
-            context.push_layer_state(id);
+            // context.push_layer_state(id);
         }
 
         if !context.pre_layout {

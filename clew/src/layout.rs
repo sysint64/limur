@@ -4,7 +4,7 @@ use crate::{
     WidgetRef, WidgetType,
     assets::Assets,
     layer::Layer,
-    rects_overlap,
+    profiler, rects_overlap,
     state::TypedWidgetStates,
     text::{TextId, TextsResources},
 };
@@ -1695,6 +1695,8 @@ pub fn layout(
                 current_idx += 1;
 
                 let layer = layers.get(*id).unwrap();
+
+                let _g = profiler::scope_named("Layer push commands");
 
                 for item in &layer.layout_items {
                     if let (initial_offset, LayoutItem::Placement(placement)) = &item {
