@@ -1,5 +1,3 @@
-use std::time::{Duration, Instant};
-
 use clew as ui;
 use clew::prelude::*;
 use clew_desktop::{
@@ -97,29 +95,16 @@ impl Window<TodoApplication, ()> for MainWindow {
                             for li in 0..2 {
                                 ui::hstack().fill_max_size().build(ctx, |ctx| {
                                     for lj in 0..2 {
-                                        // let _g = ui::profiler::scope_named("layer");
-
                                         ui::layer().fill_max_size().id(li * 2 + lj).build(
                                             ctx,
                                             |ctx| {
                                                 layer_body(ctx, li * 2 + lj);
                                             },
                                         );
-                                        // ui::layer()
-                                        //     .margin(ui::EdgeInsets::all(4.))
-                                        //     .padding(ui::EdgeInsets::all(8.))
-                                        //     .background(
-                                        //         ui::decoration()
-                                        //             .color(ui::ColorRgba::from_hex(0x00000000))
-                                        //             .border(ui::Border::all(ui::BorderSide::new(
-                                        //                 2.,
-                                        //                 ui::ColorRgba::from_hex(0xFF00FF00),
-                                        //             )))
-                                        //             .build(ctx),
-                                        //     )
-                                        //     .id(li * 2 + lj)
-                                        //     .build(ctx, |ctx| layer_body(ctx, li * 2 + lj));
                                     }
+                                });
+                                ui::zstack().height(32.).width(32.).build(ctx, |ctx| {
+                                    layer_body(ctx, 9999);
                                 });
                             }
                         });
@@ -127,18 +112,6 @@ impl Window<TodoApplication, ()> for MainWindow {
         });
 
         ui::profiler_overlay(ctx);
-
-        // if response.overflow_x {
-        //     ctx.provide(response.clone(), |ctx| {
-        //         clew_widgets::horizontal_scroll_bar().build(ctx);
-        //     });
-        // }
-
-        // if response.overflow_y {
-        //     ctx.provide(response.clone(), |ctx| {
-        //         clew_widgets::vertical_scroll_bar().build(ctx);
-        //     });
-        // }
     }
 }
 
@@ -164,14 +137,6 @@ fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
                             .id(i * 2 + j)
                             .fill_max_size()
                             .build(ctx);
-                        // if clew_widgets::button(&title)
-                        //     .id(i * 2 + j)
-                        //     .build(ctx)
-                        //     .clicked()
-                        // {
-                        //     // if ui::button_id("Button", (i, j)).show(ctx) {
-                        //     println!("Button {layer_id}: {i}_{j} Clicked");
-                        // }
                     }
                 });
             }
