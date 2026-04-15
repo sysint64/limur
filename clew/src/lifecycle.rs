@@ -32,5 +32,5 @@ pub fn finalize_cycle(state: &mut UiState) {
     state.widgets_states.sweep();
     state.phase_allocator.reset();
 
-    profiler::end_cycle();
+    // profiler::end_cycle();
 }

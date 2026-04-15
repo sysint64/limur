@@ -415,7 +415,7 @@ impl WidgetsStates {
     // }
 
     pub fn sweep(&mut self) {
-        let _g = profiler::scope();
+        // let _g = profiler::scope();
 
         // self.decorated_box.sweep(&self.accessed_this_frame);
         // self.svg.sweep(&self.accessed_this_frame);

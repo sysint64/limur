@@ -108,7 +108,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
     );
 
     {
-        let _g = profiler::scope_named("Build Pass 1");
+        let _g = profiler::scope_named("build::pass1");
         let mut build_context = BuildContext::new(
             &mut window_state.ui_state,
             &mut window_state.texts,
@@ -133,7 +133,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
     }
 
     {
-        let _g = profiler::scope_named("Layout Pass 1");
+        let _g = profiler::scope_named("layout::pass1");
         layout_pass1(
             &mut window_state.ui_state,
             &mut window_state.texts,
@@ -143,14 +143,14 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
     }
 
     {
-        let _g = profiler::scope_named("Handle interaction");
+        // let _g = profiler::scope_named("Handle interaction");
 
         let mut context = InteractionContext::new(&mut window_state.ui_state);
         handle_interaction(&mut context);
     }
 
     {
-        let _ = profiler::scope_named("Build Pass 2");
+        let _g = profiler::scope_named("build::pass2");
         window_state.ui_state.root_layer.layout_commands.clear();
 
         let mut build_context = BuildContext::new(
@@ -175,7 +175,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
     //     });
 
     {
-        let _g = profiler::scope_named("Layout Pass 2");
+        let _g = profiler::scope_named("layout::pass2");
         layout_pass2(
             &mut window_state.ui_state,
             &mut window_state.texts,
@@ -184,8 +184,10 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         );
     }
 
+    profiler::end_cycle();
+
     {
-        let _g = profiler::scope_named("Render");
+        // let _g = profiler::scope_named("Render");
         clew::render(
             &mut window_state.ui_state,
             &mut window_state.texts,

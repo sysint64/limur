@@ -4,6 +4,7 @@ use std::any::Any;
 use crate::{
     AlignY, ColorRgba, TextAlign, Vec2, WidgetRef, WidgetType,
     layout::{DeriveWrapSize, LayoutCommand, WidgetPlacement},
+    profiler,
     render::{PixelExtension, RenderCommand, RenderContext},
     state::WidgetState,
     text::TextId,
@@ -76,6 +77,13 @@ impl<'a> TextBuilder<'a> {
     }
 
     pub fn build(mut self, context: &mut BuildContext) {
+        let scope_name = if context.pre_layout {
+            "text::build::pass1"
+        } else {
+            "text::build::pass2"
+        };
+        let _g = profiler::scope_named(scope_name);
+
         let id = self.frame.id.with_seed(context.id_seed);
 
         let widget_ref = WidgetRef::new(WidgetType::of::<TextWidget>(), id);

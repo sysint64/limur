@@ -1,9 +1,10 @@
 use clew as ui;
 use clew::prelude::*;
+use parking_lot::Mutex;
 
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
-use std::sync::{LazyLock, Mutex};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use clew_derive::Identifiable;
@@ -37,7 +38,7 @@ pub struct ProfilerSnapshot {
     cycle_time: Option<Duration>,
 }
 
-#[derive(Default, Identifiable)]
+#[derive(Default, Clone, Identifiable)]
 pub struct ProfilerEntry {
     pub id: u64,
     pub name: String,
@@ -77,7 +78,7 @@ pub struct ProfilerEntryGuard {
 impl Drop for ProfilerEntryGuard {
     fn drop(&mut self) {
         let elapsed = self.start.elapsed();
-        let mut profiler = PROFILER.lock().unwrap();
+        let mut profiler = PROFILER.lock();
         profiler.leave(self, elapsed);
     }
 }
@@ -165,6 +166,11 @@ impl Profiler {
         std::ptr::hash(location.file().as_ptr(), &mut hasher);
         location.line().hash(&mut hasher);
         location.column().hash(&mut hasher);
+
+        if let Some(name) = name {
+            name.hash(&mut hasher);
+        }
+
         let id = hasher.finish();
 
         let generation = self.generation;
@@ -205,6 +211,7 @@ impl Profiler {
 
         entry.last_elapsed = elapsed;
         entry.active = entry.active.saturating_sub(1);
+
         if entry.active == 0 {
             entry.total += elapsed;
             entry.completed_count += 1;
@@ -249,7 +256,7 @@ impl ProfilerSnapshot {
 
     /// Return entries sorted by the given key. Numeric keys default to descending
     /// (hottest first); `Name` defaults to ascending alphabetical.
-    pub fn sorted(&self, by: SortBy) -> Vec<&ProfilerEntry> {
+    pub fn sorted(&self, by: SortBy) -> Vec<ProfilerEntry> {
         let default_order = match by {
             SortBy::Name => SortOrder::Ascending,
             _ => SortOrder::Descending,
@@ -257,8 +264,8 @@ impl ProfilerSnapshot {
         self.sorted_with(by, default_order)
     }
 
-    pub fn sorted_with(&self, by: SortBy, order: SortOrder) -> Vec<&ProfilerEntry> {
-        let mut out: Vec<&ProfilerEntry> = self.entries.values().collect();
+    pub fn sorted_with(&self, by: SortBy, order: SortOrder) -> Vec<ProfilerEntry> {
+        let mut out: Vec<ProfilerEntry> = self.entries.values().cloned().collect();
 
         out.sort_by(|a, b| {
             let ord = match by {
@@ -276,7 +283,7 @@ impl ProfilerSnapshot {
     }
 
     /// Convenience: top-N entries by the given key (uses default order).
-    pub fn top(&self, by: SortBy, n: usize) -> Vec<&ProfilerEntry> {
+    pub fn top(&self, by: SortBy, n: usize) -> Vec<ProfilerEntry> {
         let mut v = self.sorted(by);
         v.truncate(n);
         v
@@ -284,34 +291,39 @@ impl ProfilerSnapshot {
 }
 
 pub fn start_cycle() {
-    PROFILER.lock().unwrap().start_cycle();
+    PROFILER.lock().start_cycle();
 }
 
 pub fn end_cycle() {
-    PROFILER.lock().unwrap().end_cycle();
+    PROFILER.lock().end_cycle();
 }
 
 pub fn set_max_snapshots(max: usize) {
-    PROFILER.lock().unwrap().set_max_snapshots(max);
+    PROFILER.lock().set_max_snapshots(max);
 }
 
 #[track_caller]
 pub fn scope() -> ProfilerEntryGuard {
-    PROFILER.lock().unwrap().enter(None)
+    PROFILER.lock().enter(None)
 }
 
 #[track_caller]
 pub fn scope_named(name: &str) -> ProfilerEntryGuard {
-    PROFILER.lock().unwrap().enter(Some(name))
+    PROFILER.lock().enter(Some(name))
 }
 
 pub fn profiler_overlay(ctx: &mut ui::BuildContext) {
-    let profiler = PROFILER.lock().unwrap();
-    let Some(snapshot) = profiler.previous_snapshot() else {
-        return;
+    let (cycle, entries) = {
+        let profiler = PROFILER.lock();
+        let Some(snapshot) = profiler.previous_snapshot() else {
+            return;
+        };
+
+        (
+            snapshot.elapsed(),
+            snapshot.sorted(ui::profiler::SortBy::Total),
+        )
     };
-    let cycle = snapshot.elapsed();
-    let entries = snapshot.sorted(ui::profiler::SortBy::Total);
 
     let label_color = ui::ColorRgba::from_hex(0xFFFF0000);
     let header_color = ui::ColorRgba::from_hex(0xFFFFFF00);
@@ -339,15 +351,15 @@ pub fn profiler_overlay(ctx: &mut ui::BuildContext) {
                 });
 
                 // Share column
-                ui::vstack().spacing(2.).build(ctx, |ctx| {
-                    ui::text("%").color(header_color).build(ctx);
-                    ui::for_each(&entries).build(ctx, |ctx, it| {
-                        let share = snapshot.share_of_cycle(it) * 100.0;
-                        ui::text(&format!("{:.2}%", share))
-                            .color(label_color)
-                            .build(ctx)
-                    });
-                });
+                // ui::vstack().spacing(2.).build(ctx, |ctx| {
+                //     ui::text("%").color(header_color).build(ctx);
+                //     ui::for_each(&entries).build(ctx, |ctx, it| {
+                //         let share = snapshot.share_of_cycle(it) * 100.0;
+                //         ui::text(&format!("{:.2}%", share))
+                //             .color(label_color)
+                //             .build(ctx)
+                //     });
+                // });
 
                 // Total column
                 ui::vstack().spacing(2.).build(ctx, |ctx| {
@@ -373,7 +385,7 @@ pub fn profiler_overlay(ctx: &mut ui::BuildContext) {
                 ui::vstack().spacing(2.).build(ctx, |ctx| {
                     ui::text("N").color(header_color).build(ctx);
                     ui::for_each(&entries).build(ctx, |ctx, it| {
-                        ui::text(&format!("{}", it.count))
+                        ui::text(&format!("{}", it.completed_count))
                             .color(label_color)
                             .build(ctx)
                     });

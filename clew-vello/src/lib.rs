@@ -424,7 +424,7 @@ impl Renderer for VelloRenderer {
         text: &mut TextsResources,
         assets: &Assets,
     ) {
-        let _g = profiler::scope_named("Vello Render");
+        // let _g = profiler::scope_named("Vello Render");
 
         let width = view.physical_size.width;
         let height = view.physical_size.height;

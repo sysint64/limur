@@ -326,6 +326,7 @@ dependencies = [
  "cosmic-text",
  "env_logger",
  "log",
+ "parking_lot",
  "pollster",
  "puffin",
  "rustc-hash 2.1.1",

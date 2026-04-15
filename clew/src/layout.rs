@@ -113,6 +113,9 @@ pub enum ContainerKind {
     Layer {
         id: WidgetId,
     },
+    InsertLayer {
+        id: WidgetId,
+    },
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -808,6 +811,18 @@ pub fn layout(
                             },
                         };
                     }
+                    ContainerKind::InsertLayer { .. } => {
+                        layout_state.parent_container = LayoutContainer {
+                            idx: layout_state.current_idx(),
+                            axis: StackAxis::None,
+                            command: LayoutContainerCommand {
+                                kind: *kind,
+                                constraints: *constraints,
+                                size: *size,
+                                insets,
+                            },
+                        };
+                    }
                 }
             }
             LayoutCommand::EndContainer => {
@@ -839,6 +854,11 @@ pub fn layout(
                     ContainerKind::Passthrough => {}
                     ContainerKind::Measure { .. } => {}
                     ContainerKind::Layer { .. } => {}
+                    ContainerKind::InsertLayer { id } => {
+                        let layer = layers.get(id).unwrap();
+                        wrap_size.x = layer.wrap_size.x;
+                        wrap_size.y = layer.wrap_size.x;
+                    }
                 };
 
                 wrap_size.x += padding.horizontal();
@@ -1434,6 +1454,27 @@ pub fn layout(
                         let layer = layers.get_mut(*id).unwrap();
                         layer.wrap_size.x = widget_size.x;
                         layer.wrap_size.y = widget_size.y;
+
+                        current_idx += 1;
+                        go_next = false;
+                    }
+                    ContainerKind::InsertLayer { id } => {
+                        layout_state.pass2_parent_container = Pass2LayoutContainer {
+                            padding: *padding,
+                            zindex: *zindex,
+                            clipping,
+                            idx: current_idx,
+                            decorator_rect,
+                            foregrounds: foregrounds.clone(),
+                            axis: StackAxisPass2::None,
+                            is_layer: false,
+                        };
+
+                        let layer = layers.get_mut(*id).unwrap();
+
+                        if layer.wrap_size != widget_size {
+                            layer.is_dirty = true;
+                        }
 
                         current_idx += 1;
                         go_next = false;

@@ -54,7 +54,9 @@ impl LayerBuilder {
 
             layer.accessed_this_frame.clear();
             layer.layout_items.clear();
-            layer.is_dirty = false;
+
+            // Let layout to converge before marking it as non-dirty
+            layer.is_dirty = !context.pre_layout;
 
             scope(id).build(context, |context| {
                 context.handle_decoration_defer(callback);
@@ -68,7 +70,19 @@ impl LayerBuilder {
 
             context.layer_id = last_layer_id;
         } else {
+            context.push_layout_command(LayoutCommand::BeginContainer {
+                backgrounds: SmallVec::new(),
+                foregrounds: SmallVec::new(),
+                zindex: 0,
+                padding: EdgeInsets::ZERO,
+                margin: EdgeInsets::ZERO,
+                kind: ContainerKind::InsertLayer { id },
+                size: self.frame.size,
+                constraints: self.frame.constraints,
+                clip: self.frame.clip,
+            });
             context.push_layout_command(LayoutCommand::Layer { id });
+            context.push_layout_command(LayoutCommand::EndContainer);
 
             // context.push_layer_state(id);
         }
