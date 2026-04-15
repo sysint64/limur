@@ -44,7 +44,7 @@ pub enum LayoutCommand {
         clip: Clip,
     },
     EndContainer,
-    Layer {
+    ReplayLayer {
         id: WidgetId,
     },
     BeginOffset {
@@ -110,10 +110,10 @@ pub enum ContainerKind {
     Measure {
         id: WidgetId,
     },
-    Layer {
+    RecordLayer {
         id: WidgetId,
     },
-    InsertLayer {
+    LayerGuard {
         id: WidgetId,
     },
 }
@@ -799,7 +799,7 @@ pub fn layout(
                             },
                         };
                     }
-                    ContainerKind::Layer { .. } => {
+                    ContainerKind::RecordLayer { .. } => {
                         layout_state.parent_container = LayoutContainer {
                             idx: layout_state.current_idx(),
                             axis: StackAxis::None,
@@ -811,7 +811,7 @@ pub fn layout(
                             },
                         };
                     }
-                    ContainerKind::InsertLayer { .. } => {
+                    ContainerKind::LayerGuard { .. } => {
                         layout_state.parent_container = LayoutContainer {
                             idx: layout_state.current_idx(),
                             axis: StackAxis::None,
@@ -853,8 +853,8 @@ pub fn layout(
                     ContainerKind::None => {}
                     ContainerKind::Passthrough => {}
                     ContainerKind::Measure { .. } => {}
-                    ContainerKind::Layer { .. } => {}
-                    ContainerKind::InsertLayer { id } => {
+                    ContainerKind::RecordLayer { .. } => {}
+                    ContainerKind::LayerGuard { id } => {
                         let layer = layers.get(id).unwrap();
                         wrap_size.x = layer.wrap_size.x;
                         wrap_size.y = layer.wrap_size.x;
@@ -923,7 +923,7 @@ pub fn layout(
                 layout_state.add_flex_sum(*size);
                 layout_state.add_size(*size, *constraints, Vec2::ZERO, EdgeInsets::ZERO);
             }
-            LayoutCommand::Layer { id } => {
+            LayoutCommand::ReplayLayer { id } => {
                 let layer = layers.get(*id).unwrap();
                 let size = Size::fixed(layer.wrap_size.x, layer.wrap_size.y);
                 let constraints = Constraints::exact_size(size);
@@ -1201,7 +1201,7 @@ pub fn layout(
 
                 let current_container_position = current_position + offset;
 
-                if let ContainerKind::Layer { id } = *kind {
+                if let ContainerKind::RecordLayer { id } = *kind {
                     layout_state.push_layer(id);
                 }
 
@@ -1439,7 +1439,7 @@ pub fn layout(
                         current_idx += 1;
                         go_next = false;
                     }
-                    ContainerKind::Layer { id } => {
+                    ContainerKind::RecordLayer { id } => {
                         layout_state.pass2_parent_container = Pass2LayoutContainer {
                             padding: *padding,
                             zindex: *zindex,
@@ -1458,7 +1458,7 @@ pub fn layout(
                         current_idx += 1;
                         go_next = false;
                     }
-                    ContainerKind::InsertLayer { id } => {
+                    ContainerKind::LayerGuard { id } => {
                         layout_state.pass2_parent_container = Pass2LayoutContainer {
                             padding: *padding,
                             zindex: *zindex,
@@ -1732,7 +1732,7 @@ pub fn layout(
             LayoutCommand::Spacer { .. } => {
                 current_idx += 1;
             }
-            LayoutCommand::Layer { id } => {
+            LayoutCommand::ReplayLayer { id } => {
                 current_idx += 1;
 
                 let layer = layers.get(*id).unwrap();

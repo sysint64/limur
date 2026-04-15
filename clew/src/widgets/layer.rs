@@ -44,7 +44,7 @@ impl LayerBuilder {
                 zindex: self.frame.zindex,
                 padding: self.frame.padding,
                 margin: self.frame.margin,
-                kind: ContainerKind::Layer { id },
+                kind: ContainerKind::RecordLayer { id },
                 size: self.frame.size,
                 constraints: self.frame.constraints,
                 clip: self.frame.clip,
@@ -76,12 +76,12 @@ impl LayerBuilder {
                 zindex: 0,
                 padding: EdgeInsets::ZERO,
                 margin: EdgeInsets::ZERO,
-                kind: ContainerKind::InsertLayer { id },
+                kind: ContainerKind::LayerGuard { id },
                 size: self.frame.size,
                 constraints: self.frame.constraints,
                 clip: self.frame.clip,
             });
-            context.push_layout_command(LayoutCommand::Layer { id });
+            context.push_layout_command(LayoutCommand::ReplayLayer { id });
             context.push_layout_command(LayoutCommand::EndContainer);
 
             // context.push_layer_state(id);
