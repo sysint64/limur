@@ -864,7 +864,10 @@ pub fn layout(
                     ContainerKind::None => {}
                     ContainerKind::Passthrough => {}
                     ContainerKind::Measure { .. } => {}
-                    ContainerKind::RecordLayer { .. } => {}
+                    ContainerKind::RecordLayer { id } => {
+                        let layer = layers.get_mut(id).unwrap();
+                        layer.size = size;
+                    }
                     ContainerKind::LayerGuard { .. } => {}
                 };
 
@@ -1460,6 +1463,7 @@ pub fn layout(
 
                         let layer = layers.get_mut(*id).unwrap();
                         layer.wrap_size = layout_state.wrap_sizes[current_idx];
+                        layer.actual_size = layout_state.actual_sizes[current_idx];
                         layer.origin_position = decorator_rect.position();
 
                         current_idx += 1;
@@ -1479,8 +1483,21 @@ pub fn layout(
 
                         let layer = layers.get_mut(*id).unwrap();
 
-                        if layer.wrap_size != layout_state.wrap_sizes[current_idx] {
+                        let width_change = if layer.size.width == SizeConstraint::Wrap {
+                            layer.wrap_size.x != layout_state.wrap_sizes[current_idx].x
+                        } else {
+                            layer.actual_size.x != layout_state.actual_sizes[current_idx].x
+                        };
+
+                        let height_change = if layer.size.height == SizeConstraint::Wrap {
+                            layer.wrap_size.y != layout_state.wrap_sizes[current_idx].y
+                        } else {
+                            layer.actual_size.y != layout_state.actual_sizes[current_idx].y
+                        };
+
+                        if width_change || height_change {
                             layer.is_dirty = true;
+                            println!("Dirty");
                         }
 
                         current_idx += 1;

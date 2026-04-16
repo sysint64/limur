@@ -66,7 +66,7 @@ pub struct Size {
     pub height: SizeConstraint,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(PartialEq, Debug, Default, Clone, Copy)]
 pub enum SizeConstraint {
     Fill(f32),
     #[default]

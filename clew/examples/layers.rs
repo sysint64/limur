@@ -97,13 +97,17 @@ impl Window<TodoApplication, ()> for MainWindow {
                     ui::vstack()
                         .fill_max_height()
                         .width(ctx.view().size().x * self.width_fraction)
-                        .cross_axis_alignment(ui::CrossAxisAlignment::Center)
+                        .cross_axis_alignment(if self.center {
+                            ui::CrossAxisAlignment::Center
+                        } else {
+                            ui::CrossAxisAlignment::Start
+                        })
                         .build(ctx, |ctx| {
                             for li in 0..2 {
-                                ui::hstack().build(ctx, |ctx| {
+                                ui::hstack().fill_max_size().build(ctx, |ctx| {
                                     for lj in 0..2 {
                                         ui::layer()
-                                        // ui::zstack()
+                                            // ui::zstack()
                                             // .fill_max_size()
                                             // .clip(ui::Clip::Rect)
                                             .id(li * 2 + lj)
@@ -111,9 +115,11 @@ impl Window<TodoApplication, ()> for MainWindow {
                                     }
                                 });
                                 // ui::layer()
-                                // ui::zstack()
-                                //     .clip(ui::Clip::Rect)
+                                //     // ui::zstack()
+                                //     //     .clip(ui::Clip::Rect)
                                 //     // .id(99999)
+                                //     .width(64.)
+                                //     .height(64.)
                                 //     .build(ctx, layer_body);
                                 // ui::zstack().height(32.).width(32.).build(ctx, |ctx| {
                                 //     layer_body(ctx);
@@ -139,9 +145,9 @@ fn layer_body(ctx: &mut ui::BuildContext) {
                 .build(ctx),
         )
         .clip(ui::Clip::Oval)
-        .width(64.)
-        .height(46.)
         // .fill_max_size()
+        .width(64.)
+        .height(64.)
         .spacing(4.)
         .build(ctx, |ctx| {
             for i in 0..2 {
