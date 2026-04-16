@@ -5,7 +5,7 @@ use crate::{
     layout::{ContainerKind, LayoutCommand},
 };
 
-use super::{FrameBuilder, builder::BuildContext};
+use super::{FrameBuilder, builder::BuildContext, scope};
 
 #[derive(WidgetBuilder)]
 pub struct HStackBuilder {
@@ -54,26 +54,28 @@ impl HStackBuilder {
             });
         }
 
-        context.push_layout_command(LayoutCommand::BeginContainer {
-            backgrounds,
-            foregrounds,
-            zindex: self.frame.zindex,
-            padding: self.frame.padding,
-            margin: self.frame.margin,
-            kind: ContainerKind::HStack {
-                spacing: self.spacing,
-                rtl_aware: self.rtl_aware,
-                main_axis_alignment: self.main_axis_alignment,
-                cross_axis_alignment: self.cross_axis_alignment,
-            },
-            size: self.frame.size,
-            constraints: self.frame.constraints,
-            clip: self.frame.clip,
+        scope(context.child_index).build(context, |context| {
+            context.push_layout_command(LayoutCommand::BeginContainer {
+                backgrounds,
+                foregrounds,
+                zindex: self.frame.zindex,
+                padding: self.frame.padding,
+                margin: self.frame.margin,
+                kind: ContainerKind::HStack {
+                    spacing: self.spacing,
+                    rtl_aware: self.rtl_aware,
+                    main_axis_alignment: self.main_axis_alignment,
+                    cross_axis_alignment: self.cross_axis_alignment,
+                },
+                size: self.frame.size,
+                constraints: self.frame.constraints,
+                clip: self.frame.clip,
+            });
+
+            context.handle_decoration_defer(callback);
+
+            context.push_layout_command(LayoutCommand::EndContainer);
         });
-
-        context.handle_decoration_defer(callback);
-
-        context.push_layout_command(LayoutCommand::EndContainer);
 
         if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
             context.push_layout_command(LayoutCommand::EndOffset);

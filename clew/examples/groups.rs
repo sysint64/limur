@@ -64,30 +64,28 @@ impl Window<DemoApplication, ()> for MainWindow {
 }
 
 fn group2(ctx: &mut ui::BuildContext, texts: &[&str]) {
-    let id = ctx.child_index();
-
-    ui::scope(id).build(ctx, |ctx| {
-        ui::hstack()
-            .padding(ui::EdgeInsets::all(16.))
-            .background(
-                ui::decoration()
-                    .color(ui::ColorRgba::from_hex(0xFF880088))
-                    .when_positioned(|_, child| {
-                        let mut decoration = ui::decoration();
-                        if child.is_first {
-                            decoration = decoration.border_radius(ui::BorderRadius::top(8.));
-                        }
-                        if child.is_last {
-                            decoration = decoration.border_radius(ui::BorderRadius::bottom(8.));
-                        }
-                        decoration
-                    })
-                    .build(ctx),
-            )
-            .build(ctx, |ctx| {
-                ui::for_each(texts).build(ctx, |ctx, text| grouped(ctx, text));
-            });
-    });
+    ui::hstack()
+        .padding(ui::EdgeInsets::all(16.))
+        .background(
+            ui::decoration()
+                .color(ui::ColorRgba::from_hex(0xFF880088))
+                .when_positioned(|_, child| {
+                    let mut decoration = ui::decoration();
+                    if child.is_first {
+                        decoration = decoration.border_radius(ui::BorderRadius::top(8.));
+                    }
+                    if child.is_last {
+                        decoration = decoration.border_radius(ui::BorderRadius::bottom(8.));
+                    }
+                    decoration
+                })
+                .build(ctx),
+        )
+        .build(ctx, |ctx| {
+            for text in texts {
+                grouped(ctx, text);
+            }
+        });
 }
 
 fn grouped(ctx: &mut ui::BuildContext, text: &str) {
@@ -126,8 +124,6 @@ fn grouped(ctx: &mut ui::BuildContext, text: &str) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracy_client::Client::start();
-
     env_logger::Builder::new()
         .filter(None, log::LevelFilter::Info)
         .init();

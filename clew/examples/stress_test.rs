@@ -68,18 +68,17 @@ impl Window<TodoApplication, ()> for MainWindow {
                             for lj in 0..10 {
                                 let _g = ui::profiler::scope_named("layer");
                                 ui::layer()
-                                    // .margin(ui::EdgeInsets::all(4.))
-                                    // .padding(ui::EdgeInsets::all(8.))
-                                    // .background(
-                                        // ui::decoration()
-                                            // .color(ui::ColorRgba::from_hex(0x00000000))
-                                            // .border(ui::Border::all(ui::BorderSide::new(
-                                                // 2.,
-                                                // ui::ColorRgba::from_hex(0xFF00FF00),
-                                            // )))
-                                            // .build(ctx),
-                                    // )
-                                    .id(li * 10 + lj)
+                                    .margin(ui::EdgeInsets::all(4.))
+                                    .padding(ui::EdgeInsets::all(8.))
+                                    .background(
+                                        ui::decoration()
+                                            .color(ui::ColorRgba::from_hex(0x00000000))
+                                            .border(ui::Border::all(ui::BorderSide::new(
+                                                2.,
+                                                ui::ColorRgba::from_hex(0xFF00FF00),
+                                            )))
+                                            .build(ctx),
+                                    )
                                     .build(ctx, |ctx| layer_body(ctx, li * 10 + lj));
                             }
                         });
@@ -114,11 +113,9 @@ fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
                     let title = format!("Button {layer_id}: {i}_{j}");
 
                     if clew_widgets::button(&title)
-                        .id(i * 32 + j)
                         .build(ctx)
                         .clicked()
                     {
-                        // if ui::button_id("Button", (i, j)).show(ctx) {
                         println!("Button {layer_id}: {i}_{j} Clicked");
                     }
                 }

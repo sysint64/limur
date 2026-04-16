@@ -21,75 +21,77 @@ impl LayerBuilder {
     where
         F: FnOnce(&mut BuildContext),
     {
-        let id = self.frame.id.with_seed(context.id_seed);
-        let layer = context.layers.get_or_insert(id, Layer::default);
+        scope(context.child_index).build(context, |context| {
+            let id = self.frame.id.with_seed(context.id_seed);
+            let layer = context.layers.get_or_insert(id, Layer::default);
 
-        if layer.is_dirty {
-            layer.parent_layer_id = context.layer_id;
-            let last_layer_id = context.layer_id;
-            context.layer_id = Some(id);
+            if layer.is_dirty {
+                layer.parent_layer_id = context.layer_id;
+                let last_layer_id = context.layer_id;
+                context.layer_id = Some(id);
 
-            let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
+                let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
 
-            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
-                context.push_layout_command(LayoutCommand::BeginOffset {
-                    offset_x: self.frame.offset_x,
-                    offset_y: self.frame.offset_y,
+                if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                    context.push_layout_command(LayoutCommand::BeginOffset {
+                        offset_x: self.frame.offset_x,
+                        offset_y: self.frame.offset_y,
+                    });
+                }
+
+                context.push_layout_command(LayoutCommand::BeginContainer {
+                    backgrounds,
+                    foregrounds,
+                    zindex: self.frame.zindex,
+                    padding: self.frame.padding,
+                    margin: self.frame.margin,
+                    kind: ContainerKind::RecordLayer { id },
+                    size: self.frame.size,
+                    constraints: self.frame.constraints,
+                    clip: self.frame.clip,
                 });
+
+                let layer = context.layers.get_mut(id).unwrap();
+
+                layer.accessed_this_frame.clear();
+                layer.layout_items.clear();
+
+                // Let layout to converge before marking it as non-dirty
+                layer.is_dirty = !context.pre_layout;
+
+                scope(id).build(context, |context| {
+                    context.handle_decoration_defer(callback);
+                });
+
+                context.push_layout_command(LayoutCommand::EndContainer);
+
+                if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                    context.push_layout_command(LayoutCommand::EndOffset);
+                }
+
+                context.layer_id = last_layer_id;
+            } else {
+                context.push_layout_command(LayoutCommand::BeginContainer {
+                    backgrounds: SmallVec::new(),
+                    foregrounds: SmallVec::new(),
+                    zindex: 0,
+                    padding: EdgeInsets::ZERO,
+                    margin: EdgeInsets::ZERO,
+                    kind: ContainerKind::LayerGuard { id },
+                    size: self.frame.size,
+                    constraints: self.frame.constraints,
+                    clip: self.frame.clip,
+                });
+                context.push_layout_command(LayoutCommand::ReplayLayer { id });
+                context.push_layout_command(LayoutCommand::EndContainer);
+
+                // context.push_layer_state(id);
             }
 
-            context.push_layout_command(LayoutCommand::BeginContainer {
-                backgrounds,
-                foregrounds,
-                zindex: self.frame.zindex,
-                padding: self.frame.padding,
-                margin: self.frame.margin,
-                kind: ContainerKind::RecordLayer { id },
-                size: self.frame.size,
-                constraints: self.frame.constraints,
-                clip: self.frame.clip,
-            });
-
-            let layer = context.layers.get_mut(id).unwrap();
-
-            layer.accessed_this_frame.clear();
-            layer.layout_items.clear();
-
-            // Let layout to converge before marking it as non-dirty
-            layer.is_dirty = !context.pre_layout;
-
-            scope(id).build(context, |context| {
-                context.handle_decoration_defer(callback);
-            });
-
-            context.push_layout_command(LayoutCommand::EndContainer);
-
-            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
-                context.push_layout_command(LayoutCommand::EndOffset);
+            if !context.pre_layout {
+                context.widgets_states.accessed_this_frame.insert(id);
             }
-
-            context.layer_id = last_layer_id;
-        } else {
-            context.push_layout_command(LayoutCommand::BeginContainer {
-                backgrounds: SmallVec::new(),
-                foregrounds: SmallVec::new(),
-                zindex: 0,
-                padding: EdgeInsets::ZERO,
-                margin: EdgeInsets::ZERO,
-                kind: ContainerKind::LayerGuard { id },
-                size: self.frame.size,
-                constraints: self.frame.constraints,
-                clip: self.frame.clip,
-            });
-            context.push_layout_command(LayoutCommand::ReplayLayer { id });
-            context.push_layout_command(LayoutCommand::EndContainer);
-
-            // context.push_layer_state(id);
-        }
-
-        if !context.pre_layout {
-            context.widgets_states.accessed_this_frame.insert(id);
-        }
+        });
     }
 }
 

@@ -1498,7 +1498,6 @@ pub fn layout(
 
                         if width_change || height_change {
                             layer.is_dirty = true;
-                            println!("Dirty");
                         }
 
                         current_idx += 1;

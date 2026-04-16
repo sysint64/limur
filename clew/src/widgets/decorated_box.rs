@@ -14,6 +14,7 @@ use crate::{
 use super::{
     FrameBuilder,
     builder::{BuildContext, DecorationDeferFn, PositionedChildMeta},
+    scope,
 };
 
 pub struct DecoratedBox;
@@ -119,27 +120,29 @@ impl DecorationBuilder {
     }
 
     pub fn build(self, context: &mut BuildContext) -> WidgetRef {
-        let id = self.id.with_seed(context.id_seed);
-        context.accessed_this_frame(id);
+        scope(context.child_index).build(context, |context| {
+            let id = self.id.with_seed(context.id_seed);
+            context.accessed_this_frame(id);
 
-        context.widgets_states.decorated_box.set(
-            id,
-            State {
-                color: self.color,
-                shape: self.shape.unwrap_or(BoxShape::Rect),
-                gradients: self.gradients,
-                border_radius: self.border_radius,
-                border: self.border,
-            },
-        );
+            context.widgets_states.decorated_box.set(
+                id,
+                State {
+                    color: self.color,
+                    shape: self.shape.unwrap_or(BoxShape::Rect),
+                    gradients: self.gradients,
+                    border_radius: self.border_radius,
+                    border: self.border,
+                },
+            );
 
-        if let Some(defer) = self.defer {
-            context
-                .decoration_defer
-                .push((id, context.child_index, defer));
-        }
+            if let Some(defer) = self.defer {
+                context
+                    .decoration_defer
+                    .push((id, context.child_index, defer));
+            }
 
-        WidgetRef::new(WidgetType::of::<DecoratedBox>(), id)
+            WidgetRef::new(WidgetType::of::<DecoratedBox>(), id)
+        })
     }
 }
 

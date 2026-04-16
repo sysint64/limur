@@ -7,7 +7,7 @@ use crate::{
 };
 use std::any::Any;
 
-use super::builder::BuildContext;
+use super::{builder::BuildContext, scope};
 
 pub struct GestureDetectorBuilder {
     id: WidgetId,
@@ -135,40 +135,42 @@ impl GestureDetectorBuilder {
     where
         F: FnOnce(&mut BuildContext),
     {
-        let id = self.id.with_seed(context.id_seed);
-        let widget_ref = WidgetRef::new(WidgetType::of::<GestureDetector>(), id);
+        scope(context.child_index).build(context, |context| {
+            let id = self.id.with_seed(context.id_seed);
+            let widget_ref = WidgetRef::new(WidgetType::of::<GestureDetector>(), id);
 
-        let state = context
-            .widgets_states
-            .gesture_detector
-            .get_or_insert(id, State::default);
+            let state = context
+                .widgets_states
+                .gesture_detector
+                .get_or_insert(id, State::default);
 
-        state.layer_id = context.layer_id;
-        state.clickable = self.clickable;
-        state.dragable = self.dragable;
-        state.focusable = self.focusable;
+            state.layer_id = context.layer_id;
+            state.clickable = self.clickable;
+            state.dragable = self.dragable;
+            state.focusable = self.focusable;
 
-        let response = GestureDetectorResponse {
-            id,
-            clicked: state.clicked,
-            is_active: state.is_active,
-            is_hot: state.is_hot,
-            is_focused: state.is_focused,
-            was_focused: state.was_focused,
-            drag_start_x: state.drag_start_x,
-            drag_start_y: state.drag_start_y,
-            drag_x: state.drag_x,
-            drag_y: state.drag_y,
-            drag_delta_x: state.drag_delta_x,
-            drag_delta_y: state.drag_delta_y,
-            drag_state: state.drag_state,
-        };
+            let response = GestureDetectorResponse {
+                id,
+                clicked: state.clicked,
+                is_active: state.is_active,
+                is_hot: state.is_hot,
+                is_focused: state.is_focused,
+                was_focused: state.was_focused,
+                drag_start_x: state.drag_start_x,
+                drag_start_y: state.drag_start_y,
+                drag_x: state.drag_x,
+                drag_y: state.drag_y,
+                drag_delta_x: state.drag_delta_x,
+                drag_delta_y: state.drag_delta_y,
+                drag_state: state.drag_state,
+            };
 
-        context.foregrounds.push(widget_ref);
-        context.provide(response.clone(), callback);
-        context.accessed_this_frame(id);
+            context.foregrounds.push(widget_ref);
+            context.provide(response.clone(), callback);
+            context.accessed_this_frame(id);
 
-        response
+            response
+        })
     }
 }
 
