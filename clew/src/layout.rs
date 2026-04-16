@@ -1464,7 +1464,8 @@ pub fn layout(
                         let layer = layers.get_mut(*id).unwrap();
                         layer.wrap_size = layout_state.wrap_sizes[current_idx];
                         layer.actual_size = layout_state.actual_sizes[current_idx];
-                        layer.origin_position = decorator_rect.position();
+                        layer.origin_position =
+                            decorator_rect.position() - Vec2::new(margin.left, margin.top);
 
                         current_idx += 1;
                         go_next = false;
