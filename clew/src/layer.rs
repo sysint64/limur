@@ -9,8 +9,9 @@ pub struct Layer {
     pub parent_layer_id: Option<WidgetId>,
     pub is_dirty: bool,
     pub wrap_size: Vec2,
+    pub origin_position: Vec2,
     pub layout_commands: Vec<LayoutCommand>,
-    pub(crate) layout_items: Vec<(Vec2, LayoutItem)>,
+    pub(crate) layout_items: Vec<LayoutItem>,
     pub(crate) layout_state: LayoutState,
     pub(crate) accessed_this_frame: FxHashSet<WidgetId>,
 }
@@ -25,6 +26,7 @@ impl Default for Layer {
             layout_items: Default::default(),
             layout_state: Default::default(),
             accessed_this_frame: FxHashSet::default(),
+            origin_position: Vec2::ZERO,
         }
     }
 }
@@ -39,6 +41,7 @@ impl Layer {
             layout_items: Vec::new(),
             layout_state: LayoutState::default(),
             accessed_this_frame: FxHashSet::default(),
+            origin_position: Vec2::ZERO,
         }
     }
 }

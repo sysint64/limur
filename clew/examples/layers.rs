@@ -24,6 +24,7 @@ impl ApplicationDelegate<()> for TodoApplication {
             MainWindow {
                 height_fraction: 0.25,
                 width_fraction: 0.25,
+                center: false,
             },
             WindowDescriptor {
                 title: "100k Non Virtualized Buttons".to_string(),
@@ -51,6 +52,7 @@ impl ApplicationDelegate<()> for TodoApplication {
 pub struct MainWindow {
     width_fraction: f64,
     height_fraction: f64,
+    center: bool,
 }
 
 impl Window<TodoApplication, ()> for MainWindow {
@@ -82,6 +84,10 @@ impl Window<TodoApplication, ()> for MainWindow {
                         _ => 0.25,
                     };
                 }
+
+                if clew_widgets::button("toggle center").build(ctx).clicked() {
+                    self.center = !self.center;
+                }
             });
 
             ui::zstack()
@@ -91,21 +97,27 @@ impl Window<TodoApplication, ()> for MainWindow {
                     ui::vstack()
                         .fill_max_height()
                         .width(ctx.view().size().x * self.width_fraction)
+                        .cross_axis_alignment(ui::CrossAxisAlignment::Center)
                         .build(ctx, |ctx| {
                             for li in 0..2 {
-                                ui::hstack().fill_max_size().build(ctx, |ctx| {
+                                ui::hstack().build(ctx, |ctx| {
                                     for lj in 0..2 {
-                                        ui::layer().fill_max_size().id(li * 2 + lj).build(
-                                            ctx,
-                                            |ctx| {
-                                                layer_body(ctx, li * 2 + lj);
-                                            },
-                                        );
+                                        ui::layer()
+                                            // ui::zstack()
+                                            // .fill_max_size()
+                                            // .clip(ui::Clip::Rect)
+                                            .id(li * 2 + lj)
+                                            .build(ctx, layer_body);
                                     }
                                 });
-                                ui::zstack().height(32.).width(32.).build(ctx, |ctx| {
-                                    layer_body(ctx, 9999);
-                                });
+                                // ui::layer()
+                                // ui::zstack()
+                                //     .clip(ui::Clip::Rect)
+                                //     // .id(99999)
+                                //     .build(ctx, layer_body);
+                                // ui::zstack().height(32.).width(32.).build(ctx, |ctx| {
+                                //     layer_body(ctx);
+                                // });
                             }
                         });
                 });
@@ -115,7 +127,7 @@ impl Window<TodoApplication, ()> for MainWindow {
     }
 }
 
-fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
+fn layer_body(ctx: &mut ui::BuildContext) {
     ui::vstack()
         .background(
             ui::decoration()
@@ -126,7 +138,9 @@ fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
                 )))
                 .build(ctx),
         )
-        .fill_max_size()
+        .width(64.)
+        .height(46.)
+        // .fill_max_size()
         .spacing(4.)
         .build(ctx, |ctx| {
             for i in 0..2 {
