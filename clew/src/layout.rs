@@ -24,9 +24,18 @@ pub struct WidgetPlacement {
 #[derive(Clone, Debug)]
 pub enum LayoutItem {
     Placement(WidgetPlacement),
-    PushClip { rect: Rect, clip: Clip, zindex: i32 },
-    PopClip,
-    BeginGroup { zindex: i32 },
+    PushClip {
+        id: u32,
+        rect: Rect,
+        clip: Clip,
+        zindex: i32,
+    },
+    PopClip {
+        id: u32,
+    },
+    BeginGroup {
+        zindex: i32,
+    },
     EndGroup,
 }
 
@@ -220,6 +229,8 @@ pub(crate) struct LayoutState {
 
     layer_cursor: usize,
     layers: Vec<WidgetId>,
+
+    clip_id: u32,
 
     containers_stack_cursor: usize,
     pass_2_containers_stack_cursor: usize,
@@ -423,6 +434,7 @@ impl LayoutState {
         self.containers_stack_cursor = 0;
         self.offsets_stack_cursor = 0;
         self.layer_cursor = 0;
+        self.clip_id = 0;
 
         self.texts.clear();
     }
@@ -1253,10 +1265,12 @@ pub fn layout(
                 }
 
                 if *clip != Clip::None {
+                    layout_state.clip_id += 1;
                     layout_state.push_layout_item(
                         layers,
                         true,
                         LayoutItem::PushClip {
+                            id: layout_state.clip_id,
                             rect: decorator_rect,
                             clip: *clip,
                             zindex: *zindex,
@@ -1481,7 +1495,14 @@ pub fn layout(
                 current_position = layout_state.pop_position();
 
                 if container.clipping {
-                    layout_state.push_layout_item(layers, true, LayoutItem::PopClip);
+                    layout_state.push_layout_item(
+                        layers,
+                        true,
+                        LayoutItem::PopClip {
+                            id: layout_state.clip_id,
+                        },
+                    );
+                    layout_state.clip_id -= 1;
                 } else {
                     layout_state.push_layout_item(layers, true, LayoutItem::EndGroup);
                 }
@@ -1601,10 +1622,12 @@ pub fn layout(
                 );
 
                 if *clip != Clip::None {
+                    layout_state.clip_id += 1;
                     layout_state.push_layout_item(
                         layers,
                         is_visible,
                         LayoutItem::PushClip {
+                            id: layout_state.clip_id,
                             rect: decorators_rect,
                             clip: *clip,
                             zindex: *zindex,
@@ -1624,7 +1647,14 @@ pub fn layout(
                 );
 
                 if *clip != Clip::None {
-                    layout_state.push_layout_item(layers, is_visible, LayoutItem::PopClip);
+                    layout_state.push_layout_item(
+                        layers,
+                        is_visible,
+                        LayoutItem::PopClip {
+                            id: layout_state.clip_id,
+                        },
+                    );
+                    layout_state.clip_id -= 1;
                 }
 
                 for widget_ref in foregrounds {
@@ -1724,38 +1754,75 @@ pub fn layout(
                 current_idx += 1;
 
                 let layer = layers.get(*id).unwrap();
+                let mut pushed_clips_ids = Vec::new();
 
                 let _g = profiler::scope_named("Layer push commands");
 
                 for item in &layer.layout_items {
-                    if let LayoutItem::Placement(placement) = &item {
-                        let boundary = Rect {
-                            x: position.x + placement.boundary.x - layer.origin_position.x
-                                + offset.x,
-                            y: position.y + placement.boundary.y - layer.origin_position.y
-                                + offset.y,
-                            width: placement.boundary.width,
-                            height: placement.boundary.height,
-                        };
-                        let rect = Rect {
-                            x: position.x + placement.rect.x - layer.origin_position.x + offset.x,
-                            y: position.y + placement.rect.y - layer.origin_position.y + offset.y,
-                            width: placement.rect.width,
-                            height: placement.rect.height,
-                        };
+                    match item {
+                        LayoutItem::Placement(placement) => {
+                            let boundary = Rect {
+                                x: position.x + placement.boundary.x - layer.origin_position.x
+                                    + offset.x,
+                                y: position.y + placement.boundary.y - layer.origin_position.y
+                                    + offset.y,
+                                width: placement.boundary.width,
+                                height: placement.boundary.height,
+                            };
+                            let rect = Rect {
+                                x: position.x + placement.rect.x - layer.origin_position.x
+                                    + offset.x,
+                                y: position.y + placement.rect.y - layer.origin_position.y
+                                    + offset.y,
+                                width: placement.rect.width,
+                                height: placement.rect.height,
+                            };
 
-                        if rects_overlap(rect, Rect::from_pos_size(Vec2::ZERO, view_size)) {
-                            layout_state
-                                .visible_layout_items
-                                .push(LayoutItem::Placement(WidgetPlacement {
-                                    widget_ref: placement.widget_ref,
-                                    zindex: placement.zindex,
-                                    boundary,
-                                    rect,
-                                }));
+                            if rects_overlap(rect, Rect::from_pos_size(Vec2::ZERO, view_size)) {
+                                layout_state
+                                    .visible_layout_items
+                                    .push(LayoutItem::Placement(WidgetPlacement {
+                                        widget_ref: placement.widget_ref,
+                                        zindex: placement.zindex,
+                                        boundary,
+                                        rect,
+                                    }));
+                            }
                         }
-                    } else {
-                        layout_state.visible_layout_items.push(item.clone());
+                        LayoutItem::PushClip {
+                            id,
+                            rect,
+                            clip,
+                            zindex,
+                        } => {
+                            let rect = Rect {
+                                x: position.x + rect.x - layer.origin_position.x + offset.x,
+                                y: position.y + rect.y - layer.origin_position.y + offset.y,
+                                width: rect.width,
+                                height: rect.height,
+                            };
+
+                            if rects_overlap(rect, Rect::from_pos_size(Vec2::ZERO, view_size)) {
+                                pushed_clips_ids.push(*id);
+
+                                layout_state
+                                    .visible_layout_items
+                                    .push(LayoutItem::PushClip {
+                                        id: *id,
+                                        rect,
+                                        clip: *clip,
+                                        zindex: *zindex,
+                                    });
+                            }
+                        }
+                        LayoutItem::PopClip { id } => {
+                            if pushed_clips_ids.contains(id) {
+                                layout_state
+                                    .visible_layout_items
+                                    .push(LayoutItem::PopClip { id: *id });
+                            }
+                        }
+                        _ => layout_state.visible_layout_items.push(item.clone()),
                     }
                 }
             }
@@ -1783,6 +1850,7 @@ pub fn layout(
     }
 
     debug_assert!(layout_state.containers_stack_cursor == 0);
+    debug_assert!(layout_state.clip_id == 0);
 
     layout_state.actual_sizes[0]
 }

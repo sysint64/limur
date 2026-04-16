@@ -612,7 +612,9 @@ pub fn render(
                     render_debug_boundary(&mut render_context, placement);
                 }
             }
-            LayoutItem::PushClip { rect, clip, zindex } => {
+            LayoutItem::PushClip {
+                rect, clip, zindex, ..
+            } => {
                 let shape = clip
                     .to_shape()
                     .expect("Cannot push clip without a shape")
@@ -628,7 +630,7 @@ pub fn render(
                         command: RenderCommand::PushClip { rect, shape },
                     })
             }
-            LayoutItem::PopClip => {
+            LayoutItem::PopClip { .. } => {
                 state
                     .render_state
                     .unsorted_commands
