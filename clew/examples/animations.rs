@@ -198,7 +198,6 @@ impl MainWindow {
 }
 
 impl Window<AnimationsApplication, ()> for MainWindow {
-    #[profiling::function]
     fn build(&mut self, _: &mut AnimationsApplication, ctx: &mut ui::BuildContext) {
         let mouse_pos = ui::Vec2::new(
             ctx.input().mouse_x / ctx.view().scale_factor,
@@ -219,107 +218,113 @@ impl Window<AnimationsApplication, ()> for MainWindow {
             self.circle_opacity.approach(1.);
         }
 
-        ui::zstack().fill_max_size().build(ctx, |ctx| {
-            ui::zstack()
-                .fill_max_size()
-                .align_x(ui::AlignX::Center)
-                .align_y(ui::AlignY::Center)
-                .offset_y(self.offset_y.resolve(ctx))
-                .build(ctx, |ctx| {
-                    ui::vstack()
-                        .spacing(12.)
-                        .cross_axis_alignment(ui::CrossAxisAlignment::Center)
-                        .build(ctx, |ctx| {
-                            ui::text(&format!("Tween Offset: {}", self.offset_y.value()))
+        ui::layer().fill_max_size().build(ctx, |ctx| {
+            ui::zstack().fill_max_size().build(ctx, |ctx| {
+                ui::zstack()
+                    .fill_max_size()
+                    .align_x(ui::AlignX::Center)
+                    .align_y(ui::AlignY::Center)
+                    .offset_y(self.offset_y.resolve(ctx))
+                    .build(ctx, |ctx| {
+                        ui::vstack()
+                            .spacing(12.)
+                            .cross_axis_alignment(ui::CrossAxisAlignment::Center)
+                            .build(ctx, |ctx| {
+                                ui::text(&format!("Tween Offset: {}", self.offset_y.value()))
+                                    .build(ctx);
+                                ui::text(&format!("Tween Status: {:?}", self.offset_y.status()))
+                                    .build(ctx);
+
+                                ui::text(&format!("Keyframes Offset: {}", self.keyframes.value()))
+                                    .build(ctx);
+                                ui::text(&format!(
+                                    "Keyframes Status: {:?}",
+                                    self.keyframes.status()
+                                ))
                                 .build(ctx);
-                            ui::text(&format!("Tween Status: {:?}", self.offset_y.status()))
-                                .build(ctx);
 
-                            ui::text(&format!("Keyframes Offset: {}", self.keyframes.value()))
-                                .build(ctx);
-                            ui::text(&format!("Keyframes Status: {:?}", self.keyframes.status()))
-                                .build(ctx);
+                                ui::text(&format!("MX Status: {:?}", self.mx.status())).build(ctx);
+                                ui::text(&format!("MY Status: {:?}", self.my.status())).build(ctx);
 
-                            ui::text(&format!("MX Status: {:?}", self.mx.status())).build(ctx);
-                            ui::text(&format!("MY Status: {:?}", self.my.status())).build(ctx);
+                                if clew_widgets::button("Move Up (Tween)").build(ctx).clicked() {
+                                    self.offset_y.tween_to(-100.);
+                                }
 
-                            if clew_widgets::button("Move Up (Tween)").build(ctx).clicked() {
-                                self.offset_y.tween_to(-100.);
-                            }
+                                clew_widgets::button("Move Down (Tween)");
 
-                            clew_widgets::button("Move Down (Tween)");
+                                if clew_widgets::button("Move Down (Tween)")
+                                    .build(ctx)
+                                    .clicked()
+                                {
+                                    self.offset_y.tween_to(100.);
+                                }
 
-                            if clew_widgets::button("Move Down (Tween)")
-                                .build(ctx)
-                                .clicked()
-                            {
-                                self.offset_y.tween_to(100.);
-                            }
+                                if clew_widgets::button("Go Home (Tween)").build(ctx).clicked() {
+                                    self.offset_y.tween_to(0.);
+                                }
 
-                            if clew_widgets::button("Go Home (Tween)").build(ctx).clicked() {
-                                self.offset_y.tween_to(0.);
-                            }
+                                if clew_widgets::button("Play Keyframes (Once)")
+                                    .build(ctx)
+                                    .clicked()
+                                {
+                                    self.configure_keyframes_once();
+                                }
 
-                            if clew_widgets::button("Play Keyframes (Once)")
-                                .build(ctx)
-                                .clicked()
-                            {
-                                self.configure_keyframes_once();
-                            }
+                                if clew_widgets::button("Loop Keyframes").build(ctx).clicked() {
+                                    self.configure_keyframes_loop();
+                                }
 
-                            if clew_widgets::button("Loop Keyframes").build(ctx).clicked() {
-                                self.configure_keyframes_loop();
-                            }
+                                if clew_widgets::button("PingPong Keyframes x6")
+                                    .build(ctx)
+                                    .clicked()
+                                {
+                                    self.configure_keyframes_pingpong_6();
+                                }
 
-                            if clew_widgets::button("PingPong Keyframes x6")
-                                .build(ctx)
-                                .clicked()
-                            {
-                                self.configure_keyframes_pingpong_6();
-                            }
+                                if clew_widgets::button("Stop Keyframes (Set 0)")
+                                    .build(ctx)
+                                    .clicked()
+                                {
+                                    self.keyframes.set(0.0);
+                                }
+                            });
+                    });
 
-                            if clew_widgets::button("Stop Keyframes (Set 0)")
-                                .build(ctx)
-                                .clicked()
-                            {
-                                self.keyframes.set(0.0);
-                            }
-                        });
-                });
+                // Keyframes position box
+                ui::decorated_box()
+                    .shape(ui::BoxShape::Rect)
+                    .border_radius(ui::BorderRadius::all(24.))
+                    // .add_linear_gradient(ui::LinearGradient::angled(
+                    //     self.gradient_angle.resolve(ctx),
+                    //     (self.color1.resolve(ctx), self.color2.resolve(ctx)),
+                    // ))
+                    .color(ui::ColorRgba::from_hex(0xFF00FFFF))
+                    .width(200.)
+                    .height(200.)
+                    .offset(40., 200. + self.keyframes.resolve(ctx))
+                    .build(ctx);
 
-            // Keyframes position box
-            ui::decorated_box()
-                .shape(ui::BoxShape::Rect)
-                .border_radius(ui::BorderRadius::all(24.))
-                .add_linear_gradient(ui::LinearGradient::angled(
-                    self.gradient_angle.resolve(ctx),
-                    (self.color1.resolve(ctx), self.color2.resolve(ctx)),
-                ))
-                .width(200.)
-                .height(200.)
-                .offset(40., 200. + self.keyframes.resolve(ctx))
-                .build(ctx);
-
-            // Mouse follower
-            ui::decorated_box()
-                .shape(ui::BoxShape::Oval)
-                .color(
-                    ui::ColorRgba::from_hex(0xFFFF0000)
-                        .with_opacity(self.circle_opacity.resolve(ctx)),
-                )
-                .width(48.)
-                .height(48.)
-                .offset(self.mx.resolve(ctx) - 24., self.my.resolve(ctx) - 24.)
-                .ignore_pointer(true)
-                .build(ctx);
+                // Mouse follower
+                ui::decorated_box()
+                    .shape(ui::BoxShape::Oval)
+                    .color(
+                        ui::ColorRgba::from_hex(0xFFFF0000)
+                            .with_opacity(self.circle_opacity.resolve(ctx)),
+                    )
+                    .width(48.)
+                    .height(48.)
+                    .offset(self.mx.resolve(ctx) - 24., self.my.resolve(ctx) - 24.)
+                    .ignore_pointer(true)
+                    .build(ctx);
+            });
         });
+
+        ui::profiler_overlay(ctx);
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracy_client::Client::start();
-
     env_logger::Builder::new()
         .filter(None, log::LevelFilter::Info)
         .init();

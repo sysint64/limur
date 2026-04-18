@@ -27,6 +27,7 @@ impl LayerBuilder {
 
             if layer.is_dirty {
                 layer.parent_layer_id = context.layer_id;
+                layer.invalidate = false;
                 let last_layer_id = context.layer_id;
                 context.layer_id = Some(id);
 
@@ -57,7 +58,7 @@ impl LayerBuilder {
                 layer.layout_items.clear();
 
                 // Let layout to converge before marking it as non-dirty
-                layer.is_dirty = !context.pre_layout;
+                layer.is_dirty = context.pre_layout || layer.invalidate;
 
                 scope(id).build(context, |context| {
                     context.handle_decoration_defer(callback);
@@ -84,8 +85,6 @@ impl LayerBuilder {
                 });
                 context.push_layout_command(LayoutCommand::ReplayLayer { id });
                 context.push_layout_command(LayoutCommand::EndContainer);
-
-                // context.push_layer_state(id);
             }
 
             if !context.pre_layout {

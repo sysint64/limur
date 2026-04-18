@@ -166,6 +166,11 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         );
 
         window_state.window.build(app, &mut build_context);
+
+        if build_context.invalidate() {
+            window_state.winit_window.clone().request_redraw();
+            // window_manager.request_view_redraw(view_id);
+        }
     }
     // layer()
     //     .id(ROOT_LAYER_WIDGET_ID)

@@ -62,6 +62,7 @@ pub struct BuildContext<'a, 'b, 'c> {
     pub(crate) root_layer: &'a mut Layer,
     pub(crate) bound_size: Vec2,
     pub(crate) performance_metrics: PerformanceMetrics,
+    pub(crate) invalidate: bool,
     pub(crate) pre_layout: bool,
     pub(crate) ignore_pointer: bool,
     pub(crate) layer_id: Option<WidgetId>,
@@ -117,7 +118,22 @@ where
     /// Calling this multiple times in the same frame will not advance time
     /// multiple times.
     fn resolve(&mut self, ctx: &mut BuildContext) -> V {
-        ctx.step_animation(self);
+        if ctx.pre_layout {
+            ctx.step_animation(self);
+        } else {
+            if let Some(layer_id) = ctx.layer_id
+                && let Some(layer) = ctx.layers.get_mut(layer_id)
+            {
+                if !layer.invalidate && self.in_progress() {
+                    layer.is_dirty = true;
+                    layer.invalidate = true;
+                }
+            }
+
+            if !ctx.invalidate && self.in_progress() {
+                ctx.invalidate = true;
+            }
+        }
 
         self.value()
     }
@@ -138,6 +154,7 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     ) -> BuildContext<'a, 'b, 'c> {
         BuildContext {
             pre_layout,
+            invalidate: false,
             root_layer: &mut ui_state.root_layer,
             performance_metrics: ui_state.performance_metrics,
             bound_size: ui_state.view.size(),
@@ -207,6 +224,10 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
 
     pub fn pre_layout(&self) -> bool {
         self.pre_layout
+    }
+
+    pub fn invalidate(&self) -> bool {
+        self.invalidate
     }
 
     pub fn child_index(&self) -> u32 {

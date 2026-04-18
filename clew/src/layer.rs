@@ -8,6 +8,7 @@ use crate::{
 pub struct Layer {
     pub parent_layer_id: Option<WidgetId>,
     pub is_dirty: bool,
+    pub invalidate: bool,
     pub wrap_size: Vec2,
     pub actual_size: Vec2,
     pub size: Size,
@@ -22,6 +23,7 @@ impl Default for Layer {
     fn default() -> Self {
         Self {
             parent_layer_id: None,
+            invalidate: false,
             is_dirty: true,
             size: Size::default(),
             actual_size: Vec2::ZERO,
