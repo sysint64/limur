@@ -211,6 +211,8 @@ pub struct LayoutMeasure {
 #[derive(Default)]
 pub(crate) struct LayoutState {
     cursor: usize,
+    generate_placements: bool,
+    generate_placements_for_layers: bool,
 
     wrap_sizes: Vec<Vec2>,
     flex_sizes: Vec<Vec2>,
@@ -633,10 +635,16 @@ impl LayoutState {
         is_visible: bool,
         item: LayoutItem,
     ) {
-        for i in 0..self.layer_cursor {
-            let layer_id = self.layers[i];
-            let layer = layers.get_mut(layer_id).unwrap();
-            layer.layout_items.push(item.clone());
+        if !self.generate_placements {
+            return;
+        }
+
+        if self.generate_placements_for_layers {
+            for i in 0..self.layer_cursor {
+                let layer_id = self.layers[i];
+                let layer = layers.get_mut(layer_id).unwrap();
+                layer.layout_items.push(item.clone());
+            }
         }
 
         if is_visible {
@@ -683,8 +691,12 @@ pub fn layout(
     layers: &mut TypedWidgetStates<Layer>,
     text: &mut TextsResources,
     assets: &Assets,
+    generate_placements: bool,
+    generate_placements_for_layers: bool,
 ) -> Vec2 {
     layout_state.clear();
+    layout_state.generate_placements = generate_placements;
+    layout_state.generate_placements_for_layers = generate_placements_for_layers;
 
     let view_size = view.size();
     let scale_factor = view.scale_factor;
@@ -1086,37 +1098,40 @@ pub fn layout(
             boundary.x -= widget_size.x;
         }
 
-        match layout_state.pass2_parent_container.axis {
-            StackAxisPass2::None => {}
-            StackAxisPass2::Align { .. } => {}
-            StackAxisPass2::Horizontal {
-                cross_axis_alignment,
-                ..
-            } => {
-                if cross_axis_alignment == CrossAxisAlignment::Stretch {
-                    let height = boundary.height;
-                    widget_size.y = height.max(layout_state.actual_sizes[current_idx].y);
+        if generate_placements {
+            match layout_state.pass2_parent_container.axis {
+                StackAxisPass2::None => {}
+                StackAxisPass2::Align { .. } => {}
+                StackAxisPass2::Horizontal {
+                    cross_axis_alignment,
+                    ..
+                } => {
+                    if cross_axis_alignment == CrossAxisAlignment::Stretch {
+                        let height = boundary.height;
+                        widget_size.y = height.max(layout_state.actual_sizes[current_idx].y);
+                    }
                 }
-            }
-            StackAxisPass2::Vertical {
-                cross_axis_alignment,
-                ..
-            } => {
-                if cross_axis_alignment == CrossAxisAlignment::Stretch {
-                    let width = boundary.width;
-                    widget_size.x = width.max(layout_state.actual_sizes[current_idx].x);
+                StackAxisPass2::Vertical {
+                    cross_axis_alignment,
+                    ..
+                } => {
+                    if cross_axis_alignment == CrossAxisAlignment::Stretch {
+                        let width = boundary.width;
+                        widget_size.x = width.max(layout_state.actual_sizes[current_idx].x);
+                    }
                 }
-            }
-            StackAxisPass2::Passthrough { stretch } => {
-                if let Some(axis) = stretch {
-                    match axis {
-                        Axis::Horizontal => {
-                            let height = boundary.height;
-                            widget_size.y = height.max(layout_state.actual_sizes[current_idx].y);
-                        }
-                        Axis::Vertical => {
-                            let width = boundary.width;
-                            widget_size.x = width.max(layout_state.actual_sizes[current_idx].x);
+                StackAxisPass2::Passthrough { stretch } => {
+                    if let Some(axis) = stretch {
+                        match axis {
+                            Axis::Horizontal => {
+                                let height = boundary.height;
+                                widget_size.y =
+                                    height.max(layout_state.actual_sizes[current_idx].y);
+                            }
+                            Axis::Vertical => {
+                                let width = boundary.width;
+                                widget_size.x = width.max(layout_state.actual_sizes[current_idx].x);
+                            }
                         }
                     }
                 }
@@ -1770,76 +1785,78 @@ pub fn layout(
             LayoutCommand::ReplayLayer { id } => {
                 current_idx += 1;
 
-                let layer = layers.get(*id).unwrap();
-                let mut pushed_clips_ids = Vec::new();
+                if generate_placements_for_layers {
+                    let layer = layers.get(*id).unwrap();
+                    let mut pushed_clips_ids = Vec::new();
 
-                let _g = profiler::scope_named("Layer push commands");
+                    let _g = profiler::scope_named("Layer push commands");
 
-                for item in &layer.layout_items {
-                    match item {
-                        LayoutItem::Placement(placement) => {
-                            let boundary = Rect {
-                                x: position.x + placement.boundary.x - layer.origin_position.x
-                                    + offset.x,
-                                y: position.y + placement.boundary.y - layer.origin_position.y
-                                    + offset.y,
-                                width: placement.boundary.width,
-                                height: placement.boundary.height,
-                            };
-                            let rect = Rect {
-                                x: position.x + placement.rect.x - layer.origin_position.x
-                                    + offset.x,
-                                y: position.y + placement.rect.y - layer.origin_position.y
-                                    + offset.y,
-                                width: placement.rect.width,
-                                height: placement.rect.height,
-                            };
+                    for item in &layer.layout_items {
+                        match item {
+                            LayoutItem::Placement(placement) => {
+                                let boundary = Rect {
+                                    x: position.x + placement.boundary.x - layer.origin_position.x
+                                        + offset.x,
+                                    y: position.y + placement.boundary.y - layer.origin_position.y
+                                        + offset.y,
+                                    width: placement.boundary.width,
+                                    height: placement.boundary.height,
+                                };
+                                let rect = Rect {
+                                    x: position.x + placement.rect.x - layer.origin_position.x
+                                        + offset.x,
+                                    y: position.y + placement.rect.y - layer.origin_position.y
+                                        + offset.y,
+                                    width: placement.rect.width,
+                                    height: placement.rect.height,
+                                };
 
-                            if rects_overlap(rect, Rect::from_pos_size(Vec2::ZERO, view_size)) {
-                                layout_state
-                                    .visible_layout_items
-                                    .push(LayoutItem::Placement(WidgetPlacement {
-                                        widget_ref: placement.widget_ref,
-                                        zindex: placement.zindex,
-                                        boundary,
-                                        rect,
-                                    }));
+                                if rects_overlap(rect, Rect::from_pos_size(Vec2::ZERO, view_size)) {
+                                    layout_state
+                                        .visible_layout_items
+                                        .push(LayoutItem::Placement(WidgetPlacement {
+                                            widget_ref: placement.widget_ref,
+                                            zindex: placement.zindex,
+                                            boundary,
+                                            rect,
+                                        }));
+                                }
                             }
-                        }
-                        LayoutItem::PushClip {
-                            id,
-                            rect,
-                            clip,
-                            zindex,
-                        } => {
-                            let rect = Rect {
-                                x: position.x + rect.x - layer.origin_position.x + offset.x,
-                                y: position.y + rect.y - layer.origin_position.y + offset.y,
-                                width: rect.width,
-                                height: rect.height,
-                            };
+                            LayoutItem::PushClip {
+                                id,
+                                rect,
+                                clip,
+                                zindex,
+                            } => {
+                                let rect = Rect {
+                                    x: position.x + rect.x - layer.origin_position.x + offset.x,
+                                    y: position.y + rect.y - layer.origin_position.y + offset.y,
+                                    width: rect.width,
+                                    height: rect.height,
+                                };
 
-                            if rects_overlap(rect, Rect::from_pos_size(Vec2::ZERO, view_size)) {
-                                pushed_clips_ids.push(*id);
+                                if rects_overlap(rect, Rect::from_pos_size(Vec2::ZERO, view_size)) {
+                                    pushed_clips_ids.push(*id);
 
-                                layout_state
-                                    .visible_layout_items
-                                    .push(LayoutItem::PushClip {
-                                        id: *id,
-                                        rect,
-                                        clip: *clip,
-                                        zindex: *zindex,
-                                    });
+                                    layout_state
+                                        .visible_layout_items
+                                        .push(LayoutItem::PushClip {
+                                            id: *id,
+                                            rect,
+                                            clip: *clip,
+                                            zindex: *zindex,
+                                        });
+                                }
                             }
-                        }
-                        LayoutItem::PopClip { id } => {
-                            if pushed_clips_ids.contains(id) {
-                                layout_state
-                                    .visible_layout_items
-                                    .push(LayoutItem::PopClip { id: *id });
+                            LayoutItem::PopClip { id } => {
+                                if pushed_clips_ids.contains(id) {
+                                    layout_state
+                                        .visible_layout_items
+                                        .push(LayoutItem::PopClip { id: *id });
+                                }
                             }
+                            _ => layout_state.visible_layout_items.push(item.clone()),
                         }
-                        _ => layout_state.visible_layout_items.push(item.clone()),
                     }
                 }
             }

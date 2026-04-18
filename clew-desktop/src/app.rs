@@ -142,15 +142,17 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         );
     }
 
-    {
-        // let _g = profiler::scope_named("Handle interaction");
+    let mut should_redraw = false;
 
-        let mut context = InteractionContext::new(&mut window_state.ui_state);
+    // {
+    //     // let _g = profiler::scope_named("Handle interaction");
 
-        if handle_interaction(&mut context) {
-            window_state.winit_window.clone().request_redraw();
-        }
-    }
+    //     let mut context = InteractionContext::new(&mut window_state.ui_state);
+
+    //     if handle_interaction(&mut context) {
+    //         should_redraw = true;
+    //     }
+    // }
 
     {
         let _g = profiler::scope_named("build::pass2");
@@ -171,8 +173,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         window_state.window.build(app, &mut build_context);
 
         if build_context.invalidate() {
-            window_state.winit_window.clone().request_redraw();
-            // window_manager.request_view_redraw(view_id);
+            should_redraw = true;
         }
     }
     // layer()
@@ -206,6 +207,10 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
     }
 
     finalize_cycle(&mut window_state.ui_state);
+
+    if should_redraw {
+        window_state.winit_window.request_redraw();
+    }
 }
 
 impl<T: ApplicationDelegate<Event>, Event: 'static>
@@ -359,6 +364,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 window.ui_state.user_input.keys_pressed.clear();
                 window.ui_state.user_input.keys_pressed_repeat.clear();
 
+                window.winit_window.pre_present_notify();
                 window.renderer.process_commands(
                     &window.ui_state.view,
                     &window.ui_state.render_state,

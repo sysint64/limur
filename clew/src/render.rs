@@ -489,6 +489,8 @@ pub fn layout_pass1(
         &mut state.layers,
         text_resources,
         assets,
+        false,
+        false,
     );
 
     for layout_text in &state.root_layer.layout_state.texts {
@@ -504,6 +506,18 @@ pub fn layout_pass1(
 
         // text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);
     }
+
+    layout(
+        &mut state.root_layer.layout_state,
+        &state.view,
+        &state.root_layer.layout_commands,
+        &mut state.widgets_states.layout_measures,
+        &mut state.layers,
+        text_resources,
+        assets,
+        false,
+        false,
+    );
 }
 
 pub fn layout_pass2(
@@ -520,6 +534,8 @@ pub fn layout_pass2(
         &mut state.layers,
         text_resources,
         assets,
+        false,
+        false,
     );
 
     for layout_text in &state.root_layer.layout_state.texts {
@@ -535,6 +551,18 @@ pub fn layout_pass2(
 
         text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);
     }
+
+    layout(
+        &mut state.root_layer.layout_state,
+        &state.view,
+        &state.root_layer.layout_commands,
+        &mut state.widgets_states.layout_measures,
+        &mut state.layers,
+        text_resources,
+        assets,
+        true,
+        true,
+    );
 }
 
 pub fn render(
