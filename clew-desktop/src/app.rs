@@ -146,7 +146,10 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         // let _g = profiler::scope_named("Handle interaction");
 
         let mut context = InteractionContext::new(&mut window_state.ui_state);
-        handle_interaction(&mut context);
+
+        if handle_interaction(&mut context) {
+            window_state.winit_window.clone().request_redraw();
+        }
     }
 
     {
