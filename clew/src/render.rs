@@ -504,7 +504,7 @@ pub fn layout_pass1(
             );
         });
 
-        // text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);
+        text_resources.shape_as_needed(layout_text.text_id, &mut fonts.font_system, false);
     }
 
     layout(
@@ -515,8 +515,8 @@ pub fn layout_pass1(
         &mut state.layers,
         text_resources,
         assets,
-        false,
-        false,
+        true,
+        true,
     );
 }
 

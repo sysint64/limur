@@ -153,27 +153,27 @@ pub fn handle_interaction(ctx: &mut InteractionContext) -> bool {
 
     for layout_item in ctx.layout_items.iter() {
         match layout_item {
-            LayoutItem::Placement(placement) => {
-                if placement.widget_ref.widget_type
-                    == WidgetType::of::<widgets::gesture_detector::GestureDetector>()
-                {
-                    is_dirty = is_dirty
-                        || widgets::gesture_detector::handle_interaction(
-                            ctx,
-                            placement.widget_ref.id,
-                        );
+            LayoutItem::Placement(placement) => match placement.widget_ref.widget_type {
+                t if t == WidgetType::of::<widgets::gesture_detector::GestureDetector>() => {
+                    is_dirty |=
+                        widgets::gesture_detector::handle_interaction(ctx, placement.widget_ref.id);
                 }
-            }
+                t if t == WidgetType::of::<widgets::scroll_area::ScrollAreaWidget>() => {
+                    is_dirty |=
+                        widgets::scroll_area::handle_interaction(ctx, placement.widget_ref.id);
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
 
-    let state_updated = ctx.interaction_state != ctx.last_interaction_state;
-    *ctx.last_interaction_state = ctx.interaction_state.clone();
+    // let state_updated = ctx.interaction_state != ctx.last_interaction_state;
+    // *ctx.last_interaction_state = ctx.interaction_state.clone();
 
     ctx.user_input.reset();
     ctx.user_input.clear_frame_events();
 
-    is_dirty || state_updated
-    // true
+    // is_dirty || state_updated
+    is_dirty
 }

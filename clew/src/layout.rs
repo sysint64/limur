@@ -211,8 +211,8 @@ pub struct LayoutMeasure {
 #[derive(Default)]
 pub(crate) struct LayoutState {
     cursor: usize,
-    generate_placements: bool,
-    generate_placements_for_layers: bool,
+    output_layout_items: bool,
+    output_layers: bool,
 
     wrap_sizes: Vec<Vec2>,
     flex_sizes: Vec<Vec2>,
@@ -635,17 +635,17 @@ impl LayoutState {
         is_visible: bool,
         item: LayoutItem,
     ) {
-        if !self.generate_placements {
+        if !self.output_layout_items {
             return;
         }
 
-        if self.generate_placements_for_layers {
-            for i in 0..self.layer_cursor {
-                let layer_id = self.layers[i];
-                let layer = layers.get_mut(layer_id).unwrap();
-                layer.layout_items.push(item.clone());
-            }
+        // if self.generate_placements_for_layers {
+        for i in 0..self.layer_cursor {
+            let layer_id = self.layers[i];
+            let layer = layers.get_mut(layer_id).unwrap();
+            layer.layout_items.push(item.clone());
         }
+        // }
 
         if is_visible {
             self.visible_layout_items.push(item);
@@ -691,12 +691,11 @@ pub fn layout(
     layers: &mut TypedWidgetStates<Layer>,
     text: &mut TextsResources,
     assets: &Assets,
-    generate_placements: bool,
-    generate_placements_for_layers: bool,
+    output_layout_items: bool,
+    replay_layers: bool,
 ) -> Vec2 {
     layout_state.clear();
-    layout_state.generate_placements = generate_placements;
-    layout_state.generate_placements_for_layers = generate_placements_for_layers;
+    layout_state.output_layout_items = output_layout_items;
 
     let view_size = view.size();
     let scale_factor = view.scale_factor;
@@ -1098,7 +1097,7 @@ pub fn layout(
             boundary.x -= widget_size.x;
         }
 
-        if generate_placements {
+        if output_layout_items {
             match layout_state.pass2_parent_container.axis {
                 StackAxisPass2::None => {}
                 StackAxisPass2::Align { .. } => {}
@@ -1785,7 +1784,7 @@ pub fn layout(
             LayoutCommand::ReplayLayer { id } => {
                 current_idx += 1;
 
-                if generate_placements_for_layers {
+                if replay_layers {
                     let layer = layers.get(*id).unwrap();
                     let mut pushed_clips_ids = Vec::new();
 

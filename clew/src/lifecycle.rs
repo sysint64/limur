@@ -5,6 +5,7 @@ use crate::{io::Cursor, profiler, state::UiState};
 pub fn init_cycle(state: &mut UiState) {
     profiler::start_cycle();
 
+    state.root_layer.layout_commands.clear();
     state.animations_stepped_this_frame.clear();
     state.render_state.commands.clear();
     state.widget_placements.clear();

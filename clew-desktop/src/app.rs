@@ -144,15 +144,15 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
 
     let mut should_redraw = false;
 
-    // {
-    //     // let _g = profiler::scope_named("Handle interaction");
+    {
+        // let _g = profiler::scope_named("Handle interaction");
 
-    //     let mut context = InteractionContext::new(&mut window_state.ui_state);
+        let mut context = InteractionContext::new(&mut window_state.ui_state);
 
-    //     if handle_interaction(&mut context) {
-    //         should_redraw = true;
-    //     }
-    // }
+        if handle_interaction(&mut context) {
+            should_redraw = true;
+        }
+    }
 
     {
         let _g = profiler::scope_named("build::pass2");

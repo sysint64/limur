@@ -73,26 +73,26 @@ impl VirtualListBuilder {
                         content_height: 0.,
                     });
 
-            let layout_measures = context.widgets_states.layout_measures.get_mut(id);
-            let wrap_size = self.item_size as f64 * (self.items_count as f64);
+            // let layout_measures = context.widgets_states.layout_measures.get_mut(id);
+            // let wrap_size = self.item_size as f64 * (self.items_count as f64);
 
-            if let Some(layout_measures) = layout_measures {
-                scroll_area::handle_interaction(
-                    id,
-                    state,
-                    context.input,
-                    context.interaction,
-                    layout_measures,
-                    match self.axis {
-                        Axis::Horizontal => wrap_size,
-                        Axis::Vertical => 0.,
-                    },
-                    match self.axis {
-                        Axis::Horizontal => 0.,
-                        Axis::Vertical => wrap_size,
-                    },
-                );
-            }
+            // if let Some(layout_measures) = layout_measures {
+            //     scroll_area::handle_interaction(
+            //         id,
+            //         state,
+            //         context.input,
+            //         context.interaction,
+            //         layout_measures,
+            //         match self.axis {
+            //             Axis::Horizontal => wrap_size,
+            //             Axis::Vertical => 0.,
+            //         },
+            //         match self.axis {
+            //             Axis::Horizontal => 0.,
+            //             Axis::Vertical => wrap_size,
+            //         },
+            //     );
+            // }
 
             state.scroll_direction = self.axis.to_scroll_direction();
 

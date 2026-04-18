@@ -4,7 +4,7 @@ use clew_derive::WidgetBuilder;
 
 use crate::{
     Clip, ScrollDirection, WidgetId, WidgetRef, WidgetType,
-    interaction::InteractionState,
+    interaction::{InteractionContext, InteractionState},
     io::UserInput,
     layout::{ContainerKind, LayoutCommand, LayoutMeasure},
     state::WidgetState,
@@ -115,22 +115,6 @@ impl ScrollAreaBuilder {
                     content_height: 0.,
                 });
 
-            let layout_measures = context.widgets_states.layout_measures.get_mut(id);
-
-            if let Some(layout_measures) = layout_measures {
-                if !context.pre_layout {
-                    handle_interaction(
-                        id,
-                        state,
-                        context.input,
-                        context.interaction,
-                        layout_measures,
-                        layout_measures.wrap_width,
-                        layout_measures.wrap_height,
-                    );
-                }
-            }
-
             state.scroll_direction = self.scroll_direction;
 
             (
@@ -222,50 +206,58 @@ pub fn set_progress_y(context: &mut BuildContext, id: WidgetId, value: f64) {
     }
 }
 
-pub fn handle_interaction(
-    id: WidgetId,
-    widget_state: &mut State,
-    input: &UserInput,
-    interaction_state: &InteractionState,
-    layout_measure: &LayoutMeasure,
-    wrap_width: f64,
-    wrap_height: f64,
-) {
+pub fn handle_interaction(ctx: &mut InteractionContext, id: WidgetId) -> bool {
+    let Some(widget_state) = ctx.widgets_states.scroll_area.get_mut(id) else {
+        return false;
+    };
+
+    let Some(layout_measure) = ctx.widgets_states.layout_measures.get_mut(id) else {
+        return false;
+    };
+
+    let state = widget_state.clone();
+
     if widget_state.scroll_direction == ScrollDirection::Vertical
         || widget_state.scroll_direction == ScrollDirection::Both
     {
-        if input.mouse_wheel_delta_y != 0. && interaction_state.is_hover(&id) {
-            widget_state.offset_y += input.mouse_wheel_delta_y as f64;
+        if ctx.user_input.mouse_wheel_delta_y != 0. && ctx.interaction_state.is_hover(&id) {
+            widget_state.offset_y += ctx.user_input.mouse_wheel_delta_y as f64;
         }
 
-        widget_state.offset_y = widget_state
-            .offset_y
-            .clamp(f64::min(0., -(wrap_height - layout_measure.height)), 0.);
+        widget_state.offset_y = widget_state.offset_y.clamp(
+            f64::min(0., -(layout_measure.wrap_height - layout_measure.height)),
+            0.,
+        );
 
-        widget_state.overflow_y = layout_measure.height - wrap_height <= 0.;
-        widget_state.fraction_y = layout_measure.height / wrap_height;
+        widget_state.overflow_y = layout_measure.height - layout_measure.wrap_height <= 0.;
+        widget_state.fraction_y = layout_measure.height / layout_measure.wrap_height;
         widget_state.height = layout_measure.height;
-        widget_state.content_height = wrap_height;
-        widget_state.progress_y = -widget_state.offset_y / (wrap_height - layout_measure.height);
+        widget_state.content_height = layout_measure.wrap_height;
+        widget_state.progress_y =
+            -widget_state.offset_y / (layout_measure.wrap_height - layout_measure.height);
         widget_state.progress_y = widget_state.progress_y.clamp(0., 1.);
     }
 
     if widget_state.scroll_direction == ScrollDirection::Horizontal
         || widget_state.scroll_direction == ScrollDirection::Both
     {
-        if input.mouse_wheel_delta_x != 0. && interaction_state.is_hover(&id) {
-            widget_state.offset_x += input.mouse_wheel_delta_x as f64;
+        if ctx.user_input.mouse_wheel_delta_x != 0. && ctx.interaction_state.is_hover(&id) {
+            widget_state.offset_x += ctx.user_input.mouse_wheel_delta_x as f64;
         }
 
-        widget_state.offset_x = widget_state
-            .offset_x
-            .clamp(f64::min(0., -(wrap_width - layout_measure.width)), 0.);
+        widget_state.offset_x = widget_state.offset_x.clamp(
+            f64::min(0., -(layout_measure.wrap_width - layout_measure.width)),
+            0.,
+        );
 
-        widget_state.overflow_x = layout_measure.width - wrap_width <= 0.;
-        widget_state.fraction_x = layout_measure.width / wrap_width;
+        widget_state.overflow_x = layout_measure.width - layout_measure.wrap_width <= 0.;
+        widget_state.fraction_x = layout_measure.width / layout_measure.wrap_width;
         widget_state.width = layout_measure.width;
-        widget_state.content_width = wrap_width;
-        widget_state.progress_x = -widget_state.offset_x / (wrap_width - layout_measure.width);
+        widget_state.content_width = layout_measure.wrap_width;
+        widget_state.progress_x =
+            -widget_state.offset_x / (layout_measure.wrap_width - layout_measure.width);
         widget_state.progress_x = widget_state.progress_x.clamp(0., 1.);
     }
+
+    state != *widget_state
 }
