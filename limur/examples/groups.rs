@@ -76,16 +76,6 @@ fn group2(ctx: &mut ui::BuildContext, texts: &[&str]) {
                 } else {
                     ui::BorderRadius::ZERO
                 })
-                // .when_positioned(|_, child| {
-                //     let mut decoration = ui::decoration();
-                //     if child.is_first {
-                //         decoration = decoration.border_radius(ui::BorderRadius::top(8.));
-                //     }
-                //     if child.is_last {
-                //         decoration = decoration.border_radius(ui::BorderRadius::bottom(8.));
-                //     }
-                //     decoration
-                // })
                 .build(ctx),
         )
         .build(ctx, |ctx| {
@@ -114,18 +104,6 @@ fn grouped(ctx: &mut ui::BuildContext, text: &str) {
                     } else {
                         ui::ColorRgba::from_hex(0xFF888800)
                     })
-                    //     let mut decoration = ui::decoration();
-                    //     if child.is_first {
-                    //         decoration = decoration.border_radius(ui::BorderRadius::left(8.));
-                    //     }
-                    //     if child.is_last {
-                    //         decoration = decoration.border_radius(ui::BorderRadius::right(8.));
-                    //     }
-                    //     if response.is_hot() {
-                    //         decoration = decoration.color(ui::ColorRgba::from_hex(0xFFAAAA00));
-                    //     }
-                    //     decoration
-                    // })
                     .build(ctx),
             )
             .text_align(ui::TextAlign::Center)

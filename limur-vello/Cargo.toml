@@ -12,7 +12,7 @@ categories = ["gui"]
 
 [dependencies]
 vello = "0.6.0"
-limur = { version = "0.0.2", path = "../limur" }
+limur = { version = "0.0.1", path = "../limur" }
 cosmic-text = { workspace = true }
 raw-window-handle = { workspace = true }
 log = { workspace = true }

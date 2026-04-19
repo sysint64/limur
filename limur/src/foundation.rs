@@ -382,7 +382,7 @@ impl EdgeInsets {
     /// # Example
     ///
     /// ```
-    /// use clew::EdgeInsets;
+    /// use limur::EdgeInsets;
     ///
     /// let insets = EdgeInsets::all(10.0);
     /// assert_eq!(insets.top, 10.0);
@@ -416,7 +416,7 @@ impl EdgeInsets {
     /// # Example
     ///
     /// ```
-    /// use clew::EdgeInsets;
+    /// use limur::EdgeInsets;
     ///
     /// let insets = EdgeInsets::symmetric(20.0, 10.0);
     /// assert_eq!(insets.left, 20.0);
@@ -444,7 +444,7 @@ impl EdgeInsets {
     /// # Example
     ///
     /// ```
-    /// use clew::EdgeInsets;
+    /// use limur::EdgeInsets;
     ///
     /// let insets = EdgeInsets {
     ///     top: 10.0,
@@ -469,7 +469,7 @@ impl EdgeInsets {
     /// # Example
     ///
     /// ```
-    /// use clew::EdgeInsets;
+    /// use limur::EdgeInsets;
     ///
     /// let insets = EdgeInsets {
     ///     top: 15.0,

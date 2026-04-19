@@ -12,5 +12,5 @@ categories = ["gui"]
 
 [dependencies]
 log = { workspace = true }
-limur = { version = "0.0.2", path = "../limur" }
+limur = { version = "0.0.1", path = "../limur" }
 limur-derive = { version = "0.0.1", path = "../limur-derive" }

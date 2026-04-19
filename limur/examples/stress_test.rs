@@ -47,6 +47,51 @@ impl ApplicationDelegate<()> for TodoApplication {
 
 pub struct MainWindow;
 
+fn build(ctx: &mut ui::BuildContext) {
+    ui::text("~16k Non Virtualized Buttons")
+        .font_size(24.)
+        .build(ctx);
+
+    ui::text("1024 Buttons per layer").build(ctx);
+
+    for i in 0..4 {
+        ui::hstack().fill_max_size().build(ctx, |ctx| {
+            for j in 0..4 {
+                ui::layer()
+                    .margin(ui::EdgeInsets::all(4.))
+                    .padding(ui::EdgeInsets::all(8.))
+                    .background(
+                        ui::decoration()
+                            .color(ui::ColorRgba::from_hex(0x00000000))
+                            .border(ui::Border::all(ui::BorderSide::new(
+                                2.,
+                                ui::ColorRgba::from_hex(0xFF00FF00),
+                            )))
+                            .build(ctx),
+                    )
+                    .build(ctx, |ctx| layer_body(ctx, i * 4 + j));
+            }
+        });
+    }
+}
+
+fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
+    // 1024 Buttons
+    ui::vstack().build(ctx, |ctx| {
+        for i in 0..32 {
+            ui::hstack().build(ctx, |ctx| {
+                for j in 0..32 {
+                    let title = format!("Button {layer_id}: {i}_{j}");
+
+                    if limur_widgets::button(&title).build(ctx).clicked() {
+                        println!("Button {layer_id}: {i}_{j} Clicked");
+                    }
+                }
+            });
+        }
+    });
+}
+
 impl Window<TodoApplication, ()> for MainWindow {
     fn build(&mut self, _: &mut TodoApplication, ctx: &mut ui::BuildContext) {
         let response = ui::scroll_area()
@@ -112,10 +157,7 @@ fn layer_body(ctx: &mut ui::BuildContext, layer_id: u32) {
                 for j in 0..32 {
                     let title = format!("Button {layer_id}: {i}_{j}");
 
-                    if limur_widgets::button(&title)
-                        .build(ctx)
-                        .clicked()
-                    {
+                    if limur_widgets::button(&title).build(ctx).clicked() {
                         println!("Button {layer_id}: {i}_{j} Clicked");
                     }
                 }

@@ -1,6 +1,6 @@
 [package]
 name = "limur"
-version = "0.0.2"
+version = "0.0.1"
 edition = "2024"
 authors = ["Andrei Kabylin <sys.int64@gmail.com>"]
 description = "A composable UI framework for Rust with an immediate API. Inspired by Flutter, SwiftUI, and Jetpack Compose."

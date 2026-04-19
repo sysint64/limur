@@ -1172,7 +1172,7 @@ dependencies = [
 
 [[package]]
 name = "limur"
-version = "0.0.2"
+version = "0.0.1"
 dependencies = [
  "arboard",
  "bitflags 2.10.0",

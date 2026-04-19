@@ -107,9 +107,6 @@ impl Window<TodoApplication, ()> for MainWindow {
                                 ui::hstack().fill_max_size().build(ctx, |ctx| {
                                     for lj in 0..2 {
                                         ui::layer()
-                                            // ui::zstack()
-                                            // .fill_max_size()
-                                            // .clip(ui::Clip::Rect)
                                             .id(li * 2 + lj)
                                             .build(ctx, layer_body);
                                     }
