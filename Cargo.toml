@@ -1,12 +1,12 @@
 [workspace]
 resolver = "3"
 members = [
-    "clew",
-    "clew-desktop",
-    "clew-derive",
-    "clew-tiny-skia",
-    "clew-vello",
-    "clew-widgets",
+    "limur",
+    "limur-desktop",
+    "limur-derive",
+    "limur-tiny-skia",
+    "limur-vello",
+    "limur-widgets",
 ]
 
 [workspace.dependencies]

@@ -1,0 +1,20 @@
+[package]
+name = "limur-vello"
+version = "0.0.1"
+edition = "2024"
+authors = ["Andrei Kabylin <sys.int64@gmail.com>"]
+description = "GPU-accelerated renderer backend for the limur UI framework using `vello` and `wgpu`."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/sysint64/limur"
+readme = "README.md"
+keywords = ["gui", "ui", "imgui", "immediate", "gpu"]
+categories = ["gui"]
+
+[dependencies]
+vello = "0.6.0"
+limur = { version = "0.0.2", path = "../limur" }
+cosmic-text = { workspace = true }
+raw-window-handle = { workspace = true }
+log = { workspace = true }
+vello_svg = { version = "0.8" }
+skrifa = "0.39.0"

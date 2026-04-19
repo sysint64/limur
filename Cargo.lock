@@ -311,102 +311,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
-name = "clew"
-version = "0.0.2"
-dependencies = [
- "arboard",
- "bitflags 2.10.0",
- "bitvec",
- "bumpalo",
- "clew",
- "clew-derive",
- "clew-desktop",
- "clew-vello",
- "clew-widgets",
- "cosmic-text",
- "env_logger",
- "log",
- "parking_lot",
- "pollster",
- "puffin",
- "rustc-hash 2.1.1",
- "slab",
- "slotmap",
- "smallvec",
- "string-interner",
- "strum",
- "strum_macros",
- "tokio",
- "unicode-segmentation",
- "unicode-width",
- "usvg",
- "uuid",
- "winit",
-]
-
-[[package]]
-name = "clew-derive"
-version = "0.0.1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "clew-desktop"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "bumpalo",
- "clew",
- "log",
- "once_cell",
- "parking_lot",
- "slotmap",
- "string-interner",
- "tokio",
- "winit",
-]
-
-[[package]]
-name = "clew-tiny-skia"
-version = "0.0.1"
-dependencies = [
- "clew",
- "cosmic-text",
- "glam",
- "log",
- "raw-window-handle",
- "resvg",
- "softbuffer",
- "tiny-skia",
- "usvg",
-]
-
-[[package]]
-name = "clew-vello"
-version = "0.0.1"
-dependencies = [
- "clew",
- "cosmic-text",
- "log",
- "raw-window-handle",
- "skrifa 0.39.0",
- "vello",
- "vello_svg",
-]
-
-[[package]]
-name = "clew-widgets"
-version = "0.0.1"
-dependencies = [
- "clew",
- "clew-derive",
- "log",
-]
-
-[[package]]
 name = "clipboard-win"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1264,6 +1168,102 @@ dependencies = [
  "bitflags 2.10.0",
  "libc",
  "redox_syscall 0.5.18",
+]
+
+[[package]]
+name = "limur"
+version = "0.0.2"
+dependencies = [
+ "arboard",
+ "bitflags 2.10.0",
+ "bitvec",
+ "bumpalo",
+ "cosmic-text",
+ "env_logger",
+ "limur",
+ "limur-derive",
+ "limur-desktop",
+ "limur-vello",
+ "limur-widgets",
+ "log",
+ "parking_lot",
+ "pollster",
+ "puffin",
+ "rustc-hash 2.1.1",
+ "slab",
+ "slotmap",
+ "smallvec",
+ "string-interner",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "unicode-segmentation",
+ "unicode-width",
+ "usvg",
+ "uuid",
+ "winit",
+]
+
+[[package]]
+name = "limur-derive"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "limur-desktop"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bumpalo",
+ "limur",
+ "log",
+ "once_cell",
+ "parking_lot",
+ "slotmap",
+ "string-interner",
+ "tokio",
+ "winit",
+]
+
+[[package]]
+name = "limur-tiny-skia"
+version = "0.0.1"
+dependencies = [
+ "cosmic-text",
+ "glam",
+ "limur",
+ "log",
+ "raw-window-handle",
+ "resvg",
+ "softbuffer",
+ "tiny-skia",
+ "usvg",
+]
+
+[[package]]
+name = "limur-vello"
+version = "0.0.1"
+dependencies = [
+ "cosmic-text",
+ "limur",
+ "log",
+ "raw-window-handle",
+ "skrifa 0.39.0",
+ "vello",
+ "vello_svg",
+]
+
+[[package]]
+name = "limur-widgets"
+version = "0.0.1"
+dependencies = [
+ "limur",
+ "limur-derive",
+ "log",
 ]
 
 [[package]]
