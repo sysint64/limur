@@ -1,11 +1,11 @@
-use clew_derive::WidgetBuilder;
+use clew_derive::{WidgetBuilder, WidgetState};
 
 use crate::{
     AlignX, AlignY,
     layout::{ContainerKind, LayoutCommand},
 };
 
-use super::{FrameBuilder, builder::BuildContext};
+use super::{FrameBuilder, builder::BuildContext, scope};
 
 pub struct ZStack;
 
@@ -14,6 +14,11 @@ pub struct ZStackBuilder {
     frame: FrameBuilder,
     align_x: AlignX,
     align_y: AlignY,
+}
+
+#[derive(WidgetState, Clone, PartialEq)]
+pub struct State {
+    pub(crate) children_count: u32,
 }
 
 impl ZStackBuilder {
@@ -31,35 +36,49 @@ impl ZStackBuilder {
     where
         F: FnOnce(&mut BuildContext),
     {
-        let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
+        scope(context.position.index).build(context, |context| {
+            let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
 
-        if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
-            context.push_layout_command(LayoutCommand::BeginOffset {
-                offset_x: self.frame.offset_x,
-                offset_y: self.frame.offset_y,
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::BeginOffset {
+                    offset_x: self.frame.offset_x,
+                    offset_y: self.frame.offset_y,
+                });
+            }
+
+            context.push_layout_command(LayoutCommand::BeginContainer {
+                backgrounds,
+                foregrounds,
+                zindex: self.frame.zindex,
+                padding: self.frame.padding,
+                margin: self.frame.margin,
+                kind: ContainerKind::ZStack {
+                    align_x: self.align_x,
+                    align_y: self.align_y,
+                },
+                size: self.frame.size,
+                constraints: self.frame.constraints,
+                clip: self.frame.clip,
             });
-        }
 
-        context.push_layout_command(LayoutCommand::BeginContainer {
-            backgrounds,
-            foregrounds,
-            zindex: self.frame.zindex,
-            padding: self.frame.padding,
-            margin: self.frame.margin,
-            kind: ContainerKind::ZStack {
-                align_x: self.align_x,
-                align_y: self.align_y,
-            },
-            size: self.frame.size,
-            constraints: self.frame.constraints,
-            clip: self.frame.clip,
+            let id = self.frame.id.with_seed(context.id_seed);
+            let state = context
+                .widgets_states
+                .zstack
+                .get_or_insert(id, || State { children_count: 0 });
+
+            context.position.count = state.children_count;
+            context.handle_decoration_defer(callback);
+
+            let state = context.widgets_states.zstack.get_mut(id).unwrap();
+            state.children_count = context.position.index;
+
+            context.push_layout_command(LayoutCommand::EndContainer);
+
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::EndOffset);
+            }
         });
-        context.handle_decoration_defer(callback);
-        context.push_layout_command(LayoutCommand::EndContainer);
-
-        if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
-            context.push_layout_command(LayoutCommand::EndOffset);
-        }
     }
 }
 

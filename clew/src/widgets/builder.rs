@@ -89,8 +89,6 @@ pub struct BuildContext<'a, 'b, 'c> {
     pub(crate) interaction: &'a mut InteractionState,
     pub(crate) delta_time: f64,
     pub(crate) animations_stepped_this_frame: &'a mut FxHashSet<usize>,
-    pub(crate) child_index: u32,
-    pub(crate) child_index_stack: Vec<u32>,
     pub(crate) decoration_defer: Vec<(WidgetId, u32, DecorationDeferFn)>,
     pub(crate) decoration_defer_start_stack: Vec<usize>,
     pub(crate) shortcuts_manager: &'a mut ShortcutsManager,
@@ -101,7 +99,27 @@ pub struct BuildContext<'a, 'b, 'c> {
     pub(crate) view_config: &'a mut ViewConfig,
     pub(crate) assets: &'a Assets<'c>,
     pub(crate) layers: &'a mut TypedWidgetStates<Layer>,
+    pub(crate) position: ChildPosition,
+    pub(crate) position_stack: Vec<ChildPosition>,
     pub(crate) last_interaction_state: &'a mut InteractionState,
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct ChildPosition {
+    pub index: u32,
+    pub count: u32,
+}
+
+impl ChildPosition {
+    #[inline]
+    pub fn is_first(&self) -> bool {
+        self.index == 0
+    }
+
+    #[inline]
+    pub fn is_last(&self) -> bool {
+        self.index == self.count - 1
+    }
 }
 
 pub trait Resolve<V> {
@@ -158,7 +176,6 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             root_layer: &mut ui_state.root_layer,
             performance_metrics: ui_state.performance_metrics,
             bound_size: ui_state.view.size(),
-            child_index: 0,
             ignore_pointer: false,
             layer_id: None,
             widgets_states: &mut ui_state.widgets_states,
@@ -182,7 +199,6 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             animations_stepped_this_frame: &mut ui_state.animations_stepped_this_frame,
             foregrounds: &mut ui_state.foregrounds,
             non_interactable: &mut ui_state.non_interactable,
-            child_index_stack: Vec::new(),
             decoration_defer: Vec::new(),
             decoration_defer_start_stack: Vec::new(),
             shortcuts_manager: &mut ui_state.shortcuts_manager,
@@ -194,7 +210,13 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             assets: assets,
             layers: &mut ui_state.layers,
             last_interaction_state: &mut ui_state.last_interaction_state,
+            position_stack: Vec::new(),
+            position: ChildPosition { index: 0, count: 0 },
         }
+    }
+
+    pub fn position(&self) -> ChildPosition {
+        self.position
     }
 
     pub fn performance_metrics(&self) -> PerformanceMetrics {
@@ -230,8 +252,9 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
         self.invalidate
     }
 
+    #[deprecated(note = "Use position.index instead")]
     pub fn child_index(&self) -> u32 {
-        self.child_index
+        self.position.index
     }
 
     pub fn phase_allocator(&self) -> &bumpalo::Bump {
@@ -268,7 +291,7 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
 
         let start = self.decoration_defer_start_stack.pop().unwrap();
         let end = self.decoration_defer.len();
-        let count = self.child_index.saturating_sub(1);
+        let count = self.child_index().saturating_sub(1);
 
         for i in start..end {
             let (id, child_index, defer) = &self.decoration_defer[i];
@@ -426,14 +449,15 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
     pub fn push_layout_command(&mut self, command: LayoutCommand) {
         match command {
             LayoutCommand::BeginContainer { .. } => {
-                self.child_index += 1;
-                self.child_index_stack.push(self.child_index);
-                self.child_index = 0;
+                self.position.index += 1;
+                self.position_stack.push(self.position);
+                self.position.index = 0;
             }
             LayoutCommand::EndContainer => {
-                self.child_index = self.child_index_stack.pop().unwrap_or(0);
+                self.position = self.position_stack.pop().unwrap_or_default();
             }
-            LayoutCommand::Leaf { .. } => self.child_index += 1,
+            LayoutCommand::Leaf { .. } => self.position.index += 1,
+
             _ => {}
         }
 

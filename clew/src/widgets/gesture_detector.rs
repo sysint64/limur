@@ -135,7 +135,7 @@ impl GestureDetectorBuilder {
     where
         F: FnOnce(&mut BuildContext),
     {
-        scope(context.child_index).build(context, |context| {
+        scope(context.position.index).build(context, |context| {
             let id = self.id.with_seed(context.id_seed);
             let widget_ref = WidgetRef::new(WidgetType::of::<GestureDetector>(), id);
 

@@ -30,7 +30,7 @@ impl WidgetId {
         let location = std::panic::Location::caller();
 
         let mut hasher = FxHasher::default();
-        std::ptr::hash(location.file(), &mut hasher);
+        location.file().hash(&mut hasher);
         location.line().hash(&mut hasher);
         location.column().hash(&mut hasher);
 

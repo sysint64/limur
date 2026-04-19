@@ -1,4 +1,4 @@
-use clew_derive::WidgetBuilder;
+use clew_derive::{WidgetBuilder, WidgetState};
 
 use crate::{
     CrossAxisAlignment, MainAxisAlignment,
@@ -14,6 +14,11 @@ pub struct VStackBuilder {
     spacing: f64,
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,
+}
+
+#[derive(WidgetState, Clone, PartialEq)]
+pub struct State {
+    pub(crate) children_count: u32,
 }
 
 impl VStackBuilder {
@@ -45,16 +50,16 @@ impl VStackBuilder {
     where
         F: FnOnce(&mut BuildContext),
     {
-        let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
+        scope(context.position.index).build(context, |context| {
+            let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
 
-        if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
-            context.push_layout_command(LayoutCommand::BeginOffset {
-                offset_x: self.frame.offset_x,
-                offset_y: self.frame.offset_y,
-            });
-        }
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::BeginOffset {
+                    offset_x: self.frame.offset_x,
+                    offset_y: self.frame.offset_y,
+                });
+            }
 
-        // scope(context.child_index).build(context, |context| {
             context.push_layout_command(LayoutCommand::BeginContainer {
                 backgrounds,
                 foregrounds,
@@ -72,14 +77,24 @@ impl VStackBuilder {
                 clip: self.frame.clip,
             });
 
+            let id = self.frame.id.with_seed(context.id_seed);
+            let state = context
+                .widgets_states
+                .vstack
+                .get_or_insert(id, || State { children_count: 0 });
+
+            context.position.count = state.children_count;
             context.handle_decoration_defer(callback);
+
+            let state = context.widgets_states.vstack.get_mut(id).unwrap();
+            state.children_count = context.position.index;
 
             if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
                 context.push_layout_command(LayoutCommand::EndOffset);
             }
 
             context.push_layout_command(LayoutCommand::EndContainer);
-        // });
+        });
     }
 }
 

@@ -111,6 +111,7 @@ impl DecorationBuilder {
         self
     }
 
+    #[deprecated(note = "Use BuildContext::position instead")]
     pub fn when_positioned<F>(mut self, f: F) -> Self
     where
         F: Fn(&BuildContext, PositionedChildMeta) -> DecorationBuilder + 'static,
@@ -120,7 +121,7 @@ impl DecorationBuilder {
     }
 
     pub fn build(self, context: &mut BuildContext) -> WidgetRef {
-        scope(context.child_index).build(context, |context| {
+        scope(context.position.index).build(context, |context| {
             let id = self.id.with_seed(context.id_seed);
             context.accessed_this_frame(id);
 
@@ -138,7 +139,7 @@ impl DecorationBuilder {
             if let Some(defer) = self.defer {
                 context
                     .decoration_defer
-                    .push((id, context.child_index, defer));
+                    .push((id, context.child_index(), defer));
             }
 
             WidgetRef::new(WidgetType::of::<DecoratedBox>(), id)

@@ -21,7 +21,7 @@ impl LayerBuilder {
     where
         F: FnOnce(&mut BuildContext),
     {
-        scope(context.child_index).build(context, |context| {
+        scope(context.position.index).build(context, |context| {
             let id = self.frame.id.with_seed(context.id_seed);
             let layer = context.layers.get_or_insert(id, Layer::default);
 

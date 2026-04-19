@@ -69,16 +69,23 @@ fn group2(ctx: &mut ui::BuildContext, texts: &[&str]) {
         .background(
             ui::decoration()
                 .color(ui::ColorRgba::from_hex(0xFF880088))
-                .when_positioned(|_, child| {
-                    let mut decoration = ui::decoration();
-                    if child.is_first {
-                        decoration = decoration.border_radius(ui::BorderRadius::top(8.));
-                    }
-                    if child.is_last {
-                        decoration = decoration.border_radius(ui::BorderRadius::bottom(8.));
-                    }
-                    decoration
+                .border_radius(if ctx.position().is_first() {
+                    ui::BorderRadius::top(8.)
+                } else if ctx.position().is_last() {
+                    ui::BorderRadius::bottom(8.)
+                } else {
+                    ui::BorderRadius::ZERO
                 })
+                // .when_positioned(|_, child| {
+                //     let mut decoration = ui::decoration();
+                //     if child.is_first {
+                //         decoration = decoration.border_radius(ui::BorderRadius::top(8.));
+                //     }
+                //     if child.is_last {
+                //         decoration = decoration.border_radius(ui::BorderRadius::bottom(8.));
+                //     }
+                //     decoration
+                // })
                 .build(ctx),
         )
         .build(ctx, |ctx| {
@@ -95,24 +102,30 @@ fn grouped(ctx: &mut ui::BuildContext, text: &str) {
         ui::text(text)
             .background(
                 ui::decoration()
-                    .color(ui::ColorRgba::from_hex(0xFF888800))
-                    .when_positioned(move |_, child| {
-                        let mut decoration = ui::decoration();
-
-                        if child.is_first {
-                            decoration = decoration.border_radius(ui::BorderRadius::left(8.));
-                        }
-
-                        if child.is_last {
-                            decoration = decoration.border_radius(ui::BorderRadius::right(8.));
-                        }
-
-                        if response.is_hot() {
-                            decoration = decoration.color(ui::ColorRgba::from_hex(0xFFAAAA00));
-                        }
-
-                        decoration
+                    .border_radius(if ctx.position().is_first() {
+                        ui::BorderRadius::left(8.)
+                    } else if ctx.position().is_last() {
+                        ui::BorderRadius::right(8.)
+                    } else {
+                        ui::BorderRadius::ZERO
                     })
+                    .color(if response.is_hot() {
+                        ui::ColorRgba::from_hex(0xFFAAAA00)
+                    } else {
+                        ui::ColorRgba::from_hex(0xFF888800)
+                    })
+                    //     let mut decoration = ui::decoration();
+                    //     if child.is_first {
+                    //         decoration = decoration.border_radius(ui::BorderRadius::left(8.));
+                    //     }
+                    //     if child.is_last {
+                    //         decoration = decoration.border_radius(ui::BorderRadius::right(8.));
+                    //     }
+                    //     if response.is_hot() {
+                    //         decoration = decoration.color(ui::ColorRgba::from_hex(0xFFAAAA00));
+                    //     }
+                    //     decoration
+                    // })
                     .build(ctx),
             )
             .text_align(ui::TextAlign::Center)

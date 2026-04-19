@@ -10,16 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 
 use crate::{
-    LayoutDirection, Rect, ShortcutsRegistry, Vec2, View, WidgetId, WidgetRef,
-    editable_text::{self, OsEvent},
-    interaction::InteractionState,
-    io::UserInput,
-    layer::Layer,
-    layout::{LayoutCommand, LayoutItem, LayoutMeasure, LayoutState, WidgetPlacement},
-    profiler,
-    render::RenderState,
-    shortcuts::ShortcutsManager,
-    widgets::{decorated_box, gesture_detector, scroll_area, svg, text},
+    LayoutDirection, Rect, ShortcutsRegistry, Vec2, View, WidgetId, WidgetRef, editable_text::{self, OsEvent}, hstack, interaction::InteractionState, io::UserInput, layer::Layer, layout::{LayoutCommand, LayoutItem, LayoutMeasure, LayoutState, WidgetPlacement}, profiler, render::RenderState, shortcuts::ShortcutsManager, vstack, widgets::{decorated_box, gesture_detector, scroll_area, svg, text}, zstack
 };
 
 pub trait WidgetState: Any + Send + 'static {
@@ -86,6 +77,9 @@ pub(crate) struct WidgetsStates {
     pub(crate) decorated_box: TypedWidgetStates<decorated_box::State>,
     pub(crate) scroll_area: TypedWidgetStates<scroll_area::State>,
     pub(crate) text: TypedWidgetStates<text::State>,
+    pub(crate) vstack: TypedWidgetStates<vstack::State>,
+    pub(crate) hstack: TypedWidgetStates<hstack::State>,
+    pub(crate) zstack: TypedWidgetStates<zstack::State>,
     pub(crate) editable_text: TypedWidgetStates<editable_text::State>,
     pub(crate) gesture_detector: TypedWidgetStates<gesture_detector::State>,
     pub(crate) svg: TypedWidgetStates<svg::State>,
