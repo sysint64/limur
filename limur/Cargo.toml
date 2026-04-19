@@ -24,7 +24,7 @@ smallvec = { workspace = true }
 rustc-hash = "2.1"
 slab = "0.4.11"
 bitvec = "1.0.1"
-limur-derive = { path = "../limur-derive" }
+limur-derive = { version = "0.0.1", path = "../limur-derive" }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 uuid = "1.19.0"
