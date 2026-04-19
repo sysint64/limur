@@ -41,7 +41,7 @@ impl Window<CounterApplication, ()> for MainWindow {
 }
 ```
 
-<img src="../images/counter.png" alt="Counter example" width="347">
+<img src="./images/counter.png" alt="Counter example" width="347">
 
 ## Layers
 

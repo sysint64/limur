@@ -71,7 +71,7 @@ for i in 0..4 {
 | `limur-widgets` | Opinionated set of common widgets (buttons, scroll bars, etc.) for quick prototyping |
 | `limur-desktop` | Desktop application shell - window management, event loop, application lifecycle |
 | `limur-vello` | Renderer backend using [Vello](https://github.com/linebender/vello) |
-| `limur-tiny-skia` | Renderer backend using [tiny-skia](https://github.com/nickel-org/tiny-skia) |
+| `limur-tiny-skia` | Renderer backend using [tiny-skia](https://github.com/linebender/tiny-skia) |
 
 ## Getting Started
 
