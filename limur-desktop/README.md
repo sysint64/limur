@@ -1,13 +1,13 @@
-# clew-desktop
+# limur-desktop
 
-Desktop application runner for the [clew](https://github.com/sysint64/clew) UI framework.
+Desktop application runner for the [limur](https://github.com/sysint64/limur) UI framework.
 
 Provides window management, input handling, and event loop integration using `winit`.
 
 ## Usage
 
 ```rust
-use clew_desktop::{Application, ApplicationDelegate, WindowManager, WindowDescriptor};
+use limur_desktop::{Application, ApplicationDelegate, WindowManager, WindowDescriptor};
 
 struct MyApp;
 
@@ -26,7 +26,7 @@ impl ApplicationDelegate<()> for MyApp {
     }
 
     fn create_renderer(window: Arc<winit::window::Window>) -> Box<dyn Renderer> {
-        // Use clew-vello or clew-tiny-skia
+        // Use limur-vello or limur-tiny-skia
         Box::new(
             VelloRenderer::new(
                 window.clone(),

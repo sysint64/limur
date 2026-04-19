@@ -1,6 +1,6 @@
-# clew-derive
+# limur-derive
 
-Procedural macros for the [clew](https://github.com/sysint64/clew) UI framework.
+Procedural macros for the [limur](https://github.com/sysint64/limur) UI framework.
 
 ## Macros
 

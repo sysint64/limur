@@ -1,10 +1,10 @@
-# clew-widgets
+# limur-widgets
 
-Opinionated widget collection for the [clew](https://github.com/sysint64/clew) UI framework.
+Opinionated widget collection for the [limur](https://github.com/sysint64/limur) UI framework.
 
 ## Overview
 
-Clew is designed for building custom widgets from scratch. This crate provides ready-to-use widgets for when you don't need highly customized look and just want some quick UI.
+Limur is designed for building custom widgets from scratch. This crate provides ready-to-use widgets for when you don't need highly customized look and just want some quick UI.
 
 ## Widgets
 
@@ -13,14 +13,14 @@ Clew is designed for building custom widgets from scratch. This crate provides r
 Simple text button with hover, active, and focus states.
 
 ```rust
-if clew_widgets::button("Click me").build(ctx).clicked() {
+if limur_widgets::button("Click me").build(ctx).clicked() {
     println!("Button clicked!");
 }
 ```
 
 ### VerticalScrollBar / HorizontalScrollBar
 
-Draggable scroll bars that integrate with clew's `ScrollAreaResponse`.
+Draggable scroll bars that integrate with limur's `ScrollAreaResponse`.
 
 ```rust
 let response = ui::scroll_area().build(ctx, |ctx| {
@@ -29,7 +29,7 @@ let response = ui::scroll_area().build(ctx, |ctx| {
 
 if response.overflow_y {
     ctx.provide(response, |ctx| {
-        widget::<clew_widgets::VerticalScrollBar>().build(ctx);
+        widget::<limur_widgets::VerticalScrollBar>().build(ctx);
     });
 }
 ```

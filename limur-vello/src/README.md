@@ -1,6 +1,6 @@
-# clew-vello
+# limur-vello
 
-GPU-accelerated renderer backend for the [clew](https://github.com/sysint64/clew) UI framework using `vello` and `wgpu`.
+GPU-accelerated renderer backend for the [limur](https://github.com/sysint64/limur) UI framework using `vello` and `wgpu`.
 
 ## Overview
 
@@ -9,7 +9,7 @@ This crate provides hardware-accelerated 2D rendering. Recommended for most desk
 ## Usage
 
 ```rust
-use clew_vello::VelloRenderer;
+use limur_vello::VelloRenderer;
 use std::sync::Arc;
 
 impl ApplicationDelegate<()> for MyApp {

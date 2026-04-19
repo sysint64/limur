@@ -1,17 +1,17 @@
-# clew-tiny-skia
+# limur-tiny-skia
 
-Software renderer backend for the [clew](https://github.com/sysint64/clew) UI framework using `tiny-skia` and `softbuffer`.
+Software renderer backend for the [limur](https://github.com/sysint64/limur) UI framework using `tiny-skia` and `softbuffer`.
 
 ## Overview
 
 This crate provides a CPU-based renderer that works without GPU acceleration. Useful for compatibility, debugging, screenshot testing, or environments where GPU access is limited.
 
-> ⚠️ **Important** — This renderer is less developed and messier than `clew-vello` and is still in active development.
+> ⚠️ **Important** — This renderer is less developed and messier than `limur-vello` and is still in active development.
 
 ## Usage
 
 ```rust
-use clew_tiny_skia::TinySkiaRenderer;
+use limur_tiny_skia::TinySkiaRenderer;
 
 impl ApplicationDelegate<()> for MyApp {
     fn create_renderer(window: Arc<winit::window::Window>) -> Box<dyn Renderer> {
