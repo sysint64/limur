@@ -271,18 +271,18 @@ impl<'a> EditableTextBuilder<'a> {
         state.multi_line = self.multi_line;
         state.virtualize = self.virtualize;
 
-        if context.pre_layout {
-            if let Some(gesture_response) = self.gesture_response {
-                state.gesture_detector_response = gesture_response.clone();
+        if context.pre_layout
+            && let Some(gesture_response) = self.gesture_response
+        {
+            state.gesture_detector_response = gesture_response.clone();
 
-                if gesture_response.is_focused {
-                    interaction::handle_commands(context, id);
-                }
-
-                interaction::handle_interaction(context, id, &gesture_response);
-
-                context.accessed_this_frame(id);
+            if gesture_response.is_focused {
+                interaction::handle_commands(context, id);
             }
+
+            interaction::handle_interaction(context, id, &gesture_response);
+
+            context.accessed_this_frame(id);
         }
 
         let state = context

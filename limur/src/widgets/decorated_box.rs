@@ -139,7 +139,7 @@ impl DecorationBuilder {
             if let Some(defer) = self.defer {
                 context
                     .decoration_defer
-                    .push((id, context.child_index(), defer));
+                    .push((id, context.position.index, defer));
             }
 
             WidgetRef::new(WidgetType::of::<DecoratedBox>(), id)

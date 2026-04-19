@@ -7,7 +7,7 @@ pub mod identifiable;
 pub mod interaction;
 pub mod io;
 pub mod keyboard;
-mod layer;
+pub mod layer;
 mod layout;
 pub mod lifecycle;
 pub mod profiler;

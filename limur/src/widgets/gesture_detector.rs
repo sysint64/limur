@@ -1,8 +1,6 @@
 use crate::{
-    View, WidgetId, WidgetRef, WidgetType, impl_id,
-    interaction::{InteractionContext, InteractionState},
-    io::UserInput,
-    profiler,
+    WidgetId, WidgetRef, WidgetType, impl_id,
+    interaction::InteractionContext,
     state::WidgetState,
 };
 use std::any::Any;

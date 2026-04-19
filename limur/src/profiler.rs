@@ -28,7 +28,6 @@ impl Default for Profiler {
     }
 }
 
-#[derive(Default)]
 pub struct ProfilerSnapshot {
     entries: FxHashMap<u64, ProfilerEntry>,
     /// When `start_cycle` was called for this snapshot.
@@ -36,6 +35,16 @@ pub struct ProfilerSnapshot {
     /// Wall-clock duration between `start_cycle` and `end_cycle`.
     /// `None` until `end_cycle` is called.
     cycle_time: Option<Duration>,
+}
+
+impl ProfilerSnapshot {
+    fn new_now() -> Self {
+        Self {
+            entries: FxHashMap::default(),
+            started_at: Some(Instant::now()),
+            cycle_time: None,
+        }
+    }
 }
 
 #[derive(Default, Clone, Identifiable)]
@@ -141,9 +150,7 @@ impl Profiler {
             self.snapshots.pop_front();
         }
 
-        let mut snapshot = ProfilerSnapshot::default();
-        snapshot.started_at = Some(Instant::now());
-        self.snapshots.push_back(snapshot);
+        self.snapshots.push_back(ProfilerSnapshot::new_now());
         self.generation = self.generation.wrapping_add(1);
     }
 

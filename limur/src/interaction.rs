@@ -95,7 +95,7 @@ pub struct InteractionContext<'a> {
     pub(crate) user_input: &'a mut UserInput,
     pub(crate) view: &'a View,
     pub(crate) interaction_state: &'a mut InteractionState,
-    pub(crate) last_interaction_state: &'a mut InteractionState,
+    pub(crate) _last_interaction_state: &'a mut InteractionState,
     pub(crate) layout_items: &'a [LayoutItem],
     pub(crate) non_interactable: &'a FxHashSet<WidgetId>,
     pub(crate) widgets_states: &'a mut WidgetsStates,
@@ -109,7 +109,7 @@ impl<'a> InteractionContext<'a> {
             user_input: &mut state.user_input,
             view: &state.view,
             interaction_state: &mut state.interaction_state,
-            last_interaction_state: &mut state.last_interaction_state,
+            _last_interaction_state: &mut state.last_interaction_state,
             layout_items: &state.root_layer.layout_state.visible_layout_items,
             non_interactable: &state.non_interactable,
             widgets_states: &mut state.widgets_states,
@@ -152,8 +152,8 @@ pub fn handle_interaction(ctx: &mut InteractionContext) -> bool {
     let mut is_dirty = false;
 
     for layout_item in ctx.layout_items.iter() {
-        match layout_item {
-            LayoutItem::Placement(placement) => match placement.widget_ref.widget_type {
+        if let LayoutItem::Placement(placement) = layout_item {
+            match placement.widget_ref.widget_type {
                 t if t == WidgetType::of::<widgets::gesture_detector::GestureDetector>() => {
                     is_dirty |=
                         widgets::gesture_detector::handle_interaction(ctx, placement.widget_ref.id);
@@ -163,8 +163,7 @@ pub fn handle_interaction(ctx: &mut InteractionContext) -> bool {
                         widgets::scroll_area::handle_interaction(ctx, placement.widget_ref.id);
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         }
     }
 

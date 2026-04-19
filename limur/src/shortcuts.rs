@@ -256,7 +256,7 @@ impl ShortcutsManager {
         }
     }
 
-    pub(crate) fn last_active_shortcut_id(&self) -> Option<ShortcutId> {
+    pub(crate) fn _last_active_shortcut_id(&self) -> Option<ShortcutId> {
         self.last_active_shortcuts.get(&self.current_path).copied()
     }
 
@@ -402,7 +402,7 @@ impl ShortcutsManager {
         }
     }
 
-    pub(crate) fn finalize_cycle(&mut self, user_input: &UserInput) {
+    pub(crate) fn finalize_cycle(&mut self, _user_input: &UserInput) {
         let has_not_active_shortcut = self.next_active_shortcuts.is_empty();
 
         if has_not_active_shortcut && self.candidates == 0 {

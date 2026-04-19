@@ -212,7 +212,6 @@ pub struct LayoutMeasure {
 pub(crate) struct LayoutState {
     cursor: usize,
     output_layout_items: bool,
-    output_layers: bool,
 
     wrap_sizes: Vec<Vec2>,
     flex_sizes: Vec<Vec2>,
@@ -683,6 +682,7 @@ fn apply_constraints(size: Vec2, constraints: Constraints) -> Vec2 {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn layout(
     layout_state: &mut LayoutState,
     view: &View,
@@ -994,10 +994,10 @@ pub fn layout(
 
         let container_position = layout_state.positions[layout_state.position_cursor - 1];
         let container_resize = layout_state.resizes[container_idx];
-        let container_margin = layout_state.margins[container_idx];
+        // let container_margin = layout_state.margins[container_idx];
         let container_size_resized = layout_state.actual_sizes[container_idx] + container_resize;
         let container_size = layout_state.actual_sizes[container_idx];
-        let container_wrap_size = layout_state.wrap_sizes[container_idx];
+        // let container_wrap_size = layout_state.wrap_sizes[container_idx];
 
         let flex_x = layout_state.flex_x[current_idx];
         let flex_y = layout_state.flex_y[current_idx];

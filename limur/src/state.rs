@@ -10,7 +10,18 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 
 use crate::{
-    LayoutDirection, Rect, ShortcutsRegistry, Vec2, View, WidgetId, WidgetRef, editable_text::{self, OsEvent}, hstack, interaction::InteractionState, io::UserInput, layer::Layer, layout::{LayoutCommand, LayoutItem, LayoutMeasure, LayoutState, WidgetPlacement}, profiler, render::RenderState, shortcuts::ShortcutsManager, vstack, widgets::{decorated_box, gesture_detector, scroll_area, svg, text}, zstack
+    LayoutDirection, Rect, ShortcutsRegistry, View, WidgetId, WidgetRef,
+    editable_text::{self, OsEvent},
+    hstack,
+    interaction::InteractionState,
+    io::UserInput,
+    layer::Layer,
+    layout::{LayoutMeasure, WidgetPlacement},
+    render::RenderState,
+    shortcuts::ShortcutsManager,
+    vstack,
+    widgets::{decorated_box, gesture_detector, scroll_area, svg, text},
+    zstack,
 };
 
 pub trait WidgetState: Any + Send + 'static {
@@ -258,7 +269,7 @@ impl UiState {
 }
 
 impl WidgetsStates {
-    pub fn get_or_insert_custom<T: WidgetState, F>(&mut self, id: WidgetId, create: F) -> &mut T
+    pub fn _get_or_insert_custom<T: WidgetState, F>(&mut self, id: WidgetId, create: F) -> &mut T
     where
         F: FnOnce() -> T,
     {
@@ -372,37 +383,37 @@ impl WidgetsStates {
     //         .and_then(|b| b.as_any_mut().downcast_mut::<T>())
     // }
 
-    pub fn update_last<T>(&mut self, _id: WidgetId) -> bool
-    where
-        T: WidgetState + Clone + PartialEq,
-    {
-        true
+    // pub fn _update_last<T>(&mut self, _id: WidgetId) -> bool
+    // where
+    //     T: WidgetState + Clone + PartialEq,
+    // {
+    //     true
 
-        // let current_state = self
-        //     .data
-        //     .get(&id)
-        //     .and_then(|b| b.as_any().downcast_ref::<T>())
-        //     .unwrap();
+    //     // let current_state = self
+    //     //     .data
+    //     //     .get(&id)
+    //     //     .and_then(|b| b.as_any().downcast_ref::<T>())
+    //     //     .unwrap();
 
-        // let last_state = self
-        //     .last
-        //     .get_mut(&id)
-        //     .and_then(|b| b.as_any_mut().downcast_mut::<T>());
+    //     // let last_state = self
+    //     //     .last
+    //     //     .get_mut(&id)
+    //     //     .and_then(|b| b.as_any_mut().downcast_mut::<T>());
 
-        // if let Some(last_state) = last_state {
-        //     if last_state != current_state {
-        //         *last_state = current_state.clone();
+    //     // if let Some(last_state) = last_state {
+    //     //     if last_state != current_state {
+    //     //         *last_state = current_state.clone();
 
-        //         true
-        //     } else {
-        //         false
-        //     }
-        // } else {
-        //     self.last.insert(id, Box::new(current_state.clone()));
+    //     //         true
+    //     //     } else {
+    //     //         false
+    //     //     }
+    //     // } else {
+    //     //     self.last.insert(id, Box::new(current_state.clone()));
 
-        //     true
-        // }
-    }
+    //     //     true
+    //     // }
+    // }
 
     // pub fn contains(&self, id: WidgetId) -> bool {
     //     self.data.contains_key(&id)

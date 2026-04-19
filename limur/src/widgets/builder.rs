@@ -2,7 +2,6 @@ use std::{
     any::Any,
     hash::{Hash, Hasher},
     sync::Arc,
-    time::Duration,
 };
 
 #[cfg(feature = "clipboard")]
@@ -13,12 +12,10 @@ use smallvec::SmallVec;
 
 use crate::{
     Animation, Constraints, ShortcutId, ShortcutModifierId, ShortcutsManager, ShortcutsRegistry,
-    Size, Value, Vec2, View, ViewId, WidgetId, WidgetRef,
-    assets::Assets,
-    interaction::InteractionState,
+    Size, Value, View, ViewId, WidgetId, WidgetRef,
     io::UserInput,
     layer::Layer,
-    layout::{LayoutCommand, LayoutItem},
+    layout::LayoutCommand,
     profiler,
     state::{PerformanceMetrics, TypedWidgetStates, UiState, ViewConfig, WidgetsStates},
     text::{FontResources, TextsResources},
@@ -58,9 +55,8 @@ pub struct MutUserDataStack<'a> {
     parent: Option<&'a mut MutUserDataStack<'a>>,
 }
 
-pub struct BuildContext<'a, 'b, 'c> {
+pub struct BuildContext<'a, 'b> {
     pub(crate) root_layer: &'a mut Layer,
-    pub(crate) bound_size: Vec2,
     pub(crate) performance_metrics: PerformanceMetrics,
     pub(crate) invalidate: bool,
     pub(crate) pre_layout: bool,
@@ -86,7 +82,6 @@ pub struct BuildContext<'a, 'b, 'c> {
     pub(crate) non_interactable: &'a mut FxHashSet<WidgetId>,
     pub(crate) phase_allocator: &'a bumpalo::Bump,
     pub(crate) input: &'a mut UserInput,
-    pub(crate) interaction: &'a mut InteractionState,
     pub(crate) delta_time: f64,
     pub(crate) animations_stepped_this_frame: &'a mut FxHashSet<usize>,
     pub(crate) decoration_defer: Vec<(WidgetId, u32, DecorationDeferFn)>,
@@ -97,11 +92,9 @@ pub struct BuildContext<'a, 'b, 'c> {
     #[cfg(feature = "clipboard")]
     pub(crate) clipboard: &'a mut Option<Clipboard>,
     pub(crate) view_config: &'a mut ViewConfig,
-    pub(crate) assets: &'a Assets<'c>,
     pub(crate) layers: &'a mut TypedWidgetStates<Layer>,
     pub(crate) position: ChildPosition,
     pub(crate) position_stack: Vec<ChildPosition>,
-    pub(crate) last_interaction_state: &'a mut InteractionState,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -141,11 +134,11 @@ where
         } else {
             if let Some(layer_id) = ctx.layer_id
                 && let Some(layer) = ctx.layers.get_mut(layer_id)
+                && !layer.invalidate
+                && self.in_progress()
             {
-                if !layer.invalidate && self.in_progress() {
-                    layer.is_dirty = true;
-                    layer.invalidate = true;
-                }
+                layer.is_dirty = true;
+                layer.invalidate = true;
             }
 
             if !ctx.invalidate && self.in_progress() {
@@ -157,7 +150,7 @@ where
     }
 }
 
-impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
+impl<'a, 'b> BuildContext<'a, 'b> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         ui_state: &'a mut UiState,
@@ -167,15 +160,13 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
         broadcast_async_tx: &'a mut tokio::sync::mpsc::UnboundedSender<Box<dyn Any + Send>>,
         event_loop_proxy: Arc<dyn ApplicationEventLoopProxy>,
         delta_time: f64,
-        assets: &'a Assets<'c>,
         pre_layout: bool,
-    ) -> BuildContext<'a, 'b, 'c> {
+    ) -> BuildContext<'a, 'b> {
         BuildContext {
             pre_layout,
             invalidate: false,
             root_layer: &mut ui_state.root_layer,
             performance_metrics: ui_state.performance_metrics,
-            bound_size: ui_state.view.size(),
             ignore_pointer: false,
             layer_id: None,
             widgets_states: &mut ui_state.widgets_states,
@@ -194,7 +185,6 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             phase_allocator: &mut ui_state.phase_allocator,
             backgrounds: &mut ui_state.backgrounds,
             input: &mut ui_state.user_input,
-            interaction: &mut ui_state.interaction_state,
             delta_time,
             animations_stepped_this_frame: &mut ui_state.animations_stepped_this_frame,
             foregrounds: &mut ui_state.foregrounds,
@@ -207,9 +197,7 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
             #[cfg(feature = "clipboard")]
             clipboard: &mut ui_state.clipboard,
             view_config: &mut ui_state.view_config,
-            assets: assets,
             layers: &mut ui_state.layers,
-            last_interaction_state: &mut ui_state.last_interaction_state,
             position_stack: Vec::new(),
             position: ChildPosition { index: 0, count: 0 },
         }
@@ -291,7 +279,7 @@ impl<'a, 'b, 'c> BuildContext<'a, 'b, 'c> {
 
         let start = self.decoration_defer_start_stack.pop().unwrap();
         let end = self.decoration_defer.len();
-        let count = self.child_index().saturating_sub(1);
+        let count = self.position.index.saturating_sub(1);
 
         for i in start..end {
             let (id, child_index, defer) = &self.decoration_defer[i];

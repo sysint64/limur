@@ -70,8 +70,6 @@ impl<'a> ButtonBuilder<'a> {
                         ui::ColorRgba::from_hex(0xFF414141)
                     };
 
-                    let gesture_id = response.id;
-
                     ui::shortcut_scope(ShortcutScopeButton)
                         .active(response.is_focused())
                         .build(ctx, |ctx| {

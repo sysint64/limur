@@ -4,11 +4,10 @@ use crate::{
     Border, BorderRadius, BorderSide, ClipShape, ColorRgb, ColorRgba, DebugBoundary, Gradient,
     LayoutDirection, Rect, Vec2, View, WidgetType,
     assets::Assets,
-    interaction::{InteractionState, handle_interaction},
+    interaction::InteractionState,
     io::UserInput,
-    layer::Layer,
-    layout::{LayoutCommand, LayoutItem, WidgetPlacement, layout},
-    state::{UiState, WidgetsStates},
+    layout::{LayoutItem, WidgetPlacement, layout},
+    state::UiState,
     text::{FontResources, StringId, StringInterner, TextId, TextsResources},
     widgets,
 };
@@ -466,15 +465,6 @@ fn sort_segment(commands: &mut [RenderCommandUnsorted], start: usize, end: usize
 //     }
 // }
 
-pub struct LayoutContext<'a, 'b, 'c> {
-    pub(crate) text_resources: &'a mut TextsResources<'b>,
-    pub(crate) fonts: &'a mut FontResources,
-    pub(crate) assets: &'a Assets<'c>,
-    pub(crate) view: &'a View,
-    pub(crate) clipped_layout_items: &'a mut Vec<LayoutItem>,
-    pub(crate) widgets_states: &'a mut WidgetsStates,
-}
-
 pub fn layout_pass1(
     state: &mut UiState,
     text_resources: &mut TextsResources,
@@ -590,22 +580,19 @@ pub fn render(
         match layout_item {
             LayoutItem::Placement(placement) => {
                 if placement.widget_ref.widget_type == WidgetType::of::<widgets::text::TextWidget>()
+                    && let Some(state) = state.widgets_states.text.get(placement.widget_ref.id)
                 {
-                    if let Some(state) = state.widgets_states.text.get(placement.widget_ref.id) {
-                        widgets::text::render(&mut render_context, placement, state);
-                    }
+                    widgets::text::render(&mut render_context, placement, state);
                 }
 
                 if placement.widget_ref.widget_type
                     == WidgetType::of::<widgets::decorated_box::DecoratedBox>()
-                {
-                    if let Some(state) = state
+                    && let Some(state) = state
                         .widgets_states
                         .decorated_box
                         .get(placement.widget_ref.id)
-                    {
-                        widgets::decorated_box::render(&mut render_context, placement, state);
-                    }
+                {
+                    widgets::decorated_box::render(&mut render_context, placement, state);
                 }
 
                 if placement.widget_ref.widget_type == WidgetType::of::<widgets::svg::SvgWidget>() {

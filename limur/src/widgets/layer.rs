@@ -2,14 +2,14 @@ use limur_derive::WidgetBuilder;
 use smallvec::SmallVec;
 
 use crate::{
-    Clip, Constraints, EdgeInsets, Size,
+    EdgeInsets,
     layer::Layer,
     layout::{ContainerKind, LayoutCommand},
 };
 
 use super::{FrameBuilder, builder::BuildContext, scope};
 
-pub const ROOT_LAYER_WIDGET_ID: &'static str = "limur::root_layer";
+pub const ROOT_LAYER_WIDGET_ID: &str = "limur::root_layer";
 
 #[derive(WidgetBuilder)]
 pub struct LayerBuilder {

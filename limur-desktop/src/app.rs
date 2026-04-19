@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use limur::assets::Assets;
-use limur::builder::WidgetBuilder;
 use limur::editable_text::OsEvent;
 use limur::interaction::{InteractionContext, handle_interaction, handle_interaction_before_build};
 use limur::io::{Cursor, TextInputAction};
@@ -13,8 +12,7 @@ use limur::render::{Renderer, layout_pass1, layout_pass2};
 use limur::shortcuts::ShortcutsManager;
 use limur::text::{FontResources, StringInterner};
 use limur::widgets::builder::{ApplicationEvent, ApplicationEventLoopProxy, BuildContext};
-use limur::widgets::layer;
-use limur::{PhysicalSize, ROOT_LAYER_WIDGET_ID, ShortcutsRegistry, profiler};
+use limur::{PhysicalSize, ShortcutsRegistry, profiler};
 
 use crate::keyboard::{from_winit_key_code, from_winit_modifiers};
 use crate::window_manager::WindowManager;
@@ -117,7 +115,6 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
             broadcast_async_tx,
             event_loop_proxy.clone(),
             window_state.delta_time_timer.elapsed().as_secs_f64(),
-            assets,
             true,
         );
 
@@ -166,7 +163,6 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
             broadcast_async_tx,
             event_loop_proxy.clone(),
             window_state.delta_time_timer.elapsed().as_secs_f64(),
-            assets,
             false,
         );
 
