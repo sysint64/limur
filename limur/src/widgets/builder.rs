@@ -258,13 +258,13 @@ impl<'a, 'b> BuildContext<'a, 'b> {
     }
 
     pub fn accessed_this_frame(&mut self, id: WidgetId) {
-        if let Some(layer_id) = self.layer_id
-            && let Some(layer) = self.layers.get_mut(layer_id)
-        {
-            layer.accessed_this_frame.insert(id);
-        }
+        // if let Some(layer_id) = self.layer_id
+        //     && let Some(layer) = self.layers.get_mut(layer_id)
+        // {
+        //     layer.accessed_this_frame.insert(id);
+        // }
 
-        self.widgets_states.accessed_this_frame.insert(id);
+        // self.widgets_states.accessed_this_frame.insert(id);
     }
 
     #[inline]

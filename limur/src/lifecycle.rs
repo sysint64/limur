@@ -1,6 +1,11 @@
 use std::time::Instant;
 
-use crate::{io::Cursor, profiler, state::UiState};
+use crate::{
+    WidgetId,
+    io::Cursor,
+    profiler,
+    state::{STALE_THRESHOLD, UiState},
+};
 
 pub fn init_cycle(state: &mut UiState) {
     profiler::start_cycle();
@@ -12,6 +17,7 @@ pub fn init_cycle(state: &mut UiState) {
     state.non_interactable.clear();
     state.user_input.cursor = Cursor::Default;
     state.cycle_timer = Instant::now();
+    state.widgets_states.set_current_layer(None);
 
     state.shortcuts_manager.init_cycle(&state.user_input);
 
@@ -27,10 +33,14 @@ pub fn init_cycle(state: &mut UiState) {
 pub fn finalize_cycle(state: &mut UiState) {
     state.shortcuts_manager.finalize_cycle(&state.user_input);
     state.performance_metrics.cycle = state.cycle_timer.elapsed();
-    state
-        .layers
-        .sweep(&state.widgets_states.accessed_this_frame);
-    state.widgets_states.sweep();
+
+    let alive_layers = state.layers.sweep_layers();
+    let is_alive = |layer_id: WidgetId| -> bool { alive_layers.contains(&layer_id) };
+
+    state.layers.current_frame += 1;
+
+    state.widgets_states.sweep(&is_alive);
+    state.widgets_states.next_frame();
     state.phase_allocator.reset();
 
     // profiler::end_cycle();

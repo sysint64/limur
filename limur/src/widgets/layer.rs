@@ -30,6 +30,7 @@ impl LayerBuilder {
                 layer.invalidate = false;
                 let last_layer_id = context.layer_id;
                 context.layer_id = Some(id);
+                context.widgets_states.set_current_layer(context.layer_id);
 
                 let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
 
@@ -71,6 +72,7 @@ impl LayerBuilder {
                 }
 
                 context.layer_id = last_layer_id;
+                context.widgets_states.set_current_layer(last_layer_id);
             } else {
                 context.push_layout_command(LayoutCommand::BeginContainer {
                     backgrounds: SmallVec::new(),
@@ -87,9 +89,10 @@ impl LayerBuilder {
                 context.push_layout_command(LayoutCommand::EndContainer);
             }
 
-            if !context.pre_layout {
-                context.widgets_states.accessed_this_frame.insert(id);
-            }
+            // if !context.pre_layout {
+                // context.widgets_states.accessed_this_frame.insert(id);
+                // context.layers.touch_if_present(id);
+            // }
         });
     }
 }

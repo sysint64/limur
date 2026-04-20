@@ -18,7 +18,7 @@ pub fn select_modifier_enabled(context: &BuildContext) -> bool {
     context.input.is_shift_pressed()
 }
 
-pub fn word_modifier_enabled(context: &BuildContext, id: WidgetId) -> bool {
+pub fn word_modifier_enabled(context: &mut BuildContext, id: WidgetId) -> bool {
     let state = context.widgets_states.editable_text.get(id);
 
     if let Some(state) = state {
@@ -36,7 +36,7 @@ pub fn word_modifier_enabled(context: &BuildContext, id: WidgetId) -> bool {
     }
 }
 
-pub fn paragraph_modifier_enabled(context: &BuildContext, id: WidgetId) -> bool {
+pub fn paragraph_modifier_enabled(context: &mut BuildContext, id: WidgetId) -> bool {
     let state = context.widgets_states.editable_text.get(id);
 
     if let Some(state) = state {
@@ -54,7 +54,7 @@ pub fn paragraph_modifier_enabled(context: &BuildContext, id: WidgetId) -> bool 
     }
 }
 
-pub fn has_selection(context: &BuildContext, id: WidgetId) -> bool {
+pub fn has_selection(context: &mut BuildContext, id: WidgetId) -> bool {
     let state = context.widgets_states.editable_text.get(id);
 
     if let Some(state) = state
