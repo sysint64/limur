@@ -69,8 +69,8 @@ impl WidgetState for State {
 impl DecorationBuilder {
     impl_id!();
 
-    pub fn color(mut self, color: ColorRgba) -> Self {
-        self.color = Some(color);
+    pub fn color<T: Into<ColorRgba>>(mut self, color: T) -> Self {
+        self.color = Some(color.into());
 
         self
     }

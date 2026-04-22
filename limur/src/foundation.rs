@@ -1599,6 +1599,25 @@ impl ColorStop {
     }
 }
 
+impl From<ColorRgb> for ColorRgba {
+    fn from(value: ColorRgb) -> Self {
+        Self {
+            r: value.r,
+            g: value.g,
+            b: value.b,
+            a: 1.0,
+        }
+    }
+}
+
+impl From<ColorOkLab> for ColorRgba {
+    fn from(value: ColorOkLab) -> Self {
+        let rgb = value.to_rgb();
+
+        rgb.into()
+    }
+}
+
 impl From<cosmic_text::Color> for ColorRgba {
     fn from(value: cosmic_text::Color) -> Self {
         Self {
