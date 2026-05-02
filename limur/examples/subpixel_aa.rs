@@ -193,6 +193,12 @@ impl Window<ExampleApplication, ()> for MainWindow {
                 });
             });
 
+        ui::backdrop_filter(ui::ShaderId::FrostedGlass)
+            .offset(256., 256.)
+            .width(300.)
+            .height(200.)
+            .build(ctx);
+
         ui::profiler_overlay(ctx);
     }
 }

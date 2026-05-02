@@ -24,7 +24,7 @@ pub use animation::*;
 pub use foundation::*;
 pub use interaction::WidgetInteractionState;
 pub use profiler::profiler_overlay;
-pub use render::{Renderer, render};
+pub use render::{Renderer, ShaderId, ShaderParam, render};
 pub use shortcuts::*;
 pub use text_data::*;
 pub use widget_id::*;

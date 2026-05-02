@@ -334,6 +334,7 @@ impl VelloRenderer {
                 }
                 RenderCommand::BackdropFilter { boundary, shader } => {
                     // TODO
+                    println!("{boundary:?}");
                 }
             }
         }
@@ -641,13 +642,17 @@ impl Renderer for VelloRenderer {
         self.resize(width, height);
         self.begin_frame();
 
-        let first_layer = composition_layers.first().unwrap();
-        let second_layer = composition_layers.get(1).unwrap();
-        let third_layer = composition_layers.get(2).unwrap();
+        for layer in composition_layers {
+            self.process_commands(view, fonts, text, assets, &layer.commands);
+        }
 
-        self.process_commands(view, fonts, text, assets, &first_layer.commands);
-        self.process_commands(view, fonts, text, assets, &second_layer.commands);
-        self.process_commands(view, fonts, text, assets, &third_layer.commands);
+        // let first_layer = composition_layers.first().unwrap();
+        // let second_layer = composition_layers.get(1).unwrap();
+        // let third_layer = composition_layers.get(2).unwrap();
+
+        // self.process_commands(view, fonts, text, assets, &first_layer.commands);
+        // self.process_commands(view, fonts, text, assets, &second_layer.commands);
+        // self.process_commands(view, fonts, text, assets, &third_layer.commands);
 
         self.end_frame(fill_color);
     }

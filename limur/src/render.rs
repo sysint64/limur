@@ -64,7 +64,7 @@ impl RenderContext<'_, '_> {
 }
 
 // TODO(sysint64): Make it possible to use arbitrary shaders
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum ShaderId {
     FrostedGlass,
 }
@@ -699,6 +699,16 @@ pub fn render(
                     && let Some(state) = state.widgets_states.text.get(placement.widget_ref.id)
                 {
                     widgets::text::render(&mut render_context, placement, state);
+                }
+
+                if placement.widget_ref.widget_type
+                    == WidgetType::of::<widgets::backdrop_filter::BackdropFilter>()
+                    && let Some(state) = state
+                        .widgets_states
+                        .backdrop_filter
+                        .get(placement.widget_ref.id)
+                {
+                    widgets::backdrop_filter::render(&mut render_context, placement, state);
                 }
 
                 if placement.widget_ref.widget_type

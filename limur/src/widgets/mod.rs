@@ -1,3 +1,4 @@
+pub mod backdrop_filter;
 pub mod builder;
 pub mod component;
 pub mod decorated_box;
@@ -20,6 +21,7 @@ pub mod vstack;
 pub mod widget;
 pub mod zstack;
 
+pub use backdrop_filter::backdrop_filter;
 pub use builder::{BuildContext, Resolve};
 pub use component::{Component, component};
 pub use decorated_box::{DecorationBuilder, decorated_box, decoration};
