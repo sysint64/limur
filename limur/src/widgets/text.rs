@@ -241,6 +241,7 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
     ctx.push_command(
         placement.zindex,
         RenderCommand::Text {
+            boundary: placement.rect.px(ctx),
             x: text_position.x,
             y: text_position.y,
             text_id: state.text_id,

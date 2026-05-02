@@ -26,7 +26,7 @@ impl ApplicationDelegate<()> for CounterApplication {
                 width: 800,
                 height: 600,
                 resizable: true,
-                fill_color: ui::ColorRgb::from_hex(0x121212),
+                fill_color: Some(ui::ColorRgba::from_hex(0xFF121212)),
             },
         );
     }

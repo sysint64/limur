@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use limur::{
-    ColorRgb, EdgeInsets, PhysicalSize, Rect, View, ViewId,
+    ColorRgb, ColorRgba, EdgeInsets, PhysicalSize, Rect, View, ViewId,
     render::Renderer,
     state::UiState,
     text::{StringId, TextId, TextsResources},
@@ -16,7 +16,7 @@ pub struct WindowDescriptor {
     pub width: u32,
     pub height: u32,
     pub resizable: bool,
-    pub fill_color: ColorRgb,
+    pub fill_color: Option<ColorRgba>,
 }
 
 impl Default for WindowDescriptor {
@@ -27,7 +27,7 @@ impl Default for WindowDescriptor {
             width: 800,
             height: 600,
             resizable: true,
-            fill_color: ColorRgb::from_hex(0x000000),
+            fill_color: Some(ColorRgba::from_hex(0xFF000000)),
         }
     }
 }
@@ -39,7 +39,7 @@ pub(crate) struct WindowState<'a, App, Event> {
     pub(crate) strings: HashMap<StringId, TextId>,
     pub(crate) ui_state: UiState,
     pub(crate) renderer: Box<dyn Renderer>,
-    pub(crate) fill_color: ColorRgb,
+    pub(crate) fill_color: Option<ColorRgba>,
     pub(crate) delta_time_timer: Instant,
     pub(crate) last_ime_rect: Rect<f32>,
     pub(crate) ime_activated: bool,

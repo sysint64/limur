@@ -125,6 +125,7 @@ pub fn render(
         ctx.push_command(
             placement.zindex,
             RenderCommand::Text {
+                boundary: placement.boundary.px(ctx),
                 x: text_position.x,
                 y: text_position.y,
                 text_id,
@@ -190,6 +191,7 @@ pub fn render(
                 ctx.push_command(
                     placement.zindex,
                     RenderCommand::Text {
+                        boundary: selection_rect,
                         x: text_position.x,
                         y: text_position.y,
                         text_id,

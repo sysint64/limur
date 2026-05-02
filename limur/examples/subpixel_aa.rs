@@ -23,10 +23,10 @@ impl ApplicationDelegate<()> for ExampleApplication {
             WindowDescriptor {
                 title: "Sub-pixel font rendering".to_string(),
                 name: Some("limur-example".to_string()),
-                width: 800,
-                height: 600,
+                width: 1024,
+                height: 1024,
                 resizable: true,
-                fill_color: ui::ColorRgb::from_hex(0x121212),
+                fill_color: Some(ui::ColorRgba::from_hex(0xFF121212)),
             },
         );
     }

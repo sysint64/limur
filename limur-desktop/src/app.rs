@@ -363,7 +363,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 window.winit_window.pre_present_notify();
                 window.renderer.process_commands(
                     &window.ui_state.view,
-                    &window.ui_state.render_state,
+                    &window.ui_state.render_state.composition_layers(),
                     window.fill_color,
                     &mut self.fonts,
                     &mut window.texts,
