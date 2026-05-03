@@ -1,5 +1,7 @@
+mod backdrop_filter;
 mod rect_renderer;
 
+use backdrop_filter::{BackdropFilterRenderer, BlitRenderer, BlurInstance};
 use glam::{Vec2, Vec4};
 use limur::{
     Border, BorderRadius, BorderSide, ClipShape, ColorRgba, Gradient, PhysicalSize, Rect,
@@ -21,6 +23,7 @@ pub struct WgpuRenderer<'a> {
     gapi: sumi::Graphics,
     resources: Resources<'a>,
     renderers: Renderers,
+    compositor: Option<Compositor>,
 }
 
 struct Resources<'a> {
@@ -33,6 +36,68 @@ struct Renderers {
     colored_plane: sumi::ColoredPlaneRenderer,
     rect: RectRenderer,
     text: sumi::TextRenderer,
+    layer_blit: BlitRenderer,
+    surface_blit: BlitRenderer,
+    backdrop_filter: BackdropFilterRenderer,
+}
+
+// ── Compositor textures ───────────────────────────────────────────────────────
+// layer    — MSAA resolves here each segment (cleared to transparent per-segment)
+// composite — accumulated frame; cleared once at frame start with fill_color
+// ping      — scratch buffer for the H-blur pass
+
+struct Compositor {
+    width: u32,
+    height: u32,
+    layer_texture: wgpu::Texture,
+    layer_view: wgpu::TextureView,
+    composite_texture: wgpu::Texture,
+    composite_view: wgpu::TextureView,
+    ping_texture: wgpu::Texture,
+    ping_view: wgpu::TextureView,
+}
+
+impl Compositor {
+    fn new(device: &wgpu::Device, format: wgpu::TextureFormat, width: u32, height: u32) -> Self {
+        let make_tex = |label: &str, usage: wgpu::TextureUsages| {
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage,
+                view_formats: &[],
+            })
+        };
+
+        let rt_bind = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
+
+        let layer_tex = make_tex("Layer Texture", rt_bind);
+        let layer_view = layer_tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let composite_tex = make_tex("Composite Texture", rt_bind);
+        let composite_view = composite_tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let ping_tex = make_tex("Blur Ping Texture", rt_bind);
+        let ping_view = ping_tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        Self {
+            width,
+            height,
+            layer_texture: layer_tex,
+            layer_view,
+            composite_texture: composite_tex,
+            composite_view,
+            ping_texture: ping_tex,
+            ping_view,
+        }
+    }
 }
 
 impl<'a> WgpuRenderer<'a> {
@@ -74,27 +139,64 @@ impl<'a> WgpuRenderer<'a> {
 
         let mut context = gapi.graphics_context(4);
 
-        let mut resources = Resources {
+        let resources = Resources {
             plane: sumi::PlaneResources::new(&mut context),
             centered_plane: sumi::CenteredPlaneResources::new(&mut context),
             text: sumi::TextsResources::new(),
         };
 
-        let mut fonts = sumi::FontResources::new();
+        let fmt = context.surface_texture_format;
 
-        let mut renderers = Renderers {
+        // Premultiplied alpha-over blend for layer → composite.
+        let alpha_over = wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+        };
+
+        let renderers = Renderers {
             colored_plane: sumi::ColoredPlaneRenderer::new(
                 &mut context,
                 sumi::BumpInstances::new(128),
             ),
             rect: RectRenderer::new(&mut context, sumi::BumpInstances::new(128)),
             text: sumi::TextRenderer::new(&mut context),
+            layer_blit: BlitRenderer::new(context.device, fmt, Some(alpha_over)),
+            surface_blit: BlitRenderer::new(context.device, fmt, None),
+            backdrop_filter: BackdropFilterRenderer::new(context.device, fmt),
         };
 
         Self {
             gapi,
             resources,
             renderers,
+            compositor: None,
+        }
+    }
+
+    fn ensure_compositor(&mut self) {
+        let width = self.gapi.config.width;
+        let height = self.gapi.config.height;
+
+        let needs_rebuild = self
+            .compositor
+            .as_ref()
+            .map_or(true, |c| c.width != width || c.height != height);
+
+        if needs_rebuild {
+            self.compositor = Some(Compositor::new(
+                &self.gapi.device,
+                self.gapi.surface_texture_format,
+                width,
+                height,
+            ));
         }
     }
 }
@@ -109,57 +211,51 @@ impl<'a> Renderer for WgpuRenderer<'a> {
         text: &mut TextsResources,
         assets: &Assets,
     ) {
-        // Clear per-frame instance data.
         self.renderers.rect.instances().clear();
+        self.ensure_compositor();
 
-        let mut encoder =
-            self.gapi
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
+        let width = self.gapi.config.width;
+        let height = self.gapi.config.height;
 
+        // ── Acquire surface texture early (needed at the end for present) ────
         let (optimal, output) = match self.gapi.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(surface_texture) => (true, surface_texture),
-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
+            wgpu::CurrentSurfaceTexture::Success(t) => (true, t),
+            wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
                 log::warn!("Get current surface texture: suboptimal");
-
-                (false, surface_texture)
+                (false, t)
             }
-            wgpu::CurrentSurfaceTexture::Timeout => {
-                panic!("Get current surface texture: timout");
-            }
-            wgpu::CurrentSurfaceTexture::Occluded => {
-                panic!("Get current surface texture: occluded");
-            }
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                panic!("Get current surface texture: outdate");
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                panic!("Get current surface texture: lost");
-            }
-            wgpu::CurrentSurfaceTexture::Validation => {
-                panic!("Get current surface texture: validation error")
-            }
+            wgpu::CurrentSurfaceTexture::Timeout => panic!("surface texture: timeout"),
+            wgpu::CurrentSurfaceTexture::Occluded => panic!("surface texture: occluded"),
+            wgpu::CurrentSurfaceTexture::Outdated => panic!("surface texture: outdated"),
+            wgpu::CurrentSurfaceTexture::Lost => panic!("surface texture: lost"),
+            wgpu::CurrentSurfaceTexture::Validation => panic!("surface texture: validation error"),
         };
-
         let surface_view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        let compositor = self.compositor.as_ref().unwrap();
+
+        // ── Clear composite with fill_color ──────────────────────────────────
         {
-            let fill_color = fill_color.unwrap_or(ColorRgba::from_hex(0xFF000000));
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
+            let fill = fill_color.unwrap_or(ColorRgba::from_hex(0xFF000000));
+            let mut encoder =
+                self.gapi
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Clear Composite Encoder"),
+                    });
+            let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Clear Composite Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.gapi.msaa_texture_view,
-                    resolve_target: Some(&surface_view),
+                    view: &compositor.composite_view,
+                    resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(to_wgpu_color(
                             self.gapi.surface_texture_format,
-                            fill_color,
+                            fill,
                         )),
-                        store: wgpu::StoreOp::Discard,
+                        store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
                 })],
@@ -168,61 +264,117 @@ impl<'a> Renderer for WgpuRenderer<'a> {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            drop(_pass);
+            self.gapi.queue.submit([encoder.finish()]);
+        }
 
-            let mut context = self.gapi.render_pass(&mut render_pass, 4);
+        // ── Flatten commands, split at BackdropFilter boundaries ─────────────
+        // Each entry in `segments` is a slice of non-BackdropFilter commands.
+        // `blurs` holds the BackdropFilter commands that follow each segment.
+        let all_cmds: Vec<&RenderCommand> = composition_layers
+            .iter()
+            .flat_map(|l| l.commands.iter())
+            .collect();
 
-            for layer in composition_layers {
-                for command in &layer.commands {
-                    match command {
-                        RenderCommand::Rect {
-                            boundary,
-                            fill,
-                            border_radius,
-                            border,
-                        } => {
-                            let boundary = snap_rect(*boundary);
+        let mut segments: Vec<Vec<&RenderCommand>> = vec![vec![]];
+        let mut blurs: Vec<&RenderCommand> = vec![];
 
-                            let pos = Vec2::new(
-                                boundary.x + boundary.width * 0.5,
-                                context.view.size_unscaled.y
-                                    - boundary.y
-                                    - boundary.height * 0.5,
-                            );
-                            let size = Vec2::new(boundary.width, boundary.height);
-                            let mvp = context.view.screen_camera_matrix
-                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                                    position: pos,
-                                    scaling: size,
-                                    rotation: 0.0,
-                                });
+        for cmd in &all_cmds {
+            if matches!(cmd, RenderCommand::BackdropFilter { .. }) {
+                segments.push(vec![]);
+                blurs.push(cmd);
+            } else {
+                segments.last_mut().unwrap().push(cmd);
+            }
+        }
 
-                            let (color_t, width_t) =
-                                extract_side(border.as_ref().and_then(|b| b.top));
-                            let (color_r, width_r) =
-                                extract_side(border.as_ref().and_then(|b| b.right));
-                            let (color_b, width_b) =
-                                extract_side(border.as_ref().and_then(|b| b.bottom));
-                            let (color_l, width_l) =
-                                extract_side(border.as_ref().and_then(|b| b.left));
-                            let (width_t, width_r, width_b, width_l) = (
-                                snap_width(width_t),
-                                snap_width(width_r),
-                                snap_width(width_b),
-                                snap_width(width_l),
-                            );
+        // ── Render each segment then apply its following blur (if any) ───────
+        for (i, segment) in segments.iter().enumerate() {
+            if !segment.is_empty() {
+                let mut encoder =
+                    self.gapi
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Layer Encoder"),
+                        });
 
-                            let radii = border_radius.unwrap_or(BorderRadius::ZERO);
-                            let snap_r = |r: f32| r.round();
+                {
+                    let compositor = self.compositor.as_ref().unwrap();
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Layer Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &self.gapi.msaa_texture_view,
+                            resolve_target: Some(&compositor.layer_view),
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                store: wgpu::StoreOp::Discard,
+                            },
+                            depth_slice: None,
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
 
-                            let id =
-                                self.renderers.rect.instances().insert(RectInstance::new(
+                    let mut context = self.gapi.render_pass(&mut render_pass, 4);
+
+                    for cmd in segment {
+                        match cmd {
+                            RenderCommand::Rect {
+                                boundary,
+                                fill,
+                                border_radius,
+                                border,
+                            } => {
+                                let boundary = snap_rect(*boundary);
+
+                                let pos = Vec2::new(
+                                    boundary.x + boundary.width * 0.5,
+                                    context.view.size_unscaled.y
+                                        - boundary.y
+                                        - boundary.height * 0.5,
+                                );
+                                let size = Vec2::new(boundary.width, boundary.height);
+                                let mvp = context.view.screen_camera_matrix
+                                    * sumi::transforms_create_2d_model_matrix(
+                                        &sumi::Transforms2D {
+                                            position: pos,
+                                            scaling: size,
+                                            rotation: 0.0,
+                                        },
+                                    );
+
+                                let (color_t, width_t) =
+                                    extract_side(border.as_ref().and_then(|b| b.top));
+                                let (color_r, width_r) =
+                                    extract_side(border.as_ref().and_then(|b| b.right));
+                                let (color_b, width_b) =
+                                    extract_side(border.as_ref().and_then(|b| b.bottom));
+                                let (color_l, width_l) =
+                                    extract_side(border.as_ref().and_then(|b| b.left));
+                                let (width_t, width_r, width_b, width_l) = (
+                                    snap_width(width_t),
+                                    snap_width(width_r),
+                                    snap_width(width_b),
+                                    snap_width(width_l),
+                                );
+
+                                let radii = border_radius.unwrap_or(BorderRadius::ZERO);
+                                let snap_r = |r: f32| r.round();
+
+                                let id = self.renderers.rect.instances().insert(RectInstance::new(
                                     &mvp,
                                     size,
                                     to_rect_fill(fill),
-                                    color_t, width_t,
-                                    color_r, width_r,
-                                    color_b, width_b,
-                                    color_l, width_l,
+                                    color_t,
+                                    width_t,
+                                    color_r,
+                                    width_r,
+                                    color_b,
+                                    width_b,
+                                    color_l,
+                                    width_l,
                                     [
                                         snap_r(radii.top_left),
                                         snap_r(radii.top_right),
@@ -231,92 +383,156 @@ impl<'a> Renderer for WgpuRenderer<'a> {
                                     ],
                                 ));
 
-                            self.renderers.rect.instances().load_instance_to_gpu(
-                                &context,
-                                sumi::LoadToGPUSchedule::NextFrame,
-                                id,
-                            );
+                                self.renderers.rect.instances().load_instance_to_gpu(
+                                    &context,
+                                    sumi::LoadToGPUSchedule::NextFrame,
+                                    id,
+                                );
 
-                            self.renderers.rect.render_instance(
-                                &mut context,
-                                &self.resources.centered_plane,
-                                id,
-                            );
-                        }
-                        RenderCommand::Oval { boundary, fill, border } => {
-                            let boundary = snap_rect(*boundary);
+                                self.renderers.rect.render_instance(
+                                    &mut context,
+                                    &self.resources.centered_plane,
+                                    id,
+                                );
+                            }
+                            RenderCommand::Oval {
+                                boundary,
+                                fill,
+                                border,
+                            } => {
+                                let boundary = snap_rect(*boundary);
 
-                            let pos = Vec2::new(
-                                boundary.x + boundary.width * 0.5,
-                                context.view.size_unscaled.y
-                                    - boundary.y
-                                    - boundary.height * 0.5,
-                            );
-                            let size = Vec2::new(boundary.width, boundary.height);
-                            let mvp = context.view.screen_camera_matrix
-                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                                    position: pos,
-                                    scaling: size,
-                                    rotation: 0.0,
-                                });
+                                let pos = Vec2::new(
+                                    boundary.x + boundary.width * 0.5,
+                                    context.view.size_unscaled.y
+                                        - boundary.y
+                                        - boundary.height * 0.5,
+                                );
+                                let size = Vec2::new(boundary.width, boundary.height);
+                                let mvp = context.view.screen_camera_matrix
+                                    * sumi::transforms_create_2d_model_matrix(
+                                        &sumi::Transforms2D {
+                                            position: pos,
+                                            scaling: size,
+                                            rotation: 0.0,
+                                        },
+                                    );
 
-                            let (border_color, border_width) = extract_side(*border);
-                            let border_width = snap_width(border_width);
+                                let (border_color, border_width) = extract_side(*border);
+                                let border_width = snap_width(border_width);
 
-                            let id = self.renderers.rect.instances().insert(
-                                RectInstance::new_oval(
-                                    &mvp,
-                                    size,
-                                    to_rect_fill(fill),
-                                    border_color,
-                                    border_width,
-                                ),
-                            );
+                                let id =
+                                    self.renderers
+                                        .rect
+                                        .instances()
+                                        .insert(RectInstance::new_oval(
+                                            &mvp,
+                                            size,
+                                            to_rect_fill(fill),
+                                            border_color,
+                                            border_width,
+                                        ));
 
-                            self.renderers.rect.instances().load_instance_to_gpu(
-                                &context,
-                                sumi::LoadToGPUSchedule::NextFrame,
-                                id,
-                            );
+                                self.renderers.rect.instances().load_instance_to_gpu(
+                                    &context,
+                                    sumi::LoadToGPUSchedule::NextFrame,
+                                    id,
+                                );
 
-                            self.renderers.rect.render_instance(
-                                &mut context,
-                                &self.resources.centered_plane,
-                                id,
-                            );
-                        }
-                        RenderCommand::Text {
-                            x,
-                            y,
-                            text_id,
-                            tint_color,
-                            ..
-                        } => {
-                            //
-                        }
-                        RenderCommand::PushClip { rect, shape, .. } => {
-                            //
-                        }
-                        RenderCommand::PopClip => {
-                            //
-                        }
-                        RenderCommand::Svg {
-                            boundary,
-                            asset_id,
-                            tint_color,
-                            ..
-                        } => {
-                            //
-                        }
-                        RenderCommand::BackdropFilter { boundary, shader } => {
-                            //
+                                self.renderers.rect.render_instance(
+                                    &mut context,
+                                    &self.resources.centered_plane,
+                                    id,
+                                );
+                            }
+                            RenderCommand::Text { .. } => {}
+                            RenderCommand::PushClip { .. } => {}
+                            RenderCommand::PopClip => {}
+                            RenderCommand::Svg { .. } => {}
+                            RenderCommand::BackdropFilter { .. } => unreachable!(),
                         }
                     }
+                }
+
+                // Blit layer → composite (alpha-over blend).
+                let compositor = self.compositor.as_ref().unwrap();
+                self.renderers.layer_blit.blit(
+                    &self.gapi.device,
+                    &mut encoder,
+                    &compositor.layer_view,
+                    &compositor.composite_view,
+                );
+
+                self.gapi.queue.submit([encoder.finish()]);
+            }
+
+            // Apply the backdrop filter that follows this segment (if any).
+            if i < blurs.len() {
+                if let RenderCommand::BackdropFilter { boundary, shader } = blurs[i] {
+                    let mut blur_radius = 10.0f32;
+                    let mut tint_color = ColorRgba::TRANSPARENT;
+
+                    for (id, param) in &shader.params {
+                        match id {
+                            0 => {
+                                if let ShaderParam::Float(r) = param {
+                                    blur_radius = *r;
+                                }
+                            }
+                            1 => {
+                                if let ShaderParam::Color(c) = param {
+                                    tint_color = *c;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    let tint_premul = [
+                        tint_color.r * tint_color.a,
+                        tint_color.g * tint_color.a,
+                        tint_color.b * tint_color.a,
+                        tint_color.a,
+                    ];
+
+                    let compositor = self.compositor.as_ref().unwrap();
+                    let instance = BlurInstance::new(
+                        [boundary.x, boundary.y, boundary.width, boundary.height],
+                        width as f32,
+                        height as f32,
+                        blur_radius,
+                        tint_premul,
+                    );
+
+                    self.renderers.backdrop_filter.apply(
+                        &self.gapi.device,
+                        &self.gapi.queue,
+                        &compositor.composite_view,
+                        &compositor.ping_view,
+                        &instance,
+                    );
                 }
             }
         }
 
-        self.gapi.queue.submit(std::iter::once(encoder.finish()));
+        // ── Blit composite → surface ──────────────────────────────────────────
+        {
+            let compositor = self.compositor.as_ref().unwrap();
+            let mut encoder =
+                self.gapi
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Final Blit Encoder"),
+                    });
+            self.renderers.surface_blit.blit(
+                &self.gapi.device,
+                &mut encoder,
+                &compositor.composite_view,
+                &surface_view,
+            );
+            self.gapi.queue.submit([encoder.finish()]);
+        }
+
         output.present();
 
         if !optimal {
@@ -331,19 +547,27 @@ impl<'a> Renderer for WgpuRenderer<'a> {
     fn on_resized(&mut self, size: PhysicalSize) {
         self.gapi
             .set_view_size(Vec2::new(size.width as f32, size.height as f32));
+        // Compositor textures are lazily recreated in ensure_compositor().
     }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 // Boundaries and widths arriving from limur are already in physical pixels
 // (limur applies scale_factor via .px() before emitting RenderCommands).
-// So snapping just means rounding to the nearest whole physical pixel.
+// Snapping just means rounding to the nearest whole physical pixel.
 
 fn snap_rect(rect: Rect<f32>) -> Rect<f32> {
-    let x      = rect.x.round();
-    let y      = rect.y.round();
-    let right  = (rect.x + rect.width).round();
+    let x = rect.x.round();
+    let y = rect.y.round();
+    let right = (rect.x + rect.width).round();
     let bottom = (rect.y + rect.height).round();
-    Rect { x, y, width: right - x, height: bottom - y }
+    Rect {
+        x,
+        y,
+        width: right - x,
+        height: bottom - y,
+    }
 }
 
 fn snap_width(w: f32) -> f32 {
