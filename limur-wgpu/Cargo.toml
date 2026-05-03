@@ -1,0 +1,13 @@
+[package]
+name = "limur-wgpu"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sumi = { path = "../../sumi/" }
+limur = { version = "0.0.1", path = "../limur" }
+cosmic-text = { workspace = true }
+winit = { workspace = true }
+wgpu = "29.0.3"
+glam = { workspace = true }
+log = { workspace = true }

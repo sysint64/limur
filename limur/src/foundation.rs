@@ -1540,6 +1540,7 @@ fn even_stops_from_iter(iter: impl Iterator<Item = ColorRgba>, count: usize) -> 
 
     stops
 }
+
 impl RadialGradient {
     /// Creates a simple radial gradient from center
     pub fn circle(colors: Vec<ColorRgba>) -> Self {
@@ -1644,4 +1645,39 @@ impl From<ColorRgba> for cosmic_text::Color {
 pub enum BoxShape {
     Rect,
     Oval,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Copy)]
+pub struct LinearRgba {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
+
+impl LinearRgba {
+    pub fn to_srgb(&self) -> ColorRgba {
+        ColorRgba {
+            r: linear_to_srgb(self.r),
+            g: linear_to_srgb(self.g),
+            b: linear_to_srgb(self.b),
+            a: self.a,
+        }
+    }
+}
+
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(c: f32) -> f32 {
+    if c <= 0.0031308 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
 }

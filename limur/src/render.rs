@@ -4,7 +4,7 @@ use smallvec::SmallVec;
 
 use crate::{
     Border, BorderRadius, BorderSide, ClipShape, ColorRgb, ColorRgba, DebugBoundary, Gradient,
-    LayoutDirection, Rect, Vec2, View, WidgetType,
+    LayoutDirection, PhysicalSize, Rect, Vec2, View, WidgetType,
     assets::Assets,
     interaction::InteractionState,
     io::UserInput,
@@ -31,7 +31,9 @@ impl RenderState {
 pub trait Renderer {
     fn upload_svg(&mut self, _name: &'static str, _tree: &usvg::Tree) {}
 
-    fn on_scale_factor_update(&mut self, _scale_factor: f32) {}
+    fn on_scale_factor_update(&mut self, _scale_factor: f64) {}
+
+    fn on_resized(&mut self, _size: PhysicalSize) {}
 
     fn process_commands(
         &mut self,

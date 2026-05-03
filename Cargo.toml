@@ -7,11 +7,12 @@ members = [
     "limur-tiny-skia",
     "limur-vello",
     "limur-widgets",
+    "limur-wgpu",
 ]
 
 [workspace.dependencies]
 log = "0.4"
-glam = "0.30"
+glam = "0.32"
 slotmap = "1"
 cosmic-text = { version = "0.14" }
 raw-window-handle = "0.6"

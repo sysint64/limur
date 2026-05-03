@@ -45,6 +45,7 @@ limur-widgets = { path = "../limur-widgets" }
 limur-desktop = { path = "../limur-desktop" }
 limur-derive = { path = "../limur-derive" }
 limur-vello = { path = "../limur-vello" }
+limur-wgpu = { path = "../limur-wgpu" }
 log = { workspace = true }
 env_logger = "0.10"
 winit = { workspace = true }
