@@ -1,14 +1,16 @@
-use std::sync::Arc;
+mod rect_renderer;
 
 use glam::{Vec2, Vec4};
 use limur::{
-    Border, BorderRadius, BorderSide, ClipShape, ColorRgb, ColorRgba, Gradient, PhysicalSize, Rect,
+    Border, BorderRadius, BorderSide, ClipShape, ColorRgba, Gradient, PhysicalSize, Rect,
     ShaderParam, View,
     assets::Assets,
     profiler,
     render::{Fill, RenderCommand, RenderCompositionLayer, Renderer},
     text::{FontResources, TextsResources},
 };
+use rect_renderer::{RectFill, RectInstance, RectRenderer};
+use std::sync::Arc;
 use sumi::Instances;
 use winit::{
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
@@ -23,11 +25,13 @@ pub struct WgpuRenderer<'a> {
 
 struct Resources<'a> {
     plane: sumi::PlaneResources,
+    centered_plane: sumi::CenteredPlaneResources,
     text: sumi::TextsResources<'a>,
 }
 
 struct Renderers {
     colored_plane: sumi::ColoredPlaneRenderer,
+    rect: RectRenderer,
     text: sumi::TextRenderer,
 }
 
@@ -72,6 +76,7 @@ impl<'a> WgpuRenderer<'a> {
 
         let mut resources = Resources {
             plane: sumi::PlaneResources::new(&mut context),
+            centered_plane: sumi::CenteredPlaneResources::new(&mut context),
             text: sumi::TextsResources::new(),
         };
 
@@ -82,6 +87,7 @@ impl<'a> WgpuRenderer<'a> {
                 &mut context,
                 sumi::BumpInstances::new(128),
             ),
+            rect: RectRenderer::new(&mut context, sumi::BumpInstances::new(128)),
             text: sumi::TextRenderer::new(&mut context),
         };
 
@@ -103,6 +109,9 @@ impl<'a> Renderer for WgpuRenderer<'a> {
         text: &mut TextsResources,
         assets: &Assets,
     ) {
+        // Clear per-frame instance data.
+        self.renderers.rect.instances().clear();
+
         let mut encoder =
             self.gapi
                 .device
@@ -171,47 +180,110 @@ impl<'a> Renderer for WgpuRenderer<'a> {
                             border_radius,
                             border,
                         } => {
-                            let transforms = sumi::Transforms2D {
-                                position: Vec2::new(
-                                    boundary.x,
-                                    context.view.size_unscaled.y - boundary.y - boundary.height,
-                                ),
-                                scaling: Vec2::new(boundary.width, boundary.height),
-                                rotation: 0.,
-                            };
+                            let boundary = snap_rect(*boundary);
 
-                            let model_matrix = sumi::transforms_create_2d_model_matrix(&transforms);
-                            let mvp_matrix = context.view.screen_camera_matrix * model_matrix;
+                            let pos = Vec2::new(
+                                boundary.x + boundary.width * 0.5,
+                                context.view.size_unscaled.y
+                                    - boundary.y
+                                    - boundary.height * 0.5,
+                            );
+                            let size = Vec2::new(boundary.width, boundary.height);
+                            let mvp = context.view.screen_camera_matrix
+                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
+                                    position: pos,
+                                    scaling: size,
+                                    rotation: 0.0,
+                                });
 
-                            let instance_id = self.renderers.colored_plane.instances().insert(
-                                sumi::ColoredPlaneInstance::new(
-                                    &mvp_matrix,
-                                    &Vec4::new(1.0, 1.0, 0.0, 0.8),
-                                ),
+                            let (color_t, width_t) =
+                                extract_side(border.as_ref().and_then(|b| b.top));
+                            let (color_r, width_r) =
+                                extract_side(border.as_ref().and_then(|b| b.right));
+                            let (color_b, width_b) =
+                                extract_side(border.as_ref().and_then(|b| b.bottom));
+                            let (color_l, width_l) =
+                                extract_side(border.as_ref().and_then(|b| b.left));
+                            let (width_t, width_r, width_b, width_l) = (
+                                snap_width(width_t),
+                                snap_width(width_r),
+                                snap_width(width_b),
+                                snap_width(width_l),
                             );
 
-                            self.renderers
-                                .colored_plane
-                                .instances()
-                                .load_instance_to_gpu(
-                                    &context,
-                                    sumi::LoadToGPUSchedule::NextFrame,
-                                    instance_id,
-                                );
+                            let radii = border_radius.unwrap_or(BorderRadius::ZERO);
+                            let snap_r = |r: f32| r.round();
 
-                            self.renderers.colored_plane.render_instance(
+                            let id =
+                                self.renderers.rect.instances().insert(RectInstance::new(
+                                    &mvp,
+                                    size,
+                                    to_rect_fill(fill),
+                                    color_t, width_t,
+                                    color_r, width_r,
+                                    color_b, width_b,
+                                    color_l, width_l,
+                                    [
+                                        snap_r(radii.top_left),
+                                        snap_r(radii.top_right),
+                                        snap_r(radii.bottom_right),
+                                        snap_r(radii.bottom_left),
+                                    ],
+                                ));
+
+                            self.renderers.rect.instances().load_instance_to_gpu(
+                                &context,
+                                sumi::LoadToGPUSchedule::NextFrame,
+                                id,
+                            );
+
+                            self.renderers.rect.render_instance(
                                 &mut context,
-                                &self.resources.plane,
-                                instance_id,
+                                &self.resources.centered_plane,
+                                id,
                             );
                         }
-                        RenderCommand::Oval {
-                            boundary,
-                            fill,
-                            border,
-                            ..
-                        } => {
-                            //
+                        RenderCommand::Oval { boundary, fill, border } => {
+                            let boundary = snap_rect(*boundary);
+
+                            let pos = Vec2::new(
+                                boundary.x + boundary.width * 0.5,
+                                context.view.size_unscaled.y
+                                    - boundary.y
+                                    - boundary.height * 0.5,
+                            );
+                            let size = Vec2::new(boundary.width, boundary.height);
+                            let mvp = context.view.screen_camera_matrix
+                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
+                                    position: pos,
+                                    scaling: size,
+                                    rotation: 0.0,
+                                });
+
+                            let (border_color, border_width) = extract_side(*border);
+                            let border_width = snap_width(border_width);
+
+                            let id = self.renderers.rect.instances().insert(
+                                RectInstance::new_oval(
+                                    &mvp,
+                                    size,
+                                    to_rect_fill(fill),
+                                    border_color,
+                                    border_width,
+                                ),
+                            );
+
+                            self.renderers.rect.instances().load_instance_to_gpu(
+                                &context,
+                                sumi::LoadToGPUSchedule::NextFrame,
+                                id,
+                            );
+
+                            self.renderers.rect.render_instance(
+                                &mut context,
+                                &self.resources.centered_plane,
+                                id,
+                            );
                         }
                         RenderCommand::Text {
                             x,
@@ -241,15 +313,6 @@ impl<'a> Renderer for WgpuRenderer<'a> {
                         }
                     }
                 }
-
-                // self.process_compoisition_layer(
-                //     view,
-                //     fonts,
-                //     text,
-                //     assets,
-                //     &context,
-                //     &layer.commands,
-                // );
             }
         }
 
@@ -268,6 +331,51 @@ impl<'a> Renderer for WgpuRenderer<'a> {
     fn on_resized(&mut self, size: PhysicalSize) {
         self.gapi
             .set_view_size(Vec2::new(size.width as f32, size.height as f32));
+    }
+}
+
+// Boundaries and widths arriving from limur are already in physical pixels
+// (limur applies scale_factor via .px() before emitting RenderCommands).
+// So snapping just means rounding to the nearest whole physical pixel.
+
+fn snap_rect(rect: Rect<f32>) -> Rect<f32> {
+    let x      = rect.x.round();
+    let y      = rect.y.round();
+    let right  = (rect.x + rect.width).round();
+    let bottom = (rect.y + rect.height).round();
+    Rect { x, y, width: right - x, height: bottom - y }
+}
+
+fn snap_width(w: f32) -> f32 {
+    if w == 0.0 { 0.0 } else { w.round().max(1.0) }
+}
+
+fn to_vec4(c: ColorRgba) -> Vec4 {
+    Vec4::new(c.r, c.g, c.b, c.a)
+}
+
+fn extract_side(side: Option<BorderSide>) -> (Vec4, f32) {
+    match side {
+        Some(s) => (to_vec4(s.color), s.width),
+        None => (Vec4::ZERO, 0.0),
+    }
+}
+
+fn to_rect_fill(fill: &Option<Fill>) -> RectFill<'_> {
+    match fill {
+        Some(Fill::Color(c)) => RectFill::Solid(to_vec4(*c)),
+        None | Some(Fill::None) => RectFill::None,
+        Some(Fill::Gradient(Gradient::Linear(g))) => RectFill::Linear {
+            start: g.start,
+            end: g.end,
+            stops: &g.stops,
+        },
+        Some(Fill::Gradient(Gradient::Radial(g))) => RectFill::Radial {
+            center: g.center,
+            radius: g.radius,
+            stops: &g.stops,
+        },
+        Some(Fill::Gradient(Gradient::Sweep(_))) => RectFill::None,
     }
 }
 

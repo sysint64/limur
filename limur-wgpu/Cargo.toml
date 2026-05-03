@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 sumi = { path = "../../sumi/" }
 limur = { version = "0.0.1", path = "../limur" }
+bytemuck = { version = "1.25.0", features = ["derive"] }
 cosmic-text = { workspace = true }
 winit = { workspace = true }
 wgpu = "29.0.3"

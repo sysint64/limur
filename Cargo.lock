@@ -1746,6 +1746,7 @@ dependencies = [
 name = "limur-wgpu"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "cosmic-text 0.14.2",
  "glam",
  "limur",

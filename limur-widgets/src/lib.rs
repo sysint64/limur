@@ -76,7 +76,7 @@ impl<'a> ButtonBuilder<'a> {
                             ui::text(self.text)
                                 .background(
                                     ui::decoration()
-                                        .border_radius(ui::BorderRadius::all(3.))
+                                        .border_radius(ui::BorderRadius::all(8.))
                                         .add_linear_gradient(gradient)
                                         .border(ui::Border::all(ui::BorderSide::new(
                                             1.,
