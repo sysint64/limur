@@ -71,9 +71,57 @@ fn vs_main(
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let data = shape_data[in.instance_id];
-    // let size = data.boundary.zw;
-    // let half_size = size * 0.5;
-    // let p = (in.coord - 0.5) * size;
+    let size = data.boundary.zw;
+    let screen_position = data.boundary.xy;
+    let half_size = size * 0.5;
+    let p = in.clip_position.xy - screen_position - half_size;
 
-    return data.fill_color;
+    switch (data.shape_type) {
+        case 0u: {
+            return draw_rect(data, p, half_size);
+        }
+        default: {
+            return vec4<f32>(0, 0, 0, 0);
+        }
+    }
+}
+
+fn draw_rect(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
+    let dist = sdf_rounded_rect(p, half_size, data.border_radii);
+    let alpha = fill_mask(dist, p);
+
+    return vec4<f32>(data.fill_color.rgb * alpha, data.fill_color.a * alpha);
+}
+
+// Signed distance field for a rounded rect with per-corner radii.
+// p.y > 0 = UI top (y is flipped in the MVP matrix).
+// radii: [top_left, top_right, bottom_right, bottom_left]
+fn sdf_rounded_rect(p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f32>) -> f32 {
+    var cr = radii;
+
+    let any_nonzero = any(radii > vec4(0.0));
+    if any_nonzero {
+        let size = half_size * 2.0;
+        let s = min(1.0, min(
+            min(size.x / (radii.x + radii.y), size.x / (radii.z + radii.w)),
+            min(size.y / (radii.x + radii.w), size.y / (radii.y + radii.z))
+        ));
+        cr = radii * s;
+    }
+
+    let rx = select(
+        select(cr.w, cr.x, p.y >= 0.0),
+        select(cr.z, cr.y, p.y >= 0.0),
+        p.x >= 0.0
+    );
+
+    let q = abs(p) - half_size + rx;
+
+    return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - rx;
+}
+
+fn fill_mask(d: f32, p: vec2<f32>) -> f32 {
+    let fw = length(fwidth(p));
+
+    return smoothstep(fw * 0.5, -fw * 0.5, d);
 }
