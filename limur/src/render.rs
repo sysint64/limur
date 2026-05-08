@@ -3,16 +3,7 @@ use std::collections::HashMap;
 use smallvec::SmallVec;
 
 use crate::{
-    Border, BorderRadius, BorderSide, ClipShape, ColorRgb, ColorRgba, DebugBoundary, Gradient,
-    LayoutDirection, PhysicalSize, Rect, Vec2, View, WidgetType,
-    assets::Assets,
-    interaction::InteractionState,
-    io::UserInput,
-    layout::{LayoutItem, WidgetPlacement, layout},
-    rects_overlap,
-    state::UiState,
-    text::{FontResources, StringId, StringInterner, TextId, TextsResources},
-    widgets,
+    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ClipShape, ColorRgb, ColorRgba, DebugBoundary, Gradient, LayoutDirection, PhysicalSize, Rect, Vec2, View, WidgetType, assets::Assets, interaction::InteractionState, io::UserInput, layout::{LayoutItem, WidgetPlacement, layout}, rects_overlap, state::UiState, text::{FontResources, StringId, StringInterner, TextId, TextsResources}, widgets
 };
 
 #[derive(Debug, Default)]
@@ -85,16 +76,24 @@ pub struct ShaderBind {
 
 #[derive(Debug, Clone)]
 pub enum RenderCommand {
-    Rect {
+    Shape {
         boundary: Rect<f32>,
         fill: Option<Fill>,
         border_radius: Option<BorderRadius>,
         border: Option<Border>,
+        shape: BoxShape,
     },
-    Oval {
+    OuterBoxShadow {
         boundary: Rect<f32>,
-        border: Option<BorderSide>,
-        fill: Option<Fill>,
+        box_shadow: BoxShadow,
+        border_radius: Option<BorderRadius>,
+        shape: BoxShape,
+    },
+    InnerBoxShadow {
+        boundary: Rect<f32>,
+        box_shadow: BoxShadow,
+        border_radius: Option<BorderRadius>,
+        shape: BoxShape,
     },
     // TODO: -------------------------------------------------------------------
     // ShadedRect {
@@ -215,6 +214,8 @@ impl PixelExtension<Rect<f32>> for Rect<f64> {
             width: (right - left).max(0.0) as f32,
             height: (bottom - top).max(0.0) as f32,
         }
+
+        // (self * ctx.view.scale_factor).as_f32()
     }
 }
 
@@ -224,6 +225,8 @@ impl Rect<f64> {
         ctx: &RenderContext,
         border_radius: Option<&BorderRadius>,
     ) -> Rect<f32> {
+        // (self * ctx.view.scale_factor).as_f32()
+
         let scaled = self * ctx.view.scale_factor;
         let vw = ctx.view.physical_size.width as f64;
         let vh = ctx.view.physical_size.height as f64;
@@ -384,9 +387,10 @@ pub fn create_composition_layers(render_commands: &[RenderCommand]) -> Vec<Rende
                 clip_stack.pop();
                 layers.last_mut().unwrap().commands.push(command.clone());
             }
-            RenderCommand::Rect { boundary, .. }
-            | RenderCommand::Oval { boundary, .. }
-            | RenderCommand::Svg { boundary, .. } => {
+            RenderCommand::Shape { boundary, .. }
+            | RenderCommand::Svg { boundary, .. }
+            | RenderCommand::InnerBoxShadow { boundary, .. }
+            | RenderCommand::OuterBoxShadow { boundary, .. } => {
                 if compositing_rects
                     .iter()
                     .any(|it| rects_overlap(*it, *boundary))
@@ -808,10 +812,11 @@ pub fn render(
 fn render_debug_boundary(ctx: &mut RenderContext, placement: &WidgetPlacement) {
     ctx.push_command(
         placement.zindex,
-        RenderCommand::Rect {
+        RenderCommand::Shape {
             boundary: placement.rect.shrink(2.).px(ctx),
             fill: None,
             border_radius: None,
+            shape: BoxShape::Rect,
             border: Some(Border::all(BorderSide::new(
                 2.,
                 ColorRgba::from_hex(0xFFFF0000),

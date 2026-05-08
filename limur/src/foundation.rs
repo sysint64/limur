@@ -1641,10 +1641,26 @@ impl From<ColorRgba> for cosmic_text::Color {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BoxShape {
     Rect,
     Oval,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct BoxShadow {
+    pub color: ColorRgba,
+    pub offset: Vec2,
+    pub blur_radius: f32,
+    pub spread_radius: f32,
+    pub blur_style: BoxShadowBlurStyle,
+}
+
+#[derive(Debug, Default, Copy, Clone, PartialEq)]
+pub enum BoxShadowBlurStyle {
+    #[default]
+    Outer,
+    Inner,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Copy)]

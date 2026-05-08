@@ -1,6 +1,11 @@
 use cosmic_text::{Buffer, FontSystem};
 use limur::{
-    Border, BorderRadius, BorderSide, ClipShape, ColorRgb, ColorRgba, Gradient, Rect, ShaderParam, View, assets::Assets, profiler, render::{Fill, RenderCommand, RenderCompositionLayer, Renderer}, text::{FontResources, TextsResources}
+    Border, BorderRadius, BorderSide, ClipShape, ColorRgb, ColorRgba, Gradient, Rect, ShaderParam,
+    View,
+    assets::Assets,
+    profiler,
+    render::{Fill, RenderCommand, RenderCompositionLayer, Renderer},
+    text::{FontResources, TextsResources},
 };
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{collections::HashMap, sync::Arc};
@@ -878,28 +883,33 @@ impl VelloRenderer {
     ) {
         for command in commands {
             match command {
-                RenderCommand::Rect {
+                RenderCommand::Shape {
                     boundary,
                     fill,
                     border_radius,
                     border,
-                    ..
-                } => {
-                    self.draw_rect(
+                    shape,
+                } => match shape {
+                    limur::BoxShape::Rect => self.draw_rect(
                         *boundary,
                         fill.as_ref(),
                         border_radius.as_ref(),
                         border.as_ref(),
-                    );
-                }
-                RenderCommand::Oval {
-                    boundary,
-                    fill,
-                    border,
-                    ..
-                } => {
-                    self.draw_oval(*boundary, fill.as_ref(), border.as_ref());
-                }
+                    ),
+                    limur::BoxShape::Oval => self.draw_oval(
+                        *boundary,
+                        fill.as_ref(),
+                        border
+                            .map(|it| {
+                                it.top
+                                    .or(it.bottom)
+                                    .or(it.left)
+                                    .or(it.right)
+                                    .unwrap_or(BorderSide::default())
+                            })
+                            .as_ref(),
+                    ),
+                },
                 RenderCommand::Text {
                     x,
                     y,
@@ -1040,6 +1050,12 @@ impl VelloRenderer {
                     }
 
                     self.execute_backdrop_blur(*boundary, blur_radius, tint_color);
+                }
+                RenderCommand::OuterBoxShadow { .. } => {
+                    // TODO
+                }
+                RenderCommand::InnerBoxShadow { .. } => {
+                    // TODO
                 }
             }
         }

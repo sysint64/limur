@@ -3,7 +3,7 @@ use smallvec::SmallVec;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    AlignX, AlignY, ClipShape, LayoutDirection, Rect, Vec2,
+    AlignX, AlignY, BoxShape, ClipShape, LayoutDirection, Rect, Vec2,
     layout::WidgetPlacement,
     render::{Fill, PixelExtension, RenderCommand, RenderContext},
     state::ViewConfig,
@@ -172,11 +172,12 @@ pub fn render(
 
                 ctx.push_command(
                     placement.zindex,
-                    RenderCommand::Rect {
+                    RenderCommand::Shape {
                         boundary: selection_rect,
                         fill: Some(Fill::Color(state.selection_color)),
                         border_radius: None,
                         border: None,
+                        shape: BoxShape::Rect,
                     },
                 );
 
@@ -227,11 +228,12 @@ pub fn render(
                     // TODO: ---------------------------------------------------
                     ctx.push_command(
                         placement.zindex,
-                        RenderCommand::Rect {
+                        RenderCommand::Shape {
                             boundary: selection_rect,
                             fill: Some(Fill::Color(state.ime_highlight_color)),
                             border_radius: None,
                             border: None,
+                            shape: BoxShape::Rect,
                         },
                     );
                     // add_rect(ctx, selection_rect, &Vec4::new(0.2, 0.4, 0.8, 0.5));
@@ -270,11 +272,12 @@ pub fn render(
                     // TODO ----------------------------------------------------
                     ctx.push_command(
                         placement.zindex,
-                        RenderCommand::Rect {
+                        RenderCommand::Shape {
                             boundary: rect,
                             fill: Some(Fill::Color(state.ime_underline_color)),
                             border_radius: None,
                             border: None,
+                            shape: BoxShape::Rect,
                         },
                     );
                     // add_rect(ctx, rect, &Vec4::new(1., 1., 1., 1.));
@@ -297,11 +300,12 @@ pub fn render(
         if !calculate_scroll && editor_cursor_position.is_some() {
             ctx.push_command(
                 placement.zindex,
-                RenderCommand::Rect {
+                RenderCommand::Shape {
                     boundary: cursor_rect,
                     fill: Some(Fill::Color(state.cursor_color)),
                     border_radius: None,
                     border: None,
+                    shape: BoxShape::Rect,
                 },
             );
         }

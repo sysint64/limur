@@ -77,36 +77,38 @@ impl<D: HasDisplayHandle, W: HasWindowHandle> Renderer for TinySkiaRenderer<D, W
                     let current_clip = clip_stack.last();
 
                     match command {
-                        RenderCommand::Rect {
+                        RenderCommand::Shape {
                             boundary,
                             fill,
                             border_radius,
                             border,
+                            shape,
                             ..
-                        } => {
-                            render_rect(
+                        } => match (shape) {
+                            limur::BoxShape::Rect => render_rect(
                                 &mut pixmap,
                                 *boundary,
                                 fill.as_ref(),
                                 border_radius.as_ref(),
                                 border.as_ref(),
                                 current_clip,
-                            );
-                        }
-                        RenderCommand::Oval {
-                            boundary,
-                            fill,
-                            border,
-                            ..
-                        } => {
-                            render_oval(
+                            ),
+                            limur::BoxShape::Oval => render_oval(
                                 &mut pixmap,
                                 *boundary,
                                 fill.as_ref(),
-                                border.as_ref(),
+                                border
+                                    .map(|it| {
+                                        it.top
+                                            .or(it.bottom)
+                                            .or(it.left)
+                                            .or(it.right)
+                                            .unwrap_or(BorderSide::default())
+                                    })
+                                    .as_ref(),
                                 current_clip,
-                            );
-                        }
+                            ),
+                        },
                         RenderCommand::Text {
                             x: text_position_x,
                             y: text_position_y,
@@ -201,8 +203,14 @@ impl<D: HasDisplayHandle, W: HasWindowHandle> Renderer for TinySkiaRenderer<D, W
                                 log::warn!("Failed to render svg: {asset_id}");
                             }
                         }
-                        RenderCommand::BackdropFilter { boundary, shader } => {
-                            // No-op
+                        RenderCommand::BackdropFilter { .. } => {
+                            // Not supported
+                        }
+                        RenderCommand::OuterBoxShadow { .. } => {
+                            // TODO
+                        }
+                        RenderCommand::InnerBoxShadow { .. } => {
+                            // TODO
                         }
                     }
                 }

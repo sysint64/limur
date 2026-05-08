@@ -34,6 +34,14 @@ impl ApplicationDelegate<()> for ExampleApplication {
 
     fn create_renderer(window: std::sync::Arc<winit::window::Window>) -> Box<dyn ui::Renderer> {
         Box::new(WgpuRenderer::new(window.clone()).block_on())
+        // Box::new(
+        //     VelloRenderer::new(
+        //         window.clone(),
+        //         window.inner_size().width,
+        //         window.inner_size().height,
+        //     )
+        //     .block_on(),
+        // )
     }
 }
 
@@ -44,7 +52,7 @@ pub struct MainWindow {
 impl Window<ExampleApplication, ()> for MainWindow {
     fn build(&mut self, _: &mut ExampleApplication, ctx: &mut ui::BuildContext) {
         ui::vstack()
-            .fill_max_size()
+            // .fill_max_size()
             .spacing(24.)
             .padding(ui::EdgeInsets::all(32.))
             .build(ctx, |ctx| {
@@ -199,7 +207,7 @@ impl Window<ExampleApplication, ()> for MainWindow {
             .build(ctx);
 
         ui::backdrop_filter(ui::ShaderId::FrostedGlass)
-            .param(0, ui::ShaderParam::Float(20.))
+            .param(0, ui::ShaderParam::Float(10.))
             .param(
                 1,
                 ui::ShaderParam::Color(ui::ColorRgba::from_hex(0xFF00FF00).with_opacity(0.5)),
@@ -207,6 +215,7 @@ impl Window<ExampleApplication, ()> for MainWindow {
             .offset(400., 300.)
             .width(300.)
             .height(200.)
+            .clip(ui::Clip::Oval)
             .build(ctx);
 
         ui::profiler_overlay(ctx);

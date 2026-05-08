@@ -8,6 +8,7 @@ use limur_desktop::{
     window_manager::{WindowDescriptor, WindowManager},
 };
 use limur_vello::VelloRenderer;
+use limur_wgpu::WgpuRenderer;
 use pollster::FutureExt;
 
 struct AnimationsApplication;
@@ -28,20 +29,21 @@ impl ApplicationDelegate<()> for AnimationsApplication {
                 width: 800,
                 height: 600,
                 resizable: true,
-                fill_color: ui::ColorRgb::from_hex(0x121212),
+                fill_color: Some(ui::ColorRgba::from_hex(0xFF121212)),
             },
         );
     }
 
     fn create_renderer(window: std::sync::Arc<winit::window::Window>) -> Box<dyn ui::Renderer> {
-        Box::new(
-            VelloRenderer::new(
-                window.clone(),
-                window.inner_size().width,
-                window.inner_size().height,
-            )
-            .block_on(),
-        )
+        Box::new(WgpuRenderer::new(window.clone()).block_on())
+        // Box::new(
+        //     VelloRenderer::new(
+        //         window.clone(),
+        //         window.inner_size().width,
+        //         window.inner_size().height,
+        //     )
+        //     .block_on(),
+        // )
     }
 }
 
@@ -242,7 +244,10 @@ impl Window<AnimationsApplication, ()> for MainWindow {
                             ui::text(&format!("MX Status: {:?}", self.mx.status())).build(ctx);
                             ui::text(&format!("MY Status: {:?}", self.my.status())).build(ctx);
 
-                            if limur_widgets::button("Move Up (Tween)").build(ctx).clicked() {
+                            if limur_widgets::button("Move Up (Tween)")
+                                .build(ctx)
+                                .clicked()
+                            {
                                 self.offset_y.tween_to(-100.);
                             }
 
@@ -255,7 +260,10 @@ impl Window<AnimationsApplication, ()> for MainWindow {
                                 self.offset_y.tween_to(100.);
                             }
 
-                            if limur_widgets::button("Go Home (Tween)").build(ctx).clicked() {
+                            if limur_widgets::button("Go Home (Tween)")
+                                .build(ctx)
+                                .clicked()
+                            {
                                 self.offset_y.tween_to(0.);
                             }
 
