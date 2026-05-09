@@ -346,7 +346,8 @@ impl Renderer for WgpuRenderer {
                                 context.view.size_unscaled.y - boundary.y - boundary.height,
                             );
                             let size = Vec2::new(boundary.width, boundary.height);
-                            let expand = 3.0 * box_shadow.blur_radius + box_shadow.spread_radius;
+                            let expand =
+                                3.0 * box_shadow.blur_radius + box_shadow.spread_radius + 2.0;
 
                             let mvp = context.view.screen_camera_matrix
                                 * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
@@ -386,12 +387,11 @@ impl Renderer for WgpuRenderer {
 
                             let mvp = context.view.screen_camera_matrix
                                 * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                                    position: pos
-                                        - Vec2::new(
-                                            box_shadow.offset.x as f32,
-                                            box_shadow.offset.y as f32,
-                                        ),
-                                    scaling: size,
+                                    // position: pos,
+                                    // scaling: size,
+                                    position: pos - Vec2::new(1.0, 1.0),
+                                    scaling: Vec2::new(boundary.width, boundary.height)
+                                        + Vec2::new(2.0, 2.0),
                                     rotation: 0.0,
                                 });
 

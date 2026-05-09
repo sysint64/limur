@@ -79,11 +79,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         case 0u: {
             return rect(data, p, half_size);
         }
+        case 1u: {
+            return oval(data, p, half_size);
+        }
         case 2u: {
             return rect_outer_shadow(data, p, half_size);
         }
         case 3u: {
             return rect_inner_shadow(data, p, half_size);
+        }
+        case 4u: {
+            return oval_outer_shadow(data, p, half_size);
+        }
+        case 5u: {
+            return oval_inner_shadow(data, p, half_size);
         }
         default: {
             return vec4<f32>(0, 0, 0, 0);
@@ -91,26 +100,170 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 }
 
+fn oval(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
+    let dist = sdf_oval(p, half_size);
+    let alpha = oval_fill_mask(dist, p);
+
+    return vec4<f32>(data.fill_color.rgb, data.fill_color.a * alpha);
+}
+
+fn oval_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
+    let blur_radius = data.box_shadow.z;
+    let spread_radius = data.box_shadow.w;
+    let offset = data.box_shadow.xy;
+    let hs = half_size + spread_radius;
+
+    if blur_radius == 0.0 {
+        let dist = sdf_oval(p - offset, hs);
+        let alpha = oval_fill_mask(dist, p - offset);
+
+        return vec4<f32>(data.fill_color.rgb, data.fill_color.a * alpha);
+    }
+
+    let samples = select(4, 8, blur_radius < 10.0);
+    let shadow = oval_box_shadow(
+        p,
+        half_size,
+        blur_radius,
+        offset,
+        spread_radius,
+        data.fill_color,
+        samples,
+    );
+
+    return shadow;
+}
+
+fn oval_inner_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
+    let blur_radius = data.box_shadow.z;
+    let spread_radius = data.box_shadow.w;
+    let offset = data.box_shadow.xy;
+
+    // Clip to the oval boundary
+    let dist = sdf_oval(p, half_size);
+    let clip_alpha = oval_fill_mask(dist, p);
+
+    if clip_alpha <= 0.0 {
+        return vec4<f32>(0.0);
+    }
+
+    let inner_hs = max(half_size - spread_radius, vec2(0.0));
+
+    if blur_radius == 0.0 {
+        let inner_dist = sdf_oval(p - offset, inner_hs);
+        let inner_fill = oval_fill_mask(inner_dist, p - offset);
+        let shadow_alpha = (1.0 - inner_fill) * clip_alpha;
+
+        return vec4<f32>(data.fill_color.rgb, data.fill_color.a * shadow_alpha);
+    }
+
+    let value = oval_box_shadow(
+        p,
+        inner_hs,
+        blur_radius,
+        offset,
+        0.0,
+        data.fill_color,
+        4,
+    );
+
+    let shadow_alpha = (1.0 - value.a / data.fill_color.a) * clip_alpha;
+
+    return vec4<f32>(data.fill_color.rgb, data.fill_color.a * shadow_alpha);
+}
+
 fn rect(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let dist = sdf_rounded_rect(p, half_size, data.border_radii);
     let alpha = fill_mask(dist, p, half_size, data.border_radii);
 
-    return vec4<f32>(data.fill_color.rgb * alpha, data.fill_color.a * alpha);
+    return vec4<f32>(data.fill_color.rgb, data.fill_color.a * alpha);
+}
+
+// Approximate SDF for an ellipse
+fn sdf_oval(p: vec2<f32>, half_size: vec2<f32>) -> f32 {
+    let q = p / half_size;
+    let d = length(q) - 1.0;
+
+    return d * min(half_size.x, half_size.y);
+}
+
+fn oval_fill_mask(d: f32, p: vec2<f32>) -> f32 {
+    let fw = length(fwidth(p));
+
+    return smoothstep(fw * 0.5, -fw * 0.5, d);
+}
+
+fn oval_box_shadow(
+    p: vec2<f32>,
+    half_size: vec2<f32>,
+    blur: f32,
+    offset: vec2<f32>,
+    spread: f32,
+    color: vec4<f32>,
+    samples: i32,
+) -> vec4<f32> {
+    let point = p - offset;
+    let hs = half_size + spread;
+
+    let low = point.y - hs.y;
+    let high = point.y + hs.y;
+    let start = clamp(-3.0 * blur, low, high);
+    let end = clamp(3.0 * blur, low, high);
+
+    let step = (end - start) / f32(samples);
+    var y = start + step * 0.5;
+    var value = 0.0;
+
+    for (var i = 0; i < samples; i++) {
+        value += oval_shadow_x(point.x, point.y - y, blur, hs)
+               * gaussian(y, blur) * step;
+        y += step;
+    }
+
+    return vec4(color.rgb, color.a * value);
+}
+
+fn oval_shadow_x(
+    x: f32,
+    y: f32,
+    sigma: f32,
+    half_size: vec2<f32>,
+) -> f32 {
+    // Ellipse half-width at height y: a * sqrt(1 - (y/b)^2)
+    let t = y / half_size.y;
+    let t2 = t * t;
+
+    if t2 >= 1.0 {
+        return 0.0;
+    }
+
+    let extent = half_size.x * sqrt(1.0 - t2);
+
+    // Analytical gaussian integral from -extent to +extent
+    let inv_sigma = sqrt(0.5) / sigma;
+    let integral = 0.5 + 0.5 * erf_approx(vec2(
+        (x - extent) * inv_sigma,
+        (x + extent) * inv_sigma,
+    ));
+
+    return integral.y - integral.x;
 }
 
 fn rect_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let blur_radius = data.box_shadow.z;
     let spread_radius = data.box_shadow.w;
-    let offset = data.box_shadow.xy;
+    let offset = round(data.box_shadow.xy);
     let outer_radii = max(data.border_radii + vec4(spread_radius), vec4(0.0));
 
     if blur_radius == 0. {
         let dist = sdf_rounded_rect(p - offset, half_size + spread_radius, outer_radii);
-        let alpha = fill_mask(dist, p, half_size + spread_radius, outer_radii);
+        let fw = length(fwidth(p));
+        let alpha = smoothstep(fw * 0.5, -fw * 0.5, dist);
 
-        return vec4<f32>(data.fill_color.rgb * alpha, data.fill_color.a * alpha);
+        return vec4<f32>(data.fill_color.rgb, data.fill_color.a * alpha);
     }
 
+    let samples = select(4, 8, blur_radius < 10.0);
     let shadow = box_shadow(
         p,
         half_size - vec2<f32>(0.5),
@@ -119,7 +272,7 @@ fn rect_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
         offset,
         spread_radius,
         data.fill_color,
-        4,
+        samples,
     );
 
     return shadow;
@@ -156,7 +309,7 @@ fn rect_inner_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
         let inner_fill = fill_mask(inner_dist, p - offset, max(inner_hs, vec2(0.0)), inner_radii);
         let shadow_alpha = (1.0 - inner_fill) * clip_alpha;
 
-        return vec4<f32>(data.fill_color.rgb * shadow_alpha, data.fill_color.a * shadow_alpha);
+        return vec4<f32>(data.fill_color.rgb, data.fill_color.a * shadow_alpha);
     }
 
     let value = box_shadow(
@@ -174,7 +327,7 @@ fn rect_inner_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
     // Where it's dark (near/outside the hole edge), we want shadow.
     let shadow_alpha = (1.0 - value.a / data.fill_color.a) * clip_alpha;
 
-    return vec4<f32>(data.fill_color.rgb * shadow_alpha, data.fill_color.a * shadow_alpha);
+    return vec4<f32>(data.fill_color.rgb, data.fill_color.a * shadow_alpha);
 }
 
 // Based on vger-rs: https://github.com/audulus/vger-rs/tree/main
