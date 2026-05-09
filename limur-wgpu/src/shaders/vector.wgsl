@@ -82,6 +82,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         case 2u: {
             return rect_outer_shadow(data, p, half_size);
         }
+        case 3u: {
+            return rect_inner_shadow(data, p, half_size);
+        }
         default: {
             return vec4<f32>(0, 0, 0, 0);
         }
@@ -90,7 +93,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 fn rect(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let dist = sdf_rounded_rect(p, half_size, data.border_radii);
-    let alpha = fill_mask(dist, p);
+    let alpha = fill_mask(dist, p, half_size, data.border_radii);
 
     return vec4<f32>(data.fill_color.rgb * alpha, data.fill_color.a * alpha);
 }
@@ -99,15 +102,19 @@ fn rect_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
     let blur_radius = data.box_shadow.z;
     let spread_radius = data.box_shadow.w;
     let offset = data.box_shadow.xy;
+    let outer_radii = max(data.border_radii + vec4(spread_radius), vec4(0.0));
 
     if blur_radius == 0. {
-        return rect(data, p - offset, half_size + spread_radius);
+        let dist = sdf_rounded_rect(p - offset, half_size + spread_radius, outer_radii);
+        let alpha = fill_mask(dist, p, half_size + spread_radius, outer_radii);
+
+        return vec4<f32>(data.fill_color.rgb * alpha, data.fill_color.a * alpha);
     }
 
     let shadow = box_shadow(
         p,
-        half_size,
-        data.border_radii,
+        half_size - vec2<f32>(0.5),
+        outer_radii,
         blur_radius,
         offset,
         spread_radius,
@@ -116,6 +123,58 @@ fn rect_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
     );
 
     return shadow;
+}
+
+fn rect_inner_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
+    let blur_radius = data.box_shadow.z;
+    let spread_radius = data.box_shadow.w;
+    let offset = data.box_shadow.xy;
+
+    // Clip to the rect boundary so shadow doesn't bleed outside
+    let dist = sdf_rounded_rect(p, half_size, data.border_radii);
+    let clip_alpha = fill_mask(dist, p, half_size, data.border_radii);
+
+    if clip_alpha <= 0.0 {
+        return vec4<f32>(0.0);
+    }
+
+    // For inner shadow, we conceptually have a "hole" that is the rect
+    // shrunk by spread, offset by the shadow offset. The shadow is the
+    // blurred edge of that hole, visible only inside the original rect.
+    //
+    // shadow_alpha = 1 - box_shadow_value_of_shrunk_rect
+    // This gives 0 in the center (fully lit) and 1 near the edges (shadowed).
+
+    let inner_hs = half_size - spread_radius;
+
+    // Adjust radii for the inset - keep corners concentric
+    let inner_radii = max(data.border_radii - vec4(spread_radius), vec4(0.0));
+
+    if blur_radius == 0.0 {
+        // Hard inner shadow: just check if we're outside the shrunk rect
+        let inner_dist = sdf_rounded_rect(p - offset, max(inner_hs, vec2(0.0)), inner_radii);
+        let inner_fill = fill_mask(inner_dist, p - offset, max(inner_hs, vec2(0.0)), inner_radii);
+        let shadow_alpha = (1.0 - inner_fill) * clip_alpha;
+
+        return vec4<f32>(data.fill_color.rgb * shadow_alpha, data.fill_color.a * shadow_alpha);
+    }
+
+    let value = box_shadow(
+        p,
+        max(inner_hs, vec2(0.0)),
+        inner_radii,
+        blur_radius,
+        offset,
+        0.0,
+        data.fill_color,
+        4,
+    );
+
+    // Invert: where box_shadow is bright (inside the hole), we want no shadow.
+    // Where it's dark (near/outside the hole edge), we want shadow.
+    let shadow_alpha = (1.0 - value.a / data.fill_color.a) * clip_alpha;
+
+    return vec4<f32>(data.fill_color.rgb * shadow_alpha, data.fill_color.a * shadow_alpha);
 }
 
 // Based on vger-rs: https://github.com/audulus/vger-rs/tree/main
@@ -180,8 +239,8 @@ fn rounded_box_shadow_x(
     // Analytical gaussian integral from -curved_left to +curved_right
     let inv_sigma = sqrt(0.5) / sigma;
     let integral = 0.5 + 0.5 * erf_approx(vec2(
-        (x - curved_left) * inv_sigma,
-        (x + curved_right) * inv_sigma,
+        (x - curved_right) * inv_sigma,
+        (x + curved_left) * inv_sigma,
     ));
 
     return integral.y - integral.x;
@@ -223,8 +282,31 @@ fn sdf_rounded_rect(p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f32>) -> f32
     return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - rx;
 }
 
-fn fill_mask(d: f32, p: vec2<f32>) -> f32 {
+fn fill_mask(d: f32, p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f32>) -> f32 {
+    let has_radius = any(radii > vec4(0.0));
+
+    if !has_radius {
+        return select(0.0, 1.0, d <= 0.0);
+    }
+
     let fw = length(fwidth(p));
 
-    return smoothstep(fw * 0.5, -fw * 0.5, d);
+    // Pick the radius for the quadrant p is in
+    let r = select(
+        select(radii.z, radii.y, p.y >= 0.0),
+        select(radii.w, radii.x, p.y >= 0.0),
+        p.x < 0.0
+    );
+
+    // How far into the corner zone on each axis
+    let cx = abs(p.x) - (half_size.x - r);
+    let cy = abs(p.y) - (half_size.y - r);
+
+    // Smoothly ramp from hard edge to AA over ~1 pixel
+    let corner_blend = smoothstep(0.0, fw, min(cx, cy));
+
+    let hard = select(0.0, 1.0, d <= 0.0);
+    let soft = smoothstep(fw * 0.5, -fw * 0.5, d);
+
+    return mix(hard, soft, corner_blend);
 }

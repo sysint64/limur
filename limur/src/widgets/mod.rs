@@ -24,7 +24,7 @@ pub mod zstack;
 pub use backdrop_filter::backdrop_filter;
 pub use builder::{BuildContext, Resolve};
 pub use component::{Component, component};
-pub use decorated_box::{DecorationBuilder, decorated_box, decoration};
+pub use decorated_box::*;
 pub use editable_text::{
     CommonShortcut, ShortcutScopes, TextEditingShortcut, TextInputModifier, editable_text,
 };

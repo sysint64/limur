@@ -1,6 +1,5 @@
 use limur::{
-    Border, BorderRadius, BorderSide, BoxShadow, BoxShadowBlurStyle, BoxShape, ColorRgba, Gradient,
-    Rect, render::Fill,
+    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ColorRgba, Gradient, Rect, render::Fill,
 };
 
 use crate::to_wgpu_color;
@@ -227,7 +226,7 @@ impl VectorData {
         }
     }
 
-    pub(crate) fn box_shadow(
+    pub(crate) fn shadow(
         context: &sumi::GraphicsContext,
         boundary: Rect<f32>,
         box_shadow: BoxShadow,
@@ -237,14 +236,49 @@ impl VectorData {
         let radii = border_radius.unwrap_or(BorderRadius::ZERO);
 
         let shape_type = match shape {
-            BoxShape::Rect => match box_shadow.blur_style {
-                BoxShadowBlurStyle::Outer => 2,
-                BoxShadowBlurStyle::Inner => 3,
-            },
-            BoxShape::Oval => match box_shadow.blur_style {
-                BoxShadowBlurStyle::Outer => 4,
-                BoxShadowBlurStyle::Inner => 5,
-            },
+            BoxShape::Rect => 2,
+            BoxShape::Oval => 4,
+        };
+
+        Self {
+            boundary: [boundary.x, boundary.y, boundary.width, boundary.height],
+            shape_type,
+            _pad0: [0; 3],
+            fill_color: to_color(context, box_shadow.color),
+            border_color_left: [0.0; 4],
+            border_color_top: [0.0; 4],
+            border_color_right: [0.0; 4],
+            border_color_bottom: [0.0; 4],
+            border_widths: [0.0; 4],
+            border_radii: [
+                radii.top_left,
+                radii.top_right,
+                radii.bottom_right,
+                radii.bottom_left,
+            ],
+            box_shadow: [
+                box_shadow.offset.x as f32,
+                box_shadow.offset.y as f32,
+                box_shadow.blur_radius as f32,
+                box_shadow.spread_radius as f32,
+            ],
+            gradient_info: [0; 4],
+            gradient_params: [0.0; 4],
+        }
+    }
+
+    pub(crate) fn inner_shadow(
+        context: &sumi::GraphicsContext,
+        boundary: Rect<f32>,
+        box_shadow: BoxShadow,
+        border_radius: Option<BorderRadius>,
+        shape: BoxShape,
+    ) -> VectorData {
+        let radii = border_radius.unwrap_or(BorderRadius::ZERO);
+
+        let shape_type = match shape {
+            BoxShape::Rect => 3,
+            BoxShape::Oval => 5,
         };
 
         Self {

@@ -310,8 +310,9 @@ impl Renderer for WgpuRenderer {
 
                             let mvp = context.view.screen_camera_matrix
                                 * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                                    position: pos,
-                                    scaling: Vec2::new(boundary.width, boundary.height),
+                                    position: pos - Vec2::new(1.0, 1.0),
+                                    scaling: Vec2::new(boundary.width, boundary.height)
+                                        + Vec2::new(2.0, 2.0),
                                     rotation: 0.0,
                                 });
 
@@ -331,93 +332,6 @@ impl Renderer for WgpuRenderer {
                                 *shape,
                                 gradient_params,
                             ));
-
-                            // let id = self.renderers.colored_plane.instances().insert(
-                            //     ColoredPlaneInstance::new(&mvp, &Vec4::new(1., 0., 0., 1.)),
-                            // );
-
-                            // self.renderers
-                            //     .colored_plane
-                            //     .instances()
-                            //     .load_instance_to_gpu(
-                            //         &context,
-                            //         sumi::LoadToGPUSchedule::NextFrame,
-                            //         id,
-                            //     );
-
-                            // self.renderers.colored_plane.render_instance(
-                            //     &mut context,
-                            //     &self.resources.plane,
-                            //     id,
-                            // );
-
-                            // let boundary = snap_rect(*boundary);
-
-                            // let pos = Vec2::new(
-                            //     boundary.x,
-                            //     context.view.size_unscaled.y - boundary.y - boundary.height,
-                            // );
-                            // let size = Vec2::new(boundary.width, boundary.height);
-                            // let blur = 20.;
-                            // let expand = 3.0 * blur;
-
-                            // let mvp = context.view.screen_camera_matrix
-                            //     * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                            //         position: pos - Vec2::new(expand, expand),
-                            //         scaling: size + Vec2::new(expand * 2.0, expand * 2.0),
-                            //         rotation: 0.0,
-                            //     });
-
-                            // let (color_t, width_t) =
-                            //     extract_side(border.as_ref().and_then(|b| b.top));
-                            // let (color_r, width_r) =
-                            //     extract_side(border.as_ref().and_then(|b| b.right));
-                            // let (color_b, width_b) =
-                            //     extract_side(border.as_ref().and_then(|b| b.bottom));
-                            // let (color_l, width_l) =
-                            //     extract_side(border.as_ref().and_then(|b| b.left));
-                            // let (width_t, width_r, width_b, width_l) = (
-                            //     snap_width(width_t),
-                            //     snap_width(width_r),
-                            //     snap_width(width_b),
-                            //     snap_width(width_l),
-                            // );
-
-                            // let radii = border_radius.unwrap_or(BorderRadius::ZERO);
-                            // let snap_r = |r: f32| r.round();
-
-                            // let id = self.renderers.rect.instances().insert(RectInstance::new(
-                            //     &mvp,
-                            //     Vec2::new(boundary.x, boundary.y),
-                            //     size,
-                            //     to_rect_fill(fill),
-                            //     color_t,
-                            //     width_t,
-                            //     color_r,
-                            //     width_r,
-                            //     color_b,
-                            //     width_b,
-                            //     color_l,
-                            //     width_l,
-                            //     [
-                            //         snap_r(radii.top_left),
-                            //         snap_r(radii.top_right),
-                            //         snap_r(radii.bottom_right),
-                            //         snap_r(radii.bottom_left),
-                            //     ],
-                            // ));
-
-                            // self.renderers.rect.instances().load_instance_to_gpu(
-                            //     &context,
-                            //     sumi::LoadToGPUSchedule::NextFrame,
-                            //     id,
-                            // );
-
-                            // self.renderers.rect.render_instance(
-                            //     &mut context,
-                            //     &self.resources.plane,
-                            //     id,
-                            // );
                         }
                         RenderCommand::OuterBoxShadow {
                             boundary,
@@ -425,24 +339,36 @@ impl Renderer for WgpuRenderer {
                             border_radius,
                             shape,
                         } => {
-                            // let boundary = snap_rect(*boundary);
+                            let boundary = snap_rect(*boundary);
 
-                            // let pos = Vec2::new(
-                            //     boundary.x,
-                            //     context.view.size_unscaled.y - boundary.y - boundary.height,
-                            // );
-                            // let size = Vec2::new(boundary.width, boundary.height);
-                            // let blur = 20.;
-                            // let expand = 3.0 * blur;
+                            let pos = Vec2::new(
+                                boundary.x,
+                                context.view.size_unscaled.y - boundary.y - boundary.height,
+                            );
+                            let size = Vec2::new(boundary.width, boundary.height);
+                            let expand = 3.0 * box_shadow.blur_radius + box_shadow.spread_radius;
 
-                            // let mvp = context.view.screen_camera_matrix
-                            //     * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                            //         position: pos - Vec2::new(expand, expand),
-                            //         scaling: size + Vec2::new(expand * 2.0, expand * 2.0),
-                            //         rotation: 0.0,
-                            //     });
+                            let mvp = context.view.screen_camera_matrix
+                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
+                                    position: pos
+                                        - Vec2::new(expand, expand)
+                                        - Vec2::new(
+                                            -box_shadow.offset.x as f32,
+                                            box_shadow.offset.y as f32,
+                                        ),
+                                    scaling: size + Vec2::new(expand * 2.0, expand * 2.0),
+                                    rotation: 0.0,
+                                });
 
-                            // instances.insert(VectorInstance::new(mvp));
+                            instances.insert(VectorInstance::new(mvp));
+
+                            self.resources.vector.data.push(VectorData::shadow(
+                                &context,
+                                boundary,
+                                *box_shadow,
+                                *border_radius,
+                                *shape,
+                            ));
                         }
                         RenderCommand::InnerBoxShadow {
                             boundary,
@@ -450,7 +376,34 @@ impl Renderer for WgpuRenderer {
                             border_radius,
                             shape,
                         } => {
-                            // TODO
+                            let boundary = snap_rect(*boundary);
+
+                            let pos = Vec2::new(
+                                boundary.x,
+                                context.view.size_unscaled.y - boundary.y - boundary.height,
+                            );
+                            let size = Vec2::new(boundary.width, boundary.height);
+
+                            let mvp = context.view.screen_camera_matrix
+                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
+                                    position: pos
+                                        - Vec2::new(
+                                            box_shadow.offset.x as f32,
+                                            box_shadow.offset.y as f32,
+                                        ),
+                                    scaling: size,
+                                    rotation: 0.0,
+                                });
+
+                            instances.insert(VectorInstance::new(mvp));
+
+                            self.resources.vector.data.push(VectorData::inner_shadow(
+                                &context,
+                                boundary,
+                                *box_shadow,
+                                *border_radius,
+                                *shape,
+                            ));
                         }
                         RenderCommand::Text { .. } => {}
                         RenderCommand::PushClip { rect, shape, .. } => {}
@@ -458,6 +411,12 @@ impl Renderer for WgpuRenderer {
                         RenderCommand::Svg { .. } => {}
                         RenderCommand::BackdropFilter { boundary, shader } => {}
                     }
+                }
+
+                if self.resources.vector.take_buffer_resized() {
+                    self.renderers
+                        .vector
+                        .rebuild(&context, &self.resources.vector);
                 }
 
                 self.renderers.vector.bind(&context);
@@ -532,39 +491,6 @@ fn snap_rect(rect: Rect<f32>) -> Rect<f32> {
     }
 }
 
-fn snap_width(w: f32) -> f32 {
-    if w == 0.0 { 0.0 } else { w.round().max(1.0) }
-}
-
-fn to_vec4(c: ColorRgba) -> Vec4 {
-    Vec4::new(c.r, c.g, c.b, c.a)
-}
-
-fn extract_side(side: Option<BorderSide>) -> (Vec4, f32) {
-    match side {
-        Some(s) => (to_vec4(s.color), s.width),
-        None => (Vec4::ZERO, 0.0),
-    }
-}
-
-// fn to_rect_fill(fill: &Option<Fill>) -> RectFill<'_> {
-//     match fill {
-//         Some(Fill::Color(c)) => RectFill::Solid(to_vec4(*c)),
-//         None | Some(Fill::None) => RectFill::None,
-//         Some(Fill::Gradient(Gradient::Linear(g))) => RectFill::Linear {
-//             start: g.start,
-//             end: g.end,
-//             stops: &g.stops,
-//         },
-//         Some(Fill::Gradient(Gradient::Radial(g))) => RectFill::Radial {
-//             center: g.center,
-//             radius: g.radius,
-//             stops: &g.stops,
-//         },
-//         Some(Fill::Gradient(Gradient::Sweep(_))) => RectFill::None,
-//     }
-// }
-
 pub(crate) fn to_wgpu_color(format: wgpu::TextureFormat, color: ColorRgba) -> wgpu::Color {
     if format.is_srgb() {
         wgpu::Color {
@@ -606,63 +532,3 @@ fn rect_to_bottom_left_coordinates(view: &sumi::GraphicsView, rect: Rect<f32>) -
 
     Rect::from_pos_size(limur::Vec2::new(position.x, position.y), rect.size())
 }
-
-// fn make_clip_instance(
-//     rect: Rect<f32>,
-//     shape: &ClipShape,
-//     view: &sumi::GraphicsView,
-// ) -> RectInstance {
-//     let boundary = snap_rect(rect);
-//     let pos = Vec2::new(
-//         boundary.x,
-//         view.size_unscaled.y - boundary.y - boundary.height,
-//     );
-//     let size = Vec2::new(boundary.width, boundary.height);
-//     let mvp_matrix = view.screen_camera_matrix
-//         * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-//             position: pos,
-//             scaling: size,
-//             rotation: 0.0,
-//         });
-
-//     match shape {
-//         ClipShape::Rect => RectInstance::new(
-//             &mvp_matrix,
-//             pos,
-//             size,
-//             RectFill::None,
-//             Vec4::ZERO,
-//             0.0,
-//             Vec4::ZERO,
-//             0.0,
-//             Vec4::ZERO,
-//             0.0,
-//             Vec4::ZERO,
-//             0.0,
-//             [0.0, 0.0, 0.0, 0.0],
-//         ),
-//         ClipShape::RoundedRect { border_radius } => RectInstance::new(
-//             &mvp_matrix,
-//             pos,
-//             size,
-//             RectFill::None,
-//             Vec4::ZERO,
-//             0.0,
-//             Vec4::ZERO,
-//             0.0,
-//             Vec4::ZERO,
-//             0.0,
-//             Vec4::ZERO,
-//             0.0,
-//             [
-//                 border_radius.top_left,
-//                 border_radius.top_right,
-//                 border_radius.bottom_right,
-//                 border_radius.bottom_left,
-//             ],
-//         ),
-//         ClipShape::Oval => {
-//             RectInstance::new_oval(&mvp_matrix, pos, size, RectFill::None, Vec4::ZERO, 0.0)
-//         }
-//     }
-// }

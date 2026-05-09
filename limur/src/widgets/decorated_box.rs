@@ -4,8 +4,8 @@ use limur_derive::WidgetBuilder;
 use smallvec::{SmallVec, smallvec};
 
 use crate::{
-    Border, BorderRadius, BorderSide, BoxShadow, BoxShadowBlurStyle, BoxShape, ColorRgba, Gradient,
-    LinearGradient, RadialGradient, WidgetId, WidgetRef, WidgetType, impl_id,
+    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ColorRgba, Gradient, LinearGradient,
+    RadialGradient, WidgetId, WidgetRef, WidgetType, impl_id,
     layout::{DeriveWrapSize, LayoutCommand, WidgetPlacement},
     render::{Fill, PixelExtension, RenderCommand, RenderContext},
     state::WidgetState,
@@ -25,7 +25,8 @@ pub struct DecoratedBoxBuilder {
     frame: FrameBuilder,
     color: Option<ColorRgba>,
     gradients: SmallVec<[Gradient; 4]>,
-    box_shadows: SmallVec<[BoxShadow; 2]>,
+    shadows: SmallVec<[BoxShadow; 2]>,
+    inner_shadows: SmallVec<[BoxShadow; 2]>,
     border_radius: Option<BorderRadius>,
     border: Option<Border>,
     shape: BoxShape,
@@ -35,7 +36,8 @@ pub struct DecorationBuilder {
     pub(crate) id: WidgetId,
     pub(crate) color: Option<ColorRgba>,
     pub(crate) gradients: SmallVec<[Gradient; 4]>,
-    pub(crate) box_shadows: SmallVec<[BoxShadow; 2]>,
+    pub(crate) shadows: SmallVec<[BoxShadow; 2]>,
+    pub(crate) inner_shadows: SmallVec<[BoxShadow; 2]>,
     pub(crate) border_radius: Option<BorderRadius>,
     pub(crate) border: Option<Border>,
     pub(crate) defer: Option<DecorationDeferFn>,
@@ -47,7 +49,8 @@ pub struct State {
     pub(crate) shape: BoxShape,
     pub(crate) color: Option<ColorRgba>,
     pub(crate) gradients: SmallVec<[Gradient; 4]>,
-    pub(crate) box_shadows: SmallVec<[BoxShadow; 2]>,
+    pub(crate) shadows: SmallVec<[BoxShadow; 2]>,
+    pub(crate) inner_shadows: SmallVec<[BoxShadow; 2]>,
     pub(crate) border_radius: Option<BorderRadius>,
     pub(crate) border: Option<Border>,
 }
@@ -96,8 +99,14 @@ impl DecorationBuilder {
         self
     }
 
-    pub fn add_box_shadow(mut self, box_shadow: BoxShadow) -> Self {
-        self.box_shadows.push(box_shadow);
+    pub fn add_shadow(mut self, box_shadow: BoxShadow) -> Self {
+        self.shadows.push(box_shadow);
+
+        self
+    }
+
+    pub fn add_inner_shadow(mut self, box_shadow: BoxShadow) -> Self {
+        self.inner_shadows.push(box_shadow);
 
         self
     }
@@ -142,7 +151,8 @@ impl DecorationBuilder {
                     gradients: self.gradients,
                     border_radius: self.border_radius,
                     border: self.border,
-                    box_shadows: self.box_shadows,
+                    shadows: self.shadows,
+                    inner_shadows: self.inner_shadows,
                 },
             );
 
@@ -182,8 +192,14 @@ impl DecoratedBoxBuilder {
         self
     }
 
-    pub fn add_box_shadow(mut self, box_shadow: BoxShadow) -> Self {
-        self.box_shadows.push(box_shadow);
+    pub fn add_shadow(mut self, box_shadow: BoxShadow) -> Self {
+        self.shadows.push(box_shadow);
+
+        self
+    }
+
+    pub fn add_inner_shadow(mut self, box_shadow: BoxShadow) -> Self {
+        self.inner_shadows.push(box_shadow);
 
         self
     }
@@ -248,7 +264,8 @@ impl DecoratedBoxBuilder {
                 gradients: self.gradients.clone(),
                 border_radius: self.border_radius,
                 border: self.border,
-                box_shadows: self.box_shadows,
+                shadows: self.shadows,
+                inner_shadows: self.inner_shadows,
             },
         );
         context.accessed_this_frame(id);
@@ -264,7 +281,8 @@ pub fn decorated_box() -> DecoratedBoxBuilder {
         border_radius: None,
         border: None,
         shape: BoxShape::Rect,
-        box_shadows: SmallVec::new(),
+        shadows: SmallVec::new(),
+        inner_shadows: SmallVec::new(),
     }
 }
 
@@ -278,16 +296,13 @@ pub fn decoration() -> DecorationBuilder {
         border: None,
         shape: None,
         defer: None,
-        box_shadows: SmallVec::new(),
+        shadows: SmallVec::new(),
+        inner_shadows: SmallVec::new(),
     }
 }
 
 pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &State) {
-    for box_shadow in state
-        .box_shadows
-        .iter()
-        .filter(|it| it.blur_style == BoxShadowBlurStyle::Outer)
-    {
+    for box_shadow in state.shadows.iter() {
         ctx.push_command(
             placement.zindex - 1,
             RenderCommand::OuterBoxShadow {
@@ -331,11 +346,7 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
         );
     }
 
-    for box_shadow in state
-        .box_shadows
-        .iter()
-        .filter(|it| it.blur_style == BoxShadowBlurStyle::Inner)
-    {
+    for box_shadow in state.inner_shadows.iter() {
         ctx.push_command(
             placement.zindex,
             RenderCommand::InnerBoxShadow {
@@ -363,52 +374,4 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
             },
         );
     }
-
-    // match state.shape {
-    //     BoxShape::Rect => {
-
-    //     }
-    //     // BoxShape::Oval => {
-    //     //     let border = state.border.map(|it| it.px(ctx)).map(|it| {
-    //     //         it.top
-    //     //             .or(it.bottom)
-    //     //             .or(it.left)
-    //     //             .or(it.right)
-    //     //             .unwrap_or(BorderSide::default())
-    //     //     });
-
-    //     //     if let Some(color) = state.color {
-    //     //         ctx.push_command(
-    //     //             placement.zindex,
-    //     //             RenderCommand::Oval {
-    //     //                 boundary: placement.rect.px(ctx),
-    //     //                 fill: Some(Fill::Color(color)),
-    //     //                 border: None,
-    //     //             },
-    //     //         );
-    //     //     }
-
-    //     //     for gradient in &state.gradients {
-    //     //         ctx.push_command(
-    //     //             placement.zindex,
-    //     //             RenderCommand::Oval {
-    //     //                 boundary: placement.rect.px(ctx),
-    //     //                 fill: Some(Fill::Gradient(gradient.clone())),
-    //     //                 border: None,
-    //     //             },
-    //     //         );
-    //     //     }
-
-    //     //     if state.border.is_some() {
-    //     //         ctx.push_command(
-    //     //             placement.zindex,
-    //     //             RenderCommand::Oval {
-    //     //                 boundary: placement.rect.px(ctx),
-    //     //                 fill: None,
-    //     //                 border,
-    //     //             },
-    //     //         );
-    //     //     }
-    //     // }
-    // }
 }

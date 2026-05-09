@@ -272,7 +272,7 @@ fn hover_button(ctx: &mut ui::BuildContext, label: &str) {
                 ui::decoration()
                     .color(ui::ColorRgba::from_hex(bg_color))
                     .border_radius(ui::BorderRadius::vertical(8., 0.))
-                    .add_box_shadow(ui::BoxShadow {
+                    .add_shadow(ui::BoxShadow {
                         color: ui::ColorRgba::from_hex(0x1400FF00),
                         offset: ui::Vec2::new(0., 5.),
                         blur_radius: 0.,

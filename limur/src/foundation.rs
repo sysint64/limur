@@ -1653,14 +1653,6 @@ pub struct BoxShadow {
     pub offset: Vec2,
     pub blur_radius: f32,
     pub spread_radius: f32,
-    pub blur_style: BoxShadowBlurStyle,
-}
-
-#[derive(Debug, Default, Copy, Clone, PartialEq)]
-pub enum BoxShadowBlurStyle {
-    #[default]
-    Outer,
-    Inner,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Copy)]
