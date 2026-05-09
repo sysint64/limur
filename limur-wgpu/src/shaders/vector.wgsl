@@ -157,6 +157,7 @@ fn oval_inner_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
         return vec4<f32>(data.fill_color.rgb, data.fill_color.a * shadow_alpha);
     }
 
+    let samples = select(4, 8, blur_radius < 10.0);
     let value = oval_box_shadow(
         p,
         inner_hs,
@@ -164,7 +165,7 @@ fn oval_inner_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
         offset,
         0.0,
         data.fill_color,
-        4,
+        samples,
     );
 
     let shadow_alpha = (1.0 - value.a / data.fill_color.a) * clip_alpha;
@@ -312,6 +313,7 @@ fn rect_inner_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
         return vec4<f32>(data.fill_color.rgb, data.fill_color.a * shadow_alpha);
     }
 
+    let samples = select(4, 8, blur_radius < 10.0);
     let value = box_shadow(
         p,
         max(inner_hs, vec2(0.0)),
@@ -320,7 +322,7 @@ fn rect_inner_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> ve
         offset,
         0.0,
         data.fill_color,
-        4,
+        samples,
     );
 
     // Invert: where box_shadow is bright (inside the hole), we want no shadow.
