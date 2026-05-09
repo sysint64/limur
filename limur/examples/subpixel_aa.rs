@@ -257,9 +257,9 @@ fn hover_button(ctx: &mut ui::BuildContext, label: &str) {
         let response = ctx.of::<ui::GestureDetectorResponse>().unwrap().clone();
 
         let bg_color = if response.is_hot() {
-            0x45475aFF
+            0xFF475aFF
         } else {
-            0x313244FF
+            0xFF3244FF
         };
 
         ui::text(label)
@@ -271,7 +271,14 @@ fn hover_button(ctx: &mut ui::BuildContext, label: &str) {
             .background(
                 ui::decoration()
                     .color(ui::ColorRgba::from_hex(bg_color))
-                    .border_radius(ui::BorderRadius::all(8.))
+                    .border_radius(ui::BorderRadius::vertical(8., 0.))
+                    .add_box_shadow(ui::BoxShadow {
+                        color: ui::ColorRgba::from_hex(0x1400FF00),
+                        offset: ui::Vec2::new(0., 5.),
+                        blur_radius: 0.,
+                        spread_radius: 5.,
+                        blur_style: ui::BoxShadowBlurStyle::Outer,
+                    })
                     .build(ctx),
             )
             .build(ctx);

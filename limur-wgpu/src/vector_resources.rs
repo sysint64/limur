@@ -1,4 +1,7 @@
-use limur::{Border, BorderRadius, BorderSide, BoxShape, ColorRgba, Gradient, Rect, render::Fill};
+use limur::{
+    Border, BorderRadius, BorderSide, BoxShadow, BoxShadowBlurStyle, BoxShape, ColorRgba, Gradient,
+    Rect, render::Fill,
+};
 
 use crate::to_wgpu_color;
 
@@ -8,14 +11,15 @@ pub struct VectorData {
     // [x, y, w, h]
     boundary: [f32; 4],
 
-    // 0: rect, 1: oval
+    // 0: rect
+    // 1: oval
+    // 2: rect outer box shadow
+    // 3: rect inner box shadow
+    // 4: oval outer box shadow
+    // 5: oval inner box shadow
     shape_type: u32,
 
-    // 0: none, 1: outer, 2: inner
-    box_shadow_style: u32,
-
-    // 12 bytes — align to 16
-    _pad0: [u32; 2],
+    _pad0: [u32; 3],
 
     fill_color: [f32; 4],
     border_color_left: [f32; 4],
@@ -31,8 +35,6 @@ pub struct VectorData {
 
     // [offset_x, offset_y, blur, spread]
     box_shadow: [f32; 4],
-
-    box_shadow_color: [f32; 4],
 
     // [type, start_index, stop_count, pad]
     // types: 0: linear, 1: radial
@@ -57,14 +59,14 @@ pub(crate) struct VectorResources {
 
 pub(crate) struct GradientInfo {
     gradient_info: [u32; 4],
-    gradient_params: [u32; 4],
+    gradient_params: [f32; 4],
 }
 
 impl GradientInfo {
     fn empty() -> Self {
         Self {
             gradient_info: [0; 4],
-            gradient_params: [0; 4],
+            gradient_params: [0.; 4],
         }
     }
 }
@@ -86,6 +88,10 @@ impl VectorResources {
     pub(crate) fn flush(&mut self, context: &sumi::GraphicsContext) {
         self.data.flush(context);
         self.gradient_stops.flush(context);
+    }
+
+    pub fn take_buffer_resized(&mut self) -> bool {
+        self.data.take_buffer_resized() || self.gradient_stops.take_buffer_resized()
     }
 
     fn push_stops(&mut self, context: &sumi::GraphicsContext, stops: &[limur::ColorStop]) {
@@ -126,10 +132,10 @@ impl VectorResources {
                 GradientInfo {
                     gradient_info: [0, start_index, gradient.stops.len() as u32, 0],
                     gradient_params: [
-                        gradient.start.0.to_bits(),
-                        gradient.start.1.to_bits(),
-                        gradient.end.0.to_bits(),
-                        gradient.end.1.to_bits(),
+                        gradient.start.0,
+                        gradient.start.1,
+                        gradient.end.0,
+                        gradient.end.1,
                     ],
                 }
             }
@@ -137,17 +143,12 @@ impl VectorResources {
                 self.push_stops(context, &gradient.stops);
                 GradientInfo {
                     gradient_info: [1, start_index, gradient.stops.len() as u32, 0],
-                    gradient_params: [
-                        gradient.center.0.to_bits(),
-                        gradient.center.1.to_bits(),
-                        gradient.radius.to_bits(),
-                        0,
-                    ],
+                    gradient_params: [gradient.center.0, gradient.center.1, gradient.radius, 0.0],
                 }
             }
             Gradient::Sweep(_) => GradientInfo {
                 gradient_info: [0, start_index, 0, 0],
-                gradient_params: [0; 4],
+                gradient_params: [0.; 4],
             },
         }
     }
@@ -202,8 +203,7 @@ impl VectorData {
         Self {
             boundary: [boundary.x, boundary.y, boundary.width, boundary.height],
             shape_type,
-            box_shadow_style: 0,
-            _pad0: [0; 2],
+            _pad0: [0; 3],
             fill_color,
             border_color_left,
             border_color_top,
@@ -222,9 +222,55 @@ impl VectorData {
                 radii.bottom_left,
             ],
             box_shadow: [0.0; 4],
-            box_shadow_color: [0.0; 4],
             gradient_info: gradient_params.gradient_info,
-            gradient_params: bytemuck::cast(gradient_params.gradient_params),
+            gradient_params: gradient_params.gradient_params,
+        }
+    }
+
+    pub(crate) fn box_shadow(
+        context: &sumi::GraphicsContext,
+        boundary: Rect<f32>,
+        box_shadow: BoxShadow,
+        border_radius: Option<BorderRadius>,
+        shape: BoxShape,
+    ) -> VectorData {
+        let radii = border_radius.unwrap_or(BorderRadius::ZERO);
+
+        let shape_type = match shape {
+            BoxShape::Rect => match box_shadow.blur_style {
+                BoxShadowBlurStyle::Outer => 2,
+                BoxShadowBlurStyle::Inner => 3,
+            },
+            BoxShape::Oval => match box_shadow.blur_style {
+                BoxShadowBlurStyle::Outer => 4,
+                BoxShadowBlurStyle::Inner => 5,
+            },
+        };
+
+        Self {
+            boundary: [boundary.x, boundary.y, boundary.width, boundary.height],
+            shape_type,
+            _pad0: [0; 3],
+            fill_color: to_color(context, box_shadow.color),
+            border_color_left: [0.0; 4],
+            border_color_top: [0.0; 4],
+            border_color_right: [0.0; 4],
+            border_color_bottom: [0.0; 4],
+            border_widths: [0.0; 4],
+            border_radii: [
+                radii.top_left,
+                radii.top_right,
+                radii.bottom_right,
+                radii.bottom_left,
+            ],
+            box_shadow: [
+                box_shadow.offset.x as f32,
+                box_shadow.offset.y as f32,
+                box_shadow.blur_radius as f32,
+                box_shadow.spread_radius as f32,
+            ],
+            gradient_info: [0; 4],
+            gradient_params: [0.0; 4],
         }
     }
 }

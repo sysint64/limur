@@ -69,52 +69,59 @@ impl VectorInstance {
 
 pub struct VectorRenderer {
     render_pipeline: wgpu::RenderPipeline,
+    bind_group: VectorBindGroup,
+}
+
+struct VectorBindGroup {
+    layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }
 
-impl VectorRenderer {
+impl VectorBindGroup {
     pub fn new(context: &sumi::GraphicsContext, resources: &VectorResources) -> Self {
-        let shader = context
+        let layout = context
             .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Vector Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/vector.wgsl").into()),
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Vector Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
             });
 
-        let bind_group_layout =
-            context
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("Vector Bind Group Layout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                    ],
-                });
+        let bind_group = Self::create_bind_group(context, &layout, resources);
 
-        let bind_group = context
+        Self { layout, bind_group }
+    }
+
+    fn create_bind_group(
+        context: &sumi::GraphicsContext,
+        layout: &wgpu::BindGroupLayout,
+        resources: &VectorResources,
+    ) -> wgpu::BindGroup {
+        context
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Vector Bind group"),
-                layout: &bind_group_layout,
+                layout: layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -132,14 +139,31 @@ impl VectorRenderer {
                         ),
                     },
                 ],
+            })
+    }
+
+    fn rebuild(&mut self, context: &sumi::GraphicsContext, resources: &VectorResources) {
+        self.bind_group = Self::create_bind_group(context, &self.layout, resources);
+    }
+}
+
+impl VectorRenderer {
+    pub fn new(context: &sumi::GraphicsContext, resources: &VectorResources) -> Self {
+        let shader = context
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Vector Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/vector.wgsl").into()),
             });
+
+        let bind_group = VectorBindGroup::new(context, resources);
 
         let render_pipeline_layout =
             context
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Vector Render Pipeline Layout"),
-                    bind_group_layouts: &[Some(&bind_group_layout)],
+                    bind_group_layouts: &[Some(&bind_group.layout)],
                     immediate_size: 0,
                 });
 
@@ -185,11 +209,15 @@ impl VectorRenderer {
         }
     }
 
+    pub fn rebuild(&mut self, context: &sumi::GraphicsContext, resources: &VectorResources) {
+        self.bind_group.rebuild(context, resources);
+    }
+
     #[inline]
     pub fn bind(&self, context: &sumi::GraphicsContext<'_, '_>) {
         context.render_pass().set_pipeline(&self.render_pipeline);
         context
             .render_pass()
-            .set_bind_group(0, &self.bind_group, &[]);
+            .set_bind_group(0, &self.bind_group.bind_group, &[]);
     }
 }

@@ -289,7 +289,7 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
         .filter(|it| it.blur_style == BoxShadowBlurStyle::Outer)
     {
         ctx.push_command(
-            placement.zindex,
+            placement.zindex - 1,
             RenderCommand::OuterBoxShadow {
                 boundary: placement
                     .rect

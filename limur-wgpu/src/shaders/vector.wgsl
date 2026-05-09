@@ -19,9 +19,9 @@ struct InstanceInput {
 struct VectorData {
     boundary: vec4<f32>,
     shape_type: u32,
-    box_shadow_style: u32,
     _pad0: u32,
     _pad1: u32,
+    _pad2: u32,
     fill_color: vec4<f32>,
     border_color_left: vec4<f32>,
     border_color_top: vec4<f32>,
@@ -30,7 +30,6 @@ struct VectorData {
     border_widths: vec4<f32>,
     border_radii: vec4<f32>,
     box_shadow: vec4<f32>,
-    box_shadow_color: vec4<f32>,
     gradient_info: vec4<u32>,
     gradient_params: vec4<f32>,
 };
@@ -78,7 +77,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     switch (data.shape_type) {
         case 0u: {
-            return draw_rect(data, p, half_size);
+            return rect(data, p, half_size);
+        }
+        case 2u: {
+            return rect_outer_shadow(data, p, half_size);
         }
         default: {
             return vec4<f32>(0, 0, 0, 0);
@@ -86,11 +88,112 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 }
 
-fn draw_rect(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
+fn rect(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let dist = sdf_rounded_rect(p, half_size, data.border_radii);
     let alpha = fill_mask(dist, p);
 
     return vec4<f32>(data.fill_color.rgb * alpha, data.fill_color.a * alpha);
+}
+
+fn rect_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
+    let blur_radius = data.box_shadow.z;
+    let spread_radius = data.box_shadow.w;
+    let offset = data.box_shadow.xy;
+
+    if blur_radius == 0. {
+        return rect(data, p - offset, half_size + spread_radius);
+    }
+
+    let shadow = box_shadow(
+        p,
+        half_size,
+        data.border_radii,
+        blur_radius,
+        offset,
+        spread_radius,
+        data.fill_color,
+        4,
+    );
+
+    return shadow;
+}
+
+// Based on vger-rs: https://github.com/audulus/vger-rs/tree/main
+fn box_shadow(
+    p: vec2<f32>,
+    half_size: vec2<f32>,
+    radii: vec4<f32>,
+    blur: f32,
+    offset: vec2<f32>,
+    spread: f32,
+    color: vec4<f32>,
+    // (4 = fast, 8 = smooth)
+    samples: i32,
+) -> vec4<f32> {
+    let point = p - offset;
+    let hs = half_size + spread;
+
+    // Clamp vertical integration range to +-3 sigma
+    let low = point.y - hs.y;
+    let high = point.y + hs.y;
+    let start = clamp(-3.0 * blur, low, high);
+    let end = clamp(3.0 * blur, low, high);
+
+    let step = (end - start) / f32(samples);
+    var y = start + step * 0.5;
+    var value = 0.0;
+
+    for (var i = 0; i < samples; i++) {
+        value += rounded_box_shadow_x(point.x, point.y - y, blur, hs, radii)
+               * gaussian(y, blur) * step;
+        y += step;
+    }
+
+    return vec4(color.rgb, color.a * value);
+}
+
+fn gaussian(x: f32, sigma: f32) -> f32 {
+    let pi = 3.141592653589793;
+
+    return exp(-(x * x) / (2.0 * sigma * sigma)) / (sqrt(2.0 * pi) * sigma);
+}
+
+fn rounded_box_shadow_x(
+    x: f32,
+    y: f32,
+    sigma: f32,
+    half_size: vec2<f32>,
+    radii: vec4<f32>,
+) -> f32 {
+    // Pick the correct radius for this side (top vs bottom)
+    let r_left = select(radii.w, radii.x, y >= 0.0);
+    let r_right = select(radii.z, radii.y, y >= 0.0);
+
+    // Left edge extent at height y
+    let delta_left = min(half_size.y - r_left - abs(y), 0.0);
+    let curved_left = half_size.x - r_left + sqrt(max(0.0, r_left * r_left - delta_left * delta_left));
+
+    // Right edge extent at height y
+    let delta_right = min(half_size.y - r_right - abs(y), 0.0);
+    let curved_right = half_size.x - r_right + sqrt(max(0.0, r_right * r_right - delta_right * delta_right));
+
+    // Analytical gaussian integral from -curved_left to +curved_right
+    let inv_sigma = sqrt(0.5) / sigma;
+    let integral = 0.5 + 0.5 * erf_approx(vec2(
+        (x - curved_left) * inv_sigma,
+        (x + curved_right) * inv_sigma,
+    ));
+
+    return integral.y - integral.x;
+}
+
+fn erf_approx(x: vec2<f32>) -> vec2<f32> {
+    let s = sign(x);
+    let a = abs(x);
+    var y = 1.0 + (0.278393 + (0.230389 + 0.078108 * (a * a)) * a) * a;
+    y *= y;
+
+    return s - s / (y * y);
 }
 
 // Signed distance field for a rounded rect with per-corner radii.
