@@ -168,8 +168,8 @@ impl DecorationBuilder {
 }
 
 impl DecoratedBoxBuilder {
-    pub fn color(mut self, color: ColorRgba) -> Self {
-        self.color = Some(color);
+    pub fn color<T: Into<ColorRgba>>(mut self, color: T) -> Self {
+        self.color = Some(color.into());
 
         self
     }
@@ -223,52 +223,54 @@ impl DecoratedBoxBuilder {
     }
 
     pub fn build(self, context: &mut BuildContext) {
-        let id = self.frame.id.with_seed(context.id_seed);
-        let widget_ref = WidgetRef::new(WidgetType::of::<DecoratedBox>(), id);
-        let backgrounds = std::mem::take(context.backgrounds);
-        let foregrounds = std::mem::take(context.foregrounds);
+        scope(context.position.index).build(context, |context| {
+            let id = self.frame.id.with_seed(context.id_seed);
+            let widget_ref = WidgetRef::new(WidgetType::of::<DecoratedBox>(), id);
+            let backgrounds = std::mem::take(context.backgrounds);
+            let foregrounds = std::mem::take(context.foregrounds);
 
-        if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
-            context.push_layout_command(LayoutCommand::BeginOffset {
-                offset_x: self.frame.offset_x,
-                offset_y: self.frame.offset_y,
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::BeginOffset {
+                    offset_x: self.frame.offset_x,
+                    offset_y: self.frame.offset_y,
+                });
+            }
+
+            if self.frame.ignore_pointer {
+                context.non_interactable.insert(id);
+            }
+
+            context.push_layout_command(LayoutCommand::Leaf {
+                widget_ref,
+                backgrounds,
+                foregrounds,
+                padding: self.frame.padding,
+                margin: self.frame.margin,
+                constraints: self.frame.constraints,
+                size: self.frame.size,
+                zindex: self.frame.zindex,
+                derive_wrap_size: DeriveWrapSize::Constraints,
+                clip: self.frame.clip,
             });
-        }
 
-        if self.frame.ignore_pointer {
-            context.non_interactable.insert(id);
-        }
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::EndOffset);
+            }
 
-        context.push_layout_command(LayoutCommand::Leaf {
-            widget_ref,
-            backgrounds,
-            foregrounds,
-            padding: self.frame.padding,
-            margin: self.frame.margin,
-            constraints: self.frame.constraints,
-            size: self.frame.size,
-            zindex: self.frame.zindex,
-            derive_wrap_size: DeriveWrapSize::Constraints,
-            clip: self.frame.clip,
+            context.widgets_states.decorated_box.set(
+                id,
+                State {
+                    color: self.color,
+                    shape: self.shape,
+                    gradients: self.gradients.clone(),
+                    border_radius: self.border_radius,
+                    border: self.border,
+                    shadows: self.shadows,
+                    inner_shadows: self.inner_shadows,
+                },
+            );
+            context.accessed_this_frame(id);
         });
-
-        if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
-            context.push_layout_command(LayoutCommand::EndOffset);
-        }
-
-        context.widgets_states.decorated_box.set(
-            id,
-            State {
-                color: self.color,
-                shape: self.shape,
-                gradients: self.gradients.clone(),
-                border_radius: self.border_radius,
-                border: self.border,
-                shadows: self.shadows,
-                inner_shadows: self.inner_shadows,
-            },
-        );
-        context.accessed_this_frame(id);
     }
 }
 

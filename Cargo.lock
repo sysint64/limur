@@ -1667,6 +1667,7 @@ dependencies = [
  "limur",
  "limur-derive",
  "limur-desktop",
+ "limur-tiny-skia",
  "limur-vello",
  "limur-wgpu",
  "limur-widgets",

@@ -122,6 +122,30 @@ fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
     return out;
 }
 
+// ── Clip AA entry point ────────────────────────────────────────────────────────
+// Used with blend=(Zero, SrcAlpha) on a non-MSAA pass targeting layer_view.
+// Outputs outer_alpha so the destination is multiplied by 1 inside and 0 outside
+// the clip shape, giving smooth anti-aliased clip boundaries.
+@fragment
+fn fs_clip_aa(in: VertexOutput) -> @location(0) vec4<f32> {
+    let size       = in.size_and_grad.xy;
+    let shape_type = i32(in.size_and_grad.w);
+    let half_size  = size * 0.5;
+    let p          = (in.coord - 0.5) * size;
+
+    var outer_dist: f32;
+    if shape_type == 1 {
+        outer_dist = sdf_ellipse(p, half_size);
+    } else {
+        outer_dist = sdf_rounded_rect(p, half_size, in.border_radii);
+    }
+    let outer_aa    = 0.5 * fwidth(outer_dist);
+    let outer_alpha = 1.0 - smoothstep(-outer_aa, outer_aa, outer_dist);
+    if outer_alpha <= 0.0 { discard; }
+    // rgb=0 (src_factor=Zero ignores it); alpha=outer_alpha multiplies destination.
+    return vec4(0.0, 0.0, 0.0, outer_alpha);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let size          = in.size_and_grad.xy;
@@ -129,11 +153,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let shape_type    = i32(in.size_and_grad.w);
 
     let half_size = size * 0.5;
-    // coord in [-0.5, 0.5] from CenteredPlaneResources; p is in pixel space centered at origin.
-    let p  = in.coord * size;
+    // coord in [0, 1] from PlaneResources; p is in pixel space centered at origin.
+    let p  = (in.coord - 0.5) * size;
+
     // uv in [0, 1] for gradient evaluation (matches limur's normalized convention).
-    // coord.y = +0.5 is UI top (after the y-flip in the MVP), so uv.y must be inverted.
-    let uv = vec2(in.coord.x + 0.5, 0.5 - in.coord.y);
+    // coord.y = 1.0 is UI top (after the y-flip in the MVP), so uv.y must be inverted.
+    let uv = vec2(in.coord.x, 1.0 - in.coord.y);
 
     // ── Outer SDF ──────────────────────────────────────────────────────────────
     var outer_dist: f32;

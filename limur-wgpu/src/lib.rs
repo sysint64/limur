@@ -517,6 +517,14 @@ pub fn srgb_to_linear(c: f64) -> f64 {
     }
 }
 
+fn linear_to_srgb(c: f64) -> f64 {
+    if c <= 0.0031308 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
+}
+
 #[inline]
 fn to_bottom_left_coordinates(view: &sumi::GraphicsView, coord: Vec2, size: Vec2) -> Vec2 {
     Vec2::new(coord.x, view.size.y - coord.y - size.y)

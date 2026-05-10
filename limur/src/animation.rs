@@ -105,7 +105,7 @@ impl Lerp for ColorRgba {
             return to;
         }
 
-        let interpolated_rgb = self.to_rgb().lerp(to.to_rgb(), t);
+        let interpolated_rgb = self.rgb().lerp(to.rgb(), t);
 
         ColorRgba {
             r: interpolated_rgb.r,

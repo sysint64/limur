@@ -36,10 +36,12 @@ pub struct VectorData {
     box_shadow: [f32; 4],
 
     // [type, start_index, stop_count, pad]
-    // types: 0: linear, 1: radial
+    // types: 0: none, 1: linear, 2: radial, 3: sweep
     gradient_info: [u32; 4],
 
-    // linear: [sx, sy, ex, ey] radial: [cx, cy, r, 0]
+    // linear: [sx, sy, ex, ey]
+    // radial: [cx, cy, r, _]
+    // sweep: [cx, cy, start_angle, end_angle]
     gradient_params: [f32; 4],
 }
 
@@ -96,7 +98,12 @@ impl VectorResources {
     fn push_stops(&mut self, context: &sumi::GraphicsContext, stops: &[limur::ColorStop]) {
         for stop in stops {
             self.gradient_stops.push(GradientStop {
-                color: to_color(context, stop.color),
+                color: [
+                    crate::srgb_to_linear(stop.color.r as f64) as f32,
+                    crate::srgb_to_linear(stop.color.g as f64) as f32,
+                    crate::srgb_to_linear(stop.color.b as f64) as f32,
+                    stop.color.a as f32,
+                ],
                 offset: stop.offset,
                 _pad0: [0; 3],
             });
@@ -129,7 +136,7 @@ impl VectorResources {
             Gradient::Linear(gradient) => {
                 self.push_stops(context, &gradient.stops);
                 GradientInfo {
-                    gradient_info: [0, start_index, gradient.stops.len() as u32, 0],
+                    gradient_info: [1, start_index, gradient.stops.len() as u32, 0],
                     gradient_params: [
                         gradient.start.0,
                         gradient.start.1,
@@ -141,14 +148,22 @@ impl VectorResources {
             Gradient::Radial(gradient) => {
                 self.push_stops(context, &gradient.stops);
                 GradientInfo {
-                    gradient_info: [1, start_index, gradient.stops.len() as u32, 0],
+                    gradient_info: [2, start_index, gradient.stops.len() as u32, 0],
                     gradient_params: [gradient.center.0, gradient.center.1, gradient.radius, 0.0],
                 }
             }
-            Gradient::Sweep(_) => GradientInfo {
-                gradient_info: [0, start_index, 0, 0],
-                gradient_params: [0.; 4],
-            },
+            Gradient::Sweep(gradient) => {
+                self.push_stops(context, &gradient.stops);
+                GradientInfo {
+                    gradient_info: [3, start_index, gradient.stops.len() as u32, 0],
+                    gradient_params: [
+                        gradient.center.0,
+                        gradient.center.1,
+                        gradient.start_angle,
+                        gradient.end_angle,
+                    ],
+                }
+            }
         }
     }
 }

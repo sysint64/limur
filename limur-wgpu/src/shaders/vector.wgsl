@@ -1,3 +1,11 @@
+const COLOR_SPACE_SRGB: u32 = 0u;    // mix in sRGB space (browser/Photoshop default)
+const COLOR_SPACE_LINEAR: u32 = 3u;  // mix in linear light (physically correct, perceptually non-uniform)
+const COLOR_SPACE_OK_LAB: u32 = 1u;
+const COLOR_SPACE_OK_LCH: u32 = 2u;
+
+const TWO_PI: f32 = 6.28318530717958647692;
+const PI: f32 = 3.14159265358979323846;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) tex_coords: vec2<f32>,
@@ -42,8 +50,13 @@ struct GradientStop {
     _pad2: u32,
 };
 
+struct Globals {
+    is_srgb_surface: u32,
+};
+
 @group(0) @binding(0) var<storage, read> shape_data: array<VectorData>;
 @group(0) @binding(1) var<storage, read> gradient_stops: array<GradientStop>;
+@group(0) @binding(2) var<uniform> globals: Globals;
 
 @vertex
 fn vs_main(
@@ -75,7 +88,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let half_size = size * 0.5;
     let p = in.clip_position.xy - screen_position - half_size;
 
-    switch (data.shape_type) {
+    switch data.shape_type {
         case 0u: {
             return rect(data, p, half_size);
         }
@@ -104,7 +117,7 @@ fn oval(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let dist = sdf_oval(p, half_size);
     let alpha = oval_fill_mask(dist, p);
 
-    return vec4<f32>(data.fill_color.rgb, data.fill_color.a * alpha);
+    return fill(data, p, alpha);
 }
 
 fn oval_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
@@ -177,7 +190,166 @@ fn rect(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let dist = sdf_rounded_rect(p, half_size, data.border_radii);
     let alpha = fill_mask(dist, p, half_size, data.border_radii);
 
-    return vec4<f32>(data.fill_color.rgb, data.fill_color.a * alpha);
+    return fill(data, p, alpha);
+}
+
+fn fill(data: VectorData, p: vec2<f32>, alpha: f32) -> vec4<f32> {
+    let gradient_type = data.gradient_info.x;
+    let fill_color = vec4<f32>(data.fill_color.rgb, data.fill_color.a * alpha);
+
+    if gradient_type == 0u {
+        return fill_color;
+    }
+
+    let gradient_start_index = u32(data.gradient_info.y);
+    let gradient_stop_count = u32(data.gradient_info.z);
+
+    let size = data.boundary.zw;
+    let uv = p / size + 0.5;
+
+    var gradient_t: f32 = 0.0;
+
+    switch gradient_type {
+        // Linear gradient
+        case 1u: {
+            let start = data.gradient_params.xy;
+            let end = data.gradient_params.zw;
+            let direction = end - start;
+            let range = dot(direction, direction);
+
+            gradient_t = select(
+                0.0,
+                clamp(dot(uv - start, direction) / range, 0.0, 1.0),
+                range > 0.0001
+            );
+        }
+        // Radial gradient
+        case 2u: {
+            let center = data.gradient_params.xy;
+            let radius = data.gradient_params.z;
+
+            // make UV square
+            let aspect = size.x / size.y;
+            let d = (uv - center) * vec2(aspect, 1.0);
+            // gradient_t = clamp(length(d) / max(radius * aspect, 0.0001), 0.0, 1.0);
+
+            gradient_t = clamp(
+                length(d) / max(radius * aspect, 0.0001),
+                0.0,
+                1.0
+            );
+        }
+        // Sweep gradient
+        case 3u: {
+            let center = data.gradient_params.xy;
+            let start_angle = data.gradient_params.z;
+            let end_angle = data.gradient_params.w;
+
+            let aspect = size.x / size.y;
+            // multiply by size to measure angles in pixel space, not stretched UV space
+            let d = (uv - center) * vec2(aspect, 1.0) * size;
+            var angle = atan2(d.y, d.x);
+
+            if angle < start_angle {
+                angle += TWO_PI;
+            }
+
+            let range = end_angle - start_angle;
+
+            gradient_t = select(
+                0.0,
+                clamp((angle - start_angle) / range, 0.0, 1.0),
+                range > 0.0001
+            );
+        }
+        default:  {
+            return fill_color;
+        }
+    }
+
+    let color = sample_gradient(
+        gradient_start_index,
+        gradient_stop_count,
+        gradient_t,
+        COLOR_SPACE_OK_LAB
+    );
+
+    // mix_stops outputs linear RGB; for non-sRGB surfaces encode back to sRGB
+    // since the GPU won't do it automatically
+    let rgb = select(to_srgb(color.rgb), color.rgb, globals.is_srgb_surface != 0u);
+
+    return vec4<f32>(rgb, color.a * alpha);
+}
+
+fn sample_gradient(start: u32, count: u32, t: f32, color_space: u32) -> vec4<f32> {
+  for (var i = 0u; i < count - 1u; i += 1) {
+    let a = gradient_stops[start + i];
+    let b = gradient_stops[start + i + 1u];
+
+    if t <= b.offset {
+        let length = b.offset - a.offset;
+        let f = select(0.0, (t - a.offset) / length, length > 0.0001);
+
+        return mix_stops(a.color, b.color, f, color_space);
+    }
+  }
+
+  return gradient_stops[start + count - 1u].color;
+}
+
+fn linear_to_srgb_channel(c: f32) -> f32 {
+    if c <= 0.0031308 { return c * 12.92; }
+    return 1.055 * pow(c, 1.0 / 2.4) - 0.055;
+}
+
+fn srgb_to_linear_channel(c: f32) -> f32 {
+    if c <= 0.04045 { return c / 12.92; }
+    return pow((c + 0.055) / 1.055, 2.4);
+}
+
+fn to_linear(c: vec3<f32>) -> vec3<f32> {
+    return vec3(srgb_to_linear_channel(c.r), srgb_to_linear_channel(c.g), srgb_to_linear_channel(c.b));
+}
+
+fn to_srgb(c: vec3<f32>) -> vec3<f32> {
+    return vec3(linear_to_srgb_channel(c.r), linear_to_srgb_channel(c.g), linear_to_srgb_channel(c.b));
+}
+
+fn mix_stops(a: vec4<f32>, b: vec4<f32>, f: f32, color_space: u32) -> vec4<f32> {
+    var mixed: vec3<f32>;
+
+    switch color_space {
+        case COLOR_SPACE_LINEAR: {
+            // mix in linear light - physically correct, perceptually non-uniform
+            mixed = mix(a.rgb, b.rgb, f);
+        }
+        case COLOR_SPACE_SRGB: {
+            // mix in sRGB space - matches CSS/browser default
+            mixed = to_linear(mix(to_srgb(a.rgb), to_srgb(b.rgb), f));
+        }
+        case COLOR_SPACE_OK_LAB: {
+            let a_lab = linear_to_oklab(a.rgb);
+            let b_lab = linear_to_oklab(b.rgb);
+
+            mixed = oklab_to_linear(mix(a_lab, b_lab, f));
+        }
+        case COLOR_SPACE_OK_LCH, default: {
+            let a_lab = linear_to_oklab(a.rgb);
+            let b_lab = linear_to_oklab(b.rgb);
+            let a_lch = vec3(a_lab.x, length(a_lab.yz), atan2(a_lab.z, a_lab.y));
+            let b_lch = vec3(b_lab.x, length(b_lab.yz), atan2(b_lab.z, b_lab.y));
+
+            var dh = b_lch.z - a_lch.z;
+            if dh >  PI { dh -= TWO_PI; }
+            if dh < -PI { dh += TWO_PI; }
+
+            let h   = a_lch.z + f * dh;
+            let lch = vec3(mix(a_lch.x, b_lch.x, f), mix(a_lch.y, b_lch.y, f), h);
+            mixed = oklab_to_linear(vec3(lch.x, lch.y * cos(lch.z), lch.y * sin(lch.z)));
+        }
+    }
+
+    return vec4(mixed, mix(a.a, b.a, f));
 }
 
 // Approximate SDF for an ellipse
@@ -464,4 +636,38 @@ fn fill_mask(d: f32, p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f32>) -> f3
     let soft = smoothstep(fw * 0.5, -fw * 0.5, d);
 
     return mix(hard, soft, corner_blend);
+}
+
+// Source: https://bottosson.github.io/posts/oklab/
+fn linear_to_oklab(c: vec3<f32>) -> vec3<f32> {
+    let l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b;
+    let m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b;
+    let s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b;
+
+    let l_ = sign(l) * pow(abs(l), 1.0 / 3.0);
+    let m_ = sign(m) * pow(abs(m), 1.0 / 3.0);
+    let s_ = sign(s) * pow(abs(s), 1.0 / 3.0);
+
+    return vec3(
+        0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+        1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+        0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+    );
+}
+
+/// Source: https://bottosson.github.io/posts/oklab/
+fn oklab_to_linear(lab: vec3<f32>) -> vec3<f32> {
+    let l_ = lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z;
+    let m_ = lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z;
+    let s_ = lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z;
+
+    let l = l_ * l_ * l_;
+    let m = m_ * m_ * m_;
+    let s = s_ * s_ * s_;
+
+    return clamp(vec3(
+         4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+    ), vec3(0.0), vec3(1.0));
 }

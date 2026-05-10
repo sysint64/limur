@@ -67,7 +67,7 @@ impl<D: HasDisplayHandle, W: HasWindowHandle> Renderer for TinySkiaRenderer<D, W
             let mut pixmap = PixmapMut::from_bytes(surface_buffer_u8, width, height).unwrap();
 
             if let Some(fill_color) = fill_color {
-                pixmap.fill(convert_rgb_color(&fill_color.to_rgb()));
+                pixmap.fill(convert_rgb_color(&fill_color.rgb()));
             }
 
             let clip_stack: Vec<tiny_skia::Mask> = Vec::new();
