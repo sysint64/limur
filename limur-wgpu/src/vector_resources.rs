@@ -2,7 +2,6 @@ use limur::{
     Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ColorRgba, Gradient, Rect, render::Fill,
 };
 
-
 #[repr(C)]
 #[derive(Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct VectorData {
@@ -104,10 +103,7 @@ impl VectorResources {
         }
     }
 
-    pub(crate) fn maybe_add_gradient(
-        &mut self,
-        fill: Option<&Fill>,
-    ) -> GradientInfo {
+    pub(crate) fn maybe_add_gradient(&mut self, fill: Option<&Fill>) -> GradientInfo {
         match fill {
             Some(fill) => match fill {
                 Fill::None => GradientInfo::empty(),
@@ -118,10 +114,7 @@ impl VectorResources {
         }
     }
 
-    pub(crate) fn add_gradient(
-        &mut self,
-        gradient: Gradient,
-    ) -> GradientInfo {
+    pub(crate) fn add_gradient(&mut self, gradient: Gradient) -> GradientInfo {
         let start_index = self.gradient_stops.len() as u32;
 
         match &gradient {

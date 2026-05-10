@@ -109,10 +109,7 @@ impl VectorBindGroup {
 
         let bind_group = Self::create_bind_group(context, &layout, resources);
 
-        Self {
-            layout,
-            bind_group,
-        }
+        Self { layout, bind_group }
     }
 
     fn create_bind_group(

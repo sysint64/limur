@@ -166,10 +166,20 @@ impl WgpuRenderer {
         resources.vector.flush(&context);
 
         let renderers = Renderers {
-            // layer→composite: both Rgba16Float, no sRGB encoding needed.
-            layer_blit: BlitRenderer::new(context.device, COMPOSITOR_FORMAT, Some(alpha_over), false),
-            // composite→surface: encode sRGB if the surface is not an sRGB format.
-            surface_blit: BlitRenderer::new(context.device, surface_format, None, !surface_format.is_srgb()),
+            // layer -> composite: both Rgba16Float, no sRGB encoding needed.
+            layer_blit: BlitRenderer::new(
+                context.device,
+                COMPOSITOR_FORMAT,
+                Some(alpha_over),
+                false,
+            ),
+            // composite -> surface: encode sRGB if the surface is not an sRGB format.
+            surface_blit: BlitRenderer::new(
+                context.device,
+                surface_format,
+                None,
+                !surface_format.is_srgb(),
+            ),
             vector: VectorRenderer::new(&context, &mut resources.vector, COMPOSITOR_FORMAT),
         };
 
@@ -330,10 +340,8 @@ impl Renderer for WgpuRenderer {
 
                             instances.insert(VectorInstance::new(mvp));
 
-                            let gradient_params = self
-                                .resources
-                                .vector
-                                .maybe_add_gradient(fill.as_ref());
+                            let gradient_params =
+                                self.resources.vector.maybe_add_gradient(fill.as_ref());
 
                             self.resources.vector.data.push(VectorData::shape(
                                 boundary,
