@@ -2,7 +2,6 @@ use limur::{
     Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ColorRgba, Gradient, Rect, render::Fill,
 };
 
-use crate::to_wgpu_color;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -95,15 +94,10 @@ impl VectorResources {
         self.data.take_buffer_resized() || self.gradient_stops.take_buffer_resized()
     }
 
-    fn push_stops(&mut self, context: &sumi::GraphicsContext, stops: &[limur::ColorStop]) {
+    fn push_stops(&mut self, stops: &[limur::ColorStop]) {
         for stop in stops {
             self.gradient_stops.push(GradientStop {
-                color: [
-                    crate::srgb_to_linear(stop.color.r as f64) as f32,
-                    crate::srgb_to_linear(stop.color.g as f64) as f32,
-                    crate::srgb_to_linear(stop.color.b as f64) as f32,
-                    stop.color.a as f32,
-                ],
+                color: to_color(stop.color),
                 offset: stop.offset,
                 _pad0: [0; 3],
             });
@@ -112,14 +106,13 @@ impl VectorResources {
 
     pub(crate) fn maybe_add_gradient(
         &mut self,
-        context: &sumi::GraphicsContext,
         fill: Option<&Fill>,
     ) -> GradientInfo {
         match fill {
             Some(fill) => match fill {
                 Fill::None => GradientInfo::empty(),
                 Fill::Color(..) => GradientInfo::empty(),
-                Fill::Gradient(gradient) => self.add_gradient(context, gradient.clone()),
+                Fill::Gradient(gradient) => self.add_gradient(gradient.clone()),
             },
             None => GradientInfo::empty(),
         }
@@ -127,14 +120,13 @@ impl VectorResources {
 
     pub(crate) fn add_gradient(
         &mut self,
-        context: &sumi::GraphicsContext,
         gradient: Gradient,
     ) -> GradientInfo {
         let start_index = self.gradient_stops.len() as u32;
 
         match &gradient {
             Gradient::Linear(gradient) => {
-                self.push_stops(context, &gradient.stops);
+                self.push_stops(&gradient.stops);
                 GradientInfo {
                     gradient_info: [1, start_index, gradient.stops.len() as u32, 0],
                     gradient_params: [
@@ -146,14 +138,14 @@ impl VectorResources {
                 }
             }
             Gradient::Radial(gradient) => {
-                self.push_stops(context, &gradient.stops);
+                self.push_stops(&gradient.stops);
                 GradientInfo {
                     gradient_info: [2, start_index, gradient.stops.len() as u32, 0],
                     gradient_params: [gradient.center.0, gradient.center.1, gradient.radius, 0.0],
                 }
             }
             Gradient::Sweep(gradient) => {
-                self.push_stops(context, &gradient.stops);
+                self.push_stops(&gradient.stops);
                 GradientInfo {
                     gradient_info: [3, start_index, gradient.stops.len() as u32, 0],
                     gradient_params: [
@@ -169,20 +161,18 @@ impl VectorResources {
 }
 
 #[inline]
-fn to_color(context: &sumi::GraphicsContext, color: ColorRgba) -> [f32; 4] {
-    let wgpu_color = to_wgpu_color(context.surface_texture_format, color);
-
+fn to_color(color: ColorRgba) -> [f32; 4] {
+    // Compositor textures store linear light (Rgba16Float). Always linearize.
     [
-        wgpu_color.r as f32,
-        wgpu_color.g as f32,
-        wgpu_color.b as f32,
-        wgpu_color.a as f32,
+        crate::srgb_to_linear(color.r as f64) as f32,
+        crate::srgb_to_linear(color.g as f64) as f32,
+        crate::srgb_to_linear(color.b as f64) as f32,
+        color.a as f32,
     ]
 }
 
 impl VectorData {
     pub(crate) fn shape(
-        context: &sumi::GraphicsContext,
         boundary: Rect<f32>,
         fill: Option<&Fill>,
         border_radius: Option<BorderRadius>,
@@ -192,13 +182,13 @@ impl VectorData {
     ) -> Self {
         let side = |side: Option<BorderSide>| -> ([f32; 4], f32) {
             match side {
-                Some(side) => (to_color(context, side.color), side.width),
+                Some(side) => (to_color(side.color), side.width),
                 None => ([0.0; 4], 0.0),
             }
         };
 
         let fill_color = match fill {
-            Some(Fill::Color(color)) => to_color(context, *color),
+            Some(Fill::Color(color)) => to_color(*color),
             _ => [0.0; 4],
         };
 
@@ -242,7 +232,6 @@ impl VectorData {
     }
 
     pub(crate) fn shadow(
-        context: &sumi::GraphicsContext,
         boundary: Rect<f32>,
         box_shadow: BoxShadow,
         border_radius: Option<BorderRadius>,
@@ -259,7 +248,7 @@ impl VectorData {
             boundary: [boundary.x, boundary.y, boundary.width, boundary.height],
             shape_type,
             _pad0: [0; 3],
-            fill_color: to_color(context, box_shadow.color),
+            fill_color: to_color(box_shadow.color),
             border_color_left: [0.0; 4],
             border_color_top: [0.0; 4],
             border_color_right: [0.0; 4],
@@ -283,7 +272,6 @@ impl VectorData {
     }
 
     pub(crate) fn inner_shadow(
-        context: &sumi::GraphicsContext,
         boundary: Rect<f32>,
         box_shadow: BoxShadow,
         border_radius: Option<BorderRadius>,
@@ -300,7 +288,7 @@ impl VectorData {
             boundary: [boundary.x, boundary.y, boundary.width, boundary.height],
             shape_type,
             _pad0: [0; 3],
-            fill_color: to_color(context, box_shadow.color),
+            fill_color: to_color(box_shadow.color),
             border_color_left: [0.0; 4],
             border_color_top: [0.0; 4],
             border_color_right: [0.0; 4],

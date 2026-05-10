@@ -1,5 +1,9 @@
-const COLOR_SPACE_SRGB: u32 = 0u;    // mix in sRGB space (browser/Photoshop default)
-const COLOR_SPACE_LINEAR: u32 = 3u;  // mix in linear light (physically correct, perceptually non-uniform)
+// mix in sRGB space (browser/Photoshop default)
+const COLOR_SPACE_SRGB: u32 = 0u;
+
+// mix in linear light (physically correct, perceptually non-uniform)
+const COLOR_SPACE_LINEAR: u32 = 3u;
+
 const COLOR_SPACE_OK_LAB: u32 = 1u;
 const COLOR_SPACE_OK_LCH: u32 = 2u;
 
@@ -50,13 +54,8 @@ struct GradientStop {
     _pad2: u32,
 };
 
-struct Globals {
-    is_srgb_surface: u32,
-};
-
 @group(0) @binding(0) var<storage, read> shape_data: array<VectorData>;
 @group(0) @binding(1) var<storage, read> gradient_stops: array<GradientStop>;
-@group(0) @binding(2) var<uniform> globals: Globals;
 
 @vertex
 fn vs_main(
@@ -274,11 +273,8 @@ fn fill(data: VectorData, p: vec2<f32>, alpha: f32) -> vec4<f32> {
         COLOR_SPACE_OK_LAB
     );
 
-    // mix_stops outputs linear RGB; for non-sRGB surfaces encode back to sRGB
-    // since the GPU won't do it automatically
-    let rgb = select(to_srgb(color.rgb), color.rgb, globals.is_srgb_surface != 0u);
-
-    return vec4<f32>(rgb, color.a * alpha);
+    // mix_stops always outputs linear RGB; compositor stores linear (Rgba16Float).
+    return vec4<f32>(color.rgb, color.a * alpha);
 }
 
 fn sample_gradient(start: u32, count: u32, t: f32, color_space: u32) -> vec4<f32> {

@@ -3,19 +3,23 @@ mod vector_renderer;
 mod vector_resources;
 
 use blit_renderer::BlitRenderer;
-use glam::{Vec2, Vec4};
+use glam::Vec2;
 use limur::{
-    BorderRadius, BorderSide, ClipShape, ColorRgba, Gradient, PhysicalSize, Rect, ShaderParam,
-    View,
+    ClipShape, ColorRgba, PhysicalSize, Rect, View,
     assets::Assets,
     render::{RenderCommand, RenderCompositionLayer, Renderer},
     text::{FontResources, TextsResources},
 };
 use std::sync::Arc;
-use sumi::{InstancingGeometry, PlaneResources, RenderInstances};
+use sumi::{InstancingGeometry, RenderInstances};
 use vector_renderer::{VectorInstance, VectorInstanceId, VectorRenderer};
 use vector_resources::{VectorData, VectorResources};
 use winit::window::Window;
+
+/// All intermediate compositor textures use this format so that blending always
+/// happens in linear light space, regardless of the final surface format.
+/// Rgba16Float is universally supported on desktop, iOS, and Android.
+const COMPOSITOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 pub struct WgpuRenderer {
     gapi: sumi::Graphics,
@@ -39,6 +43,8 @@ struct Renderers {
 struct Compositor {
     width: u32,
     height: u32,
+    msaa_texture: wgpu::Texture,
+    msaa_view: wgpu::TextureView,
     layer_texture: wgpu::Texture,
     layer_view: wgpu::TextureView,
     composite_texture: wgpu::Texture,
@@ -48,8 +54,8 @@ struct Compositor {
 }
 
 impl Compositor {
-    fn new(device: &wgpu::Device, format: wgpu::TextureFormat, width: u32, height: u32) -> Self {
-        let make_tex = |label: &str, usage: wgpu::TextureUsages| {
+    fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        let make_tex = |label: &str, sample_count: u32, usage: wgpu::TextureUsages| {
             device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
                 size: wgpu::Extent3d {
@@ -58,28 +64,34 @@ impl Compositor {
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: 1,
+                sample_count,
                 dimension: wgpu::TextureDimension::D2,
-                format,
+                format: COMPOSITOR_FORMAT,
                 usage,
                 view_formats: &[],
             })
         };
 
+        let rt_only = wgpu::TextureUsages::RENDER_ATTACHMENT;
         let rt_bind = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
 
-        let layer_tex = make_tex("Layer Texture", rt_bind);
+        let msaa_tex = make_tex("Compositor MSAA", 4, rt_only);
+        let msaa_view = msaa_tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let layer_tex = make_tex("Layer Texture", 1, rt_bind);
         let layer_view = layer_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let composite_tex = make_tex("Composite Texture", rt_bind);
+        let composite_tex = make_tex("Composite Texture", 1, rt_bind);
         let composite_view = composite_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let ping_tex = make_tex("Blur Ping Texture", rt_bind);
+        let ping_tex = make_tex("Blur Ping Texture", 1, rt_bind);
         let ping_view = ping_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
         Self {
             width,
             height,
+            msaa_texture: msaa_tex,
+            msaa_view,
             layer_texture: layer_tex,
             layer_view,
             composite_texture: composite_tex,
@@ -135,9 +147,9 @@ impl WgpuRenderer {
             vector_instances: sumi::BumpInstances::new(128),
         };
 
-        let fmt = context.surface_texture_format;
+        let surface_format = context.surface_texture_format;
 
-        // Premultiplied alpha-over blend for layer -> composite.
+        // Premultiplied alpha-over blend for layer -> composite (both in linear Rgba16Float).
         let alpha_over = wgpu::BlendState {
             color: wgpu::BlendComponent {
                 src_factor: wgpu::BlendFactor::One,
@@ -154,9 +166,11 @@ impl WgpuRenderer {
         resources.vector.flush(&context);
 
         let renderers = Renderers {
-            layer_blit: BlitRenderer::new(context.device, fmt, Some(alpha_over)),
-            surface_blit: BlitRenderer::new(context.device, fmt, None),
-            vector: VectorRenderer::new(&context, &mut resources.vector),
+            // layer→composite: both Rgba16Float, no sRGB encoding needed.
+            layer_blit: BlitRenderer::new(context.device, COMPOSITOR_FORMAT, Some(alpha_over), false),
+            // composite→surface: encode sRGB if the surface is not an sRGB format.
+            surface_blit: BlitRenderer::new(context.device, surface_format, None, !surface_format.is_srgb()),
+            vector: VectorRenderer::new(&context, &mut resources.vector, COMPOSITOR_FORMAT),
         };
 
         Self {
@@ -177,12 +191,7 @@ impl WgpuRenderer {
             .map_or(true, |c| c.width != width || c.height != height);
 
         if needs_rebuild {
-            self.compositor = Some(Compositor::new(
-                &self.gapi.device,
-                self.gapi.surface_texture_format,
-                width,
-                height,
-            ));
+            self.compositor = Some(Compositor::new(&self.gapi.device, width, height));
         }
     }
 }
@@ -235,10 +244,13 @@ impl Renderer for WgpuRenderer {
                     view: &compositor.composite_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(to_wgpu_color(
-                            self.gapi.surface_texture_format,
-                            fill,
-                        )),
+                        // Compositor is Rgba16Float (linear), so always linearize the clear color.
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: srgb_to_linear(fill.r as f64),
+                            g: srgb_to_linear(fill.g as f64),
+                            b: srgb_to_linear(fill.b as f64),
+                            a: fill.a as f64,
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
@@ -268,7 +280,7 @@ impl Renderer for WgpuRenderer {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Layer Pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.gapi.msaa_texture_view,
+                        view: &compositor.msaa_view,
                         resolve_target: Some(&compositor.layer_view),
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -321,10 +333,9 @@ impl Renderer for WgpuRenderer {
                             let gradient_params = self
                                 .resources
                                 .vector
-                                .maybe_add_gradient(&context, fill.as_ref());
+                                .maybe_add_gradient(fill.as_ref());
 
                             self.resources.vector.data.push(VectorData::shape(
-                                &context,
                                 boundary,
                                 fill.as_ref(),
                                 *border_radius,
@@ -364,7 +375,6 @@ impl Renderer for WgpuRenderer {
                             instances.insert(VectorInstance::new(mvp));
 
                             self.resources.vector.data.push(VectorData::shadow(
-                                &context,
                                 boundary,
                                 *box_shadow,
                                 *border_radius,
@@ -398,7 +408,6 @@ impl Renderer for WgpuRenderer {
                             instances.insert(VectorInstance::new(mvp));
 
                             self.resources.vector.data.push(VectorData::inner_shadow(
-                                &context,
                                 boundary,
                                 *box_shadow,
                                 *border_radius,
@@ -491,37 +500,11 @@ fn snap_rect(rect: Rect<f32>) -> Rect<f32> {
     }
 }
 
-pub(crate) fn to_wgpu_color(format: wgpu::TextureFormat, color: ColorRgba) -> wgpu::Color {
-    if format.is_srgb() {
-        wgpu::Color {
-            r: srgb_to_linear(color.r as f64),
-            g: srgb_to_linear(color.g as f64),
-            b: srgb_to_linear(color.b as f64),
-            a: color.a as f64,
-        }
-    } else {
-        wgpu::Color {
-            r: color.r as f64,
-            g: color.g as f64,
-            b: color.b as f64,
-            a: color.a as f64,
-        }
-    }
-}
-
 pub fn srgb_to_linear(c: f64) -> f64 {
     if c <= 0.04045 {
         c / 12.92
     } else {
         ((c + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-fn linear_to_srgb(c: f64) -> f64 {
-    if c <= 0.0031308 {
-        c * 12.92
-    } else {
-        1.055 * c.powf(1.0 / 2.4) - 0.055
     }
 }
 

@@ -1,7 +1,10 @@
+use wgpu::util::DeviceExt;
+
 pub struct BlitRenderer {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
+    globals_buffer: wgpu::Buffer,
 }
 
 impl BlitRenderer {
@@ -9,6 +12,7 @@ impl BlitRenderer {
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
         blend: Option<wgpu::BlendState>,
+        encode_srgb: bool,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blit Shader"),
@@ -32,6 +36,16 @@ impl BlitRenderer {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
                     count: None,
                 },
             ],
@@ -80,10 +94,18 @@ impl BlitRenderer {
             ..Default::default()
         });
 
+        let encode_srgb_val: u32 = encode_srgb as u32;
+        let globals_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Blit Globals"),
+            contents: bytemuck::bytes_of(&encode_srgb_val),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
         Self {
             pipeline,
             bind_group_layout,
             sampler,
+            globals_buffer,
         }
     }
 
@@ -105,6 +127,12 @@ impl BlitRenderer {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer(
+                        self.globals_buffer.as_entire_buffer_binding(),
+                    ),
                 },
             ],
         });

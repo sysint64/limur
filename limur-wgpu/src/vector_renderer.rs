@@ -1,6 +1,5 @@
 use glam::Mat4;
 use sumi::prelude::*;
-use wgpu::util::DeviceExt;
 
 use crate::vector_resources::VectorResources;
 
@@ -76,7 +75,6 @@ pub struct VectorRenderer {
 struct VectorBindGroup {
     layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
-    globals_buffer: wgpu::Buffer,
 }
 
 impl VectorBindGroup {
@@ -106,37 +104,14 @@ impl VectorBindGroup {
                         },
                         count: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
                 ],
             });
 
-        let is_srgb: u32 = if context.surface_texture_format.is_srgb() {
-            1
-        } else {
-            0
-        };
-        let globals_buffer = context
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vector Globals"),
-                contents: bytemuck::bytes_of(&is_srgb),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-        let bind_group = Self::create_bind_group(context, &layout, resources, &globals_buffer);
+        let bind_group = Self::create_bind_group(context, &layout, resources);
 
         Self {
             layout,
             bind_group,
-            globals_buffer,
         }
     }
 
@@ -144,7 +119,6 @@ impl VectorBindGroup {
         context: &sumi::GraphicsContext,
         layout: &wgpu::BindGroupLayout,
         resources: &VectorResources,
-        globals_buffer: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
         context
             .device
@@ -167,24 +141,21 @@ impl VectorBindGroup {
                                 .as_entire_buffer_binding(),
                         ),
                     },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Buffer(
-                            globals_buffer.as_entire_buffer_binding(),
-                        ),
-                    },
                 ],
             })
     }
 
     fn rebuild(&mut self, context: &sumi::GraphicsContext, resources: &VectorResources) {
-        self.bind_group =
-            Self::create_bind_group(context, &self.layout, resources, &self.globals_buffer);
+        self.bind_group = Self::create_bind_group(context, &self.layout, resources);
     }
 }
 
 impl VectorRenderer {
-    pub fn new(context: &sumi::GraphicsContext, resources: &VectorResources) -> Self {
+    pub fn new(
+        context: &sumi::GraphicsContext,
+        resources: &VectorResources,
+        target_format: wgpu::TextureFormat,
+    ) -> Self {
         let shader = context
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -221,7 +192,7 @@ impl VectorRenderer {
                         entry_point: Some("fs_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         targets: &[Some(wgpu::ColorTargetState {
-                            format: context.surface_texture_format,
+                            format: target_format,
                             blend: Some(wgpu::BlendState {
                                 color: wgpu::BlendComponent {
                                     src_factor: wgpu::BlendFactor::SrcAlpha,
