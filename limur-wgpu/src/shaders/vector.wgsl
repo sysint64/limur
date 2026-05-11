@@ -116,7 +116,27 @@ fn oval(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let dist = sdf_oval(p, half_size);
     let alpha = oval_fill_mask(dist, p);
 
-    return fill(data, p, half_size, alpha, 0.0);
+    let border_left = data.border_widths.x;
+    let border_top = data.border_widths.y;
+    let border_right = data.border_widths.z;
+    let border_bottom = data.border_widths.w;
+
+    // Inner rect center shifts by the asymmetry in opposing border widths.
+    let inner_center = vec2(
+        (border_left - border_right) * 0.5,
+        (border_bottom - border_top) * 0.5,
+    );
+    let inner_half = max(
+        half_size - vec2(
+            (border_left + border_right) * 0.5,
+            (border_top + border_bottom) * 0.5,
+        ),
+        vec2(0.0),
+    );
+
+    let inner_dist = sdf_oval(p - inner_center, inner_half);
+
+    return fill(data, p, half_size, alpha, inner_dist);
 }
 
 fn oval_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
@@ -228,7 +248,8 @@ fn fill(data: VectorData, p: vec2<f32>, half_size: vec2<f32>, alpha: f32, inner_
 
     let inner_aa = 0.5 * fwidth(inner_dist);
     let border_fill_factor = 1.0 - smoothstep(-inner_aa, inner_aa, inner_dist);
-    let border = add_border(data, p, half_size, inner_dist);
+    // let border = add_border(data, p, half_size, inner_dist);
+    let border = add_dash_border_rounded_rect(data, p, half_size, inner_dist, 10.0, 5.0, 0.0);
 
     if gradient_type == 0u {
         let result_color = mix_premultiplied(border, fill_color, border_fill_factor);
@@ -306,7 +327,7 @@ fn fill(data: VectorData, p: vec2<f32>, half_size: vec2<f32>, alpha: f32, inner_
         gradient_start_index,
         gradient_stop_count,
         gradient_t,
-        COLOR_SPACE_OK_LCH
+        COLOR_SPACE_OK_LAB
     );
 
     let result_color = mix_premultiplied(border, gradient_color, border_fill_factor);
@@ -363,6 +384,220 @@ fn add_border(data: VectorData, p: vec2<f32>, half_size: vec2<f32>, inner_dist: 
     let blend = smoothstep(-fw, 0.0, f) * 0.5;
 
     return mix_premultiplied(c0, c1, blend);
+}
+
+// Like add_border but applies a dash pattern along each edge.
+// dash_length and gap_length are in pixels. dash_offset shifts the pattern start.
+// Returns transparent in gap regions so the fill/background shows through.
+fn add_dash_border(
+    data: VectorData,
+    p: vec2<f32>,
+    half_size: vec2<f32>,
+    inner_dist: f32,
+    dash_length: f32,
+    gap_length: f32,
+    dash_offset: f32,
+) -> vec4<f32> {
+    let bw = data.border_widths; // [left, top, right, bottom] -> [x, y, z, w]
+
+    let d_top    = half_size.y - p.y;
+    let d_right  = half_size.x - p.x;
+    let d_bottom = half_size.y + p.y;
+    let d_left   = half_size.x + p.x;
+
+    let inf = 1e9;
+    let n_top    = select(inf, d_top    / bw.y, bw.y > 0.0);
+    let n_right  = select(inf, d_right  / bw.z, bw.z > 0.0);
+    let n_bottom = select(inf, d_bottom / bw.w, bw.w > 0.0);
+    let n_left   = select(inf, d_left   / bw.x, bw.x > 0.0);
+
+    // Arc-length position along each edge (used to compute dash phase).
+    // Edges run: top left→right, right top→bottom, bottom right→left, left bottom→top.
+    // Each edge is offset by the cumulative perimeter so positions are continuous at
+    // corners — without this, ep_top ends at `width` while ep_right restarts at 0,
+    // causing a phase jump that shows as a gap/artifact in the dash pattern.
+    let width  = half_size.x * 2.0;
+    let height = half_size.y * 2.0;
+    let ep_top    = p.x + half_size.x;                           // 0        .. width
+    let ep_right  = width + (half_size.y - p.y);                 // width    .. width+height
+    let ep_bottom = width + height + (half_size.x - p.x);        // w+h      .. 2w+h
+    let ep_left   = width * 2.0 + height + (p.y + half_size.y);  // 2w+h     .. 2(w+h)
+
+    // Track winner (c0/n0/ep0) and runner-up (c1/n1/ep1) by normalized distance.
+    var c0 = data.border_color_top;
+    var n0 = n_top;
+    var ep0 = ep_top;
+    var c1 = data.border_color_top;
+    var n1 = inf;
+    var ep1 = ep_top;
+
+    if n_right < n0 {
+        c1 = c0; n1 = n0; ep1 = ep0;
+        c0 = data.border_color_right; n0 = n_right; ep0 = ep_right;
+    } else if n_right < n1 {
+        c1 = data.border_color_right; n1 = n_right; ep1 = ep_right;
+    }
+    if n_bottom < n0 {
+        c1 = c0; n1 = n0; ep1 = ep0;
+        c0 = data.border_color_bottom; n0 = n_bottom; ep0 = ep_bottom;
+    } else if n_bottom < n1 {
+        c1 = data.border_color_bottom; n1 = n_bottom; ep1 = ep_bottom;
+    }
+    if n_left < n0 {
+        c1 = c0; n1 = n0; ep1 = ep0;
+        c0 = data.border_color_left; n0 = n_left; ep0 = ep_left;
+    } else if n_left < n1 {
+        c1 = data.border_color_left; n1 = n_left; ep1 = ep_left;
+    }
+
+    // Anti-alias the boundary between the two nearest sides (same as add_border).
+    let f = n0 - n1;
+    let fw_f = fwidth(f);
+    let blend = smoothstep(-fw_f, 0.0, f) * 0.5;
+    let border_color = mix_premultiplied(c0, c1, blend);
+    let edge_pos = mix(ep0, ep1, blend);
+
+    // Dash pattern: phase runs 0..period, dash occupies 0..dash_length.
+    let period = dash_length + gap_length;
+    let phase = fract((edge_pos + dash_offset) / period) * period;
+    let fw = length(fwidth(p));
+    let dash_alpha = smoothstep(dash_length + fw, dash_length - fw, phase);
+
+    return vec4<f32>(border_color.rgb, border_color.a * dash_alpha);
+}
+
+// Computes the arc-length position along the perimeter of a rounded rect at point p.
+// The parameterization starts at the left end of the top edge and goes clockwise:
+//   top edge → top-right arc → right edge → bottom-right arc →
+//   bottom edge → bottom-left arc → left edge → top-left arc
+// radii: [top-left, top-right, bottom-right, bottom-left]
+fn rounded_rect_perimeter_pos(p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f32>) -> f32 {
+    // Clamp radii (same logic as sdf_rounded_rect)
+    let size = half_size * 2.0;
+    let s = min(1.0, min(
+        min(size.x / max(radii.x + radii.y, 1e-5), size.x / max(radii.z + radii.w, 1e-5)),
+        min(size.y / max(radii.x + radii.w, 1e-5), size.y / max(radii.y + radii.z, 1e-5))
+    ));
+    let r = radii * s; // [tl, tr, br, bl]
+
+    // Straight edge lengths
+    let top_len    = size.x - r.x - r.y;
+    let right_len  = size.y - r.y - r.z;
+    let bottom_len = size.x - r.z - r.w;
+    let left_len   = size.y - r.w - r.x;
+
+    // Cumulative perimeter offsets
+    let off_top    = 0.0;
+    let off_tr     = off_top    + top_len;
+    let off_right  = off_tr     + PI * 0.5 * r.y;
+    let off_br     = off_right  + right_len;
+    let off_bottom = off_br     + PI * 0.5 * r.z;
+    let off_bl     = off_bottom + bottom_len;
+    let off_left   = off_bl     + PI * 0.5 * r.w;
+    let off_tl     = off_left   + left_len;
+
+    // Corner centers (p.y >= 0 = top)
+    let cc_tr = vec2( half_size.x - r.y,  half_size.y - r.y);
+    let cc_br = vec2( half_size.x - r.z, -half_size.y + r.z);
+    let cc_bl = vec2(-half_size.x + r.w, -half_size.y + r.w);
+    let cc_tl = vec2(-half_size.x + r.x,  half_size.y - r.x);
+
+    // A pixel is in a corner zone when it lies beyond the straight portion of both adjacent edges.
+    let in_tr = r.y > 0.0 && p.x > cc_tr.x && p.y > cc_tr.y;
+    let in_br = r.z > 0.0 && p.x > cc_br.x && p.y < cc_br.y;
+    let in_bl = r.w > 0.0 && p.x < cc_bl.x && p.y < cc_bl.y;
+    let in_tl = r.x > 0.0 && p.x < cc_tl.x && p.y > cc_tl.y;
+
+    if in_tr {
+        // CW sweep from PI/2 (top tangent) to 0 (right tangent)
+        let d = p - cc_tr;
+        return off_tr + (PI * 0.5 - atan2(d.y, d.x)) * r.y;
+    }
+    if in_br {
+        // CW sweep from 0 (right tangent) to -PI/2 (bottom tangent)
+        let d = p - cc_br;
+        return off_br + (-atan2(d.y, d.x)) * r.z;
+    }
+    if in_bl {
+        // CW sweep from -PI/2 (bottom) to ±PI (left); use atan2(-dx,-dy) to avoid discontinuity
+        let d = p - cc_bl;
+        return off_bl + atan2(-d.x, -d.y) * r.w;
+    }
+    if in_tl {
+        // CW sweep from PI (left tangent) to PI/2 (top tangent)
+        let d = p - cc_tl;
+        return off_tl + (PI - atan2(d.y, d.x)) * r.x;
+    }
+
+    // Straight edge: find the closest one
+    let d_top    = half_size.y - p.y;
+    let d_right  = half_size.x - p.x;
+    let d_bottom = half_size.y + p.y;
+    let d_left   = half_size.x + p.x;
+
+    if d_top <= d_right && d_top <= d_bottom && d_top <= d_left {
+        return off_top    + (p.x + half_size.x - r.x);    // left→right
+    }
+    if d_right <= d_bottom && d_right <= d_left {
+        return off_right  + (half_size.y - r.y - p.y);    // top→bottom
+    }
+    if d_bottom <= d_left {
+        return off_bottom + (half_size.x - r.z - p.x);    // right→left
+    }
+    return     off_left   + (p.y + half_size.y - r.w);    // bottom→top
+}
+
+// Dash border for rounded rects: uses true arc-length perimeter position so dashes
+// have uniform pixel length through corners and there are no phase gaps.
+fn add_dash_border_rounded_rect(
+    data: VectorData,
+    p: vec2<f32>,
+    half_size: vec2<f32>,
+    inner_dist: f32,
+    dash_length: f32,
+    gap_length: f32,
+    dash_offset: f32,
+) -> vec4<f32> {
+    let bw = data.border_widths;
+
+    let d_top    = half_size.y - p.y;
+    let d_right  = half_size.x - p.x;
+    let d_bottom = half_size.y + p.y;
+    let d_left   = half_size.x + p.x;
+
+    let inf = 1e9;
+    let n_top    = select(inf, d_top    / bw.y, bw.y > 0.0);
+    let n_right  = select(inf, d_right  / bw.z, bw.z > 0.0);
+    let n_bottom = select(inf, d_bottom / bw.w, bw.w > 0.0);
+    let n_left   = select(inf, d_left   / bw.x, bw.x > 0.0);
+
+    var c0 = data.border_color_top;    var n0 = n_top;
+    var c1 = data.border_color_top;    var n1 = inf;
+
+    if n_right < n0  { c1 = c0; n1 = n0; c0 = data.border_color_right;  n0 = n_right;  }
+    else if n_right  < n1 { c1 = data.border_color_right;  n1 = n_right;  }
+    if n_bottom < n0 { c1 = c0; n1 = n0; c0 = data.border_color_bottom; n0 = n_bottom; }
+    else if n_bottom < n1 { c1 = data.border_color_bottom; n1 = n_bottom; }
+    if n_left < n0   { c1 = c0; n1 = n0; c0 = data.border_color_left;   n0 = n_left;   }
+    else if n_left   < n1 { c1 = data.border_color_left;   n1 = n_left;   }
+
+    let f = n0 - n1;
+    let fw_f = fwidth(f);
+    let blend = smoothstep(-fw_f, 0.0, f) * 0.5;
+    let border_color = mix_premultiplied(c0, c1, blend);
+
+    let edge_pos = rounded_rect_perimeter_pos(p, half_size, data.border_radii);
+
+    let period = dash_length + gap_length;
+    let phase = fract((edge_pos + dash_offset) / period) * period;
+    // Use length(fwidth(p)) as a stable ~1px estimate instead of fwidth(edge_pos).
+    // fwidth(edge_pos) is unreliable at zone boundaries (corner↔straight) and at the
+    // fract wrap because neighboring fragments may take different branches, giving the
+    // GPU incorrect cross-fragment derivatives.
+    let fw = length(fwidth(p));
+    let dash_alpha = smoothstep(dash_length + fw, dash_length - fw, phase);
+
+    return vec4<f32>(border_color.rgb, border_color.a * dash_alpha);
 }
 
 fn sample_gradient(start: u32, count: u32, t: f32, color_space: u32) -> vec4<f32> {

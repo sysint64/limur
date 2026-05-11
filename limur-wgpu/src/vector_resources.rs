@@ -207,10 +207,10 @@ impl VectorData {
             border_color_right,
             border_color_bottom,
             border_widths: [
-                border_width_left,
-                border_width_top,
-                border_width_right,
-                border_width_bottom,
+                border_width_left.round(),
+                border_width_top.round(),
+                border_width_right.round(),
+                border_width_bottom.round(),
             ],
             border_radii: [
                 radii.top_left,
