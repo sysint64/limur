@@ -116,7 +116,7 @@ fn oval(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let dist = sdf_oval(p, half_size);
     let alpha = oval_fill_mask(dist, p);
 
-    return fill(data, p, alpha);
+    return fill(data, p, half_size, alpha, 0.0);
 }
 
 fn oval_outer_shadow(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
@@ -189,15 +189,51 @@ fn rect(data: VectorData, p: vec2<f32>, half_size: vec2<f32>) -> vec4<f32> {
     let dist = sdf_rounded_rect(p, half_size, data.border_radii);
     let alpha = fill_mask(dist, p, half_size, data.border_radii);
 
-    return fill(data, p, alpha);
+    let border_left = data.border_widths.x;
+    let border_top = data.border_widths.y;
+    let border_right = data.border_widths.z;
+    let border_bottom = data.border_widths.w;
+
+    // Inner rect center shifts by the asymmetry in opposing border widths.
+    let inner_center = vec2(
+        (border_left - border_right) * 0.5,
+        (border_bottom - border_top) * 0.5,
+    );
+    let inner_half = max(
+        half_size - vec2(
+            (border_left + border_right) * 0.5,
+            (border_top + border_bottom) * 0.5,
+        ),
+        vec2(0.0),
+    );
+
+    let inner_radii = max(
+        data.border_radii - vec4(
+            min(border_top, border_left),
+            min(border_top, border_right),
+            min(border_bottom, border_right),
+            min(border_bottom, border_left),
+        ),
+        vec4(0.0)
+    );
+
+    let inner_dist = sdf_rounded_rect(p - inner_center, inner_half, inner_radii);
+
+    return fill(data, p, half_size, alpha, inner_dist);
 }
 
-fn fill(data: VectorData, p: vec2<f32>, alpha: f32) -> vec4<f32> {
+fn fill(data: VectorData, p: vec2<f32>, half_size: vec2<f32>, alpha: f32, inner_dist: f32) -> vec4<f32> {
     let gradient_type = data.gradient_info.x;
     let fill_color = vec4<f32>(data.fill_color.rgb, data.fill_color.a * alpha);
 
+    let inner_aa = 0.5 * fwidth(inner_dist);
+    let border_fill_factor = 1.0 - smoothstep(-inner_aa, inner_aa, inner_dist);
+    let border = add_border(data, p, half_size, inner_dist);
+
     if gradient_type == 0u {
-        return fill_color;
+        let result_color = mix_premultiplied(border, fill_color, border_fill_factor);
+
+        return vec4<f32>(result_color.rgb, result_color.a * alpha);
     }
 
     let gradient_start_index = u32(data.gradient_info.y);
@@ -266,15 +302,67 @@ fn fill(data: VectorData, p: vec2<f32>, alpha: f32) -> vec4<f32> {
         }
     }
 
-    let color = sample_gradient(
+    let gradient_color = sample_gradient(
         gradient_start_index,
         gradient_stop_count,
         gradient_t,
-        COLOR_SPACE_OK_LAB
+        COLOR_SPACE_OK_LCH
     );
 
+    let result_color = mix_premultiplied(border, gradient_color, border_fill_factor);
+
     // mix_stops always outputs linear RGB; compositor stores linear (Rgba16Float).
-    return vec4<f32>(color.rgb, color.a * alpha);
+    return vec4<f32>(result_color.rgb, result_color.a * alpha);
+}
+
+fn add_border(data: VectorData, p: vec2<f32>, half_size: vec2<f32>, inner_dist: f32) -> vec4<f32> {
+    // Normalize each edge distance by its border width so that the diagonal
+    // boundary between two adjacent sides runs from the outer corner to the
+    // inner corner (CSS-style). Sides with zero width get infinite normalized
+    // distance and are never selected.
+    let bw = data.border_widths; // [left, top, right, bottom] -> [x, y, z, w]
+
+    let d_top    = half_size.y - p.y;
+    let d_right  = half_size.x - p.x;
+    let d_bottom = half_size.y + p.y;
+    let d_left   = half_size.x + p.x;
+
+    let inf = 1e9;
+    let n_top    = select(inf, d_top    / bw.y, bw.y > 0.0);
+    let n_right  = select(inf, d_right  / bw.z, bw.z > 0.0);
+    let n_bottom = select(inf, d_bottom / bw.w, bw.w > 0.0);
+    let n_left   = select(inf, d_left   / bw.x, bw.x > 0.0);
+
+    // Track the winner (c0/n0) and runner-up (c1/n1) by normalized distance.
+    var c0 = data.border_color_top;
+    var n0 = n_top;
+    var c1 = data.border_color_top;
+    var n1 = inf;
+
+    if n_right < n0 {
+        c1 = c0; n1 = n0; c0 = data.border_color_right; n0 = n_right;
+    } else if n_right < n1 {
+        c1 = data.border_color_right; n1 = n_right;
+    }
+    if n_bottom < n0 {
+        c1 = c0; n1 = n0; c0 = data.border_color_bottom; n0 = n_bottom;
+    } else if n_bottom < n1 {
+        c1 = data.border_color_bottom; n1 = n_bottom;
+    }
+    if n_left < n0 {
+        c1 = c0; n1 = n0; c0 = data.border_color_left; n0 = n_left;
+    } else if n_left < n1 {
+        c1 = data.border_color_left; n1 = n_left;
+    }
+
+    // Anti-alias the boundary between the two nearest sides.
+    // f = 0 at the boundary (n0 == n1), negative in winner territory.
+    // blend goes from 0 (far from boundary, pure c0) to 0.5 (at boundary, 50/50).
+    let f = n0 - n1;
+    let fw = fwidth(f);
+    let blend = smoothstep(-fw, 0.0, f) * 0.5;
+
+    return mix_premultiplied(c0, c1, blend);
 }
 
 fn sample_gradient(start: u32, count: u32, t: f32, color_space: u32) -> vec4<f32> {
@@ -319,7 +407,7 @@ fn mix_stops(a: vec4<f32>, b: vec4<f32>, f: f32, color_space: u32) -> vec4<f32> 
             // mix in linear light - physically correct, perceptually non-uniform
             mixed = mix(a.rgb, b.rgb, f);
         }
-        case COLOR_SPACE_SRGB: {
+        case COLOR_SPACE_SRGB, default: {
             // mix in sRGB space - matches CSS/browser default
             mixed = to_linear(mix(to_srgb(a.rgb), to_srgb(b.rgb), f));
         }
@@ -329,7 +417,7 @@ fn mix_stops(a: vec4<f32>, b: vec4<f32>, f: f32, color_space: u32) -> vec4<f32> 
 
             mixed = oklab_to_linear(mix(a_lab, b_lab, f));
         }
-        case COLOR_SPACE_OK_LCH, default: {
+        case COLOR_SPACE_OK_LCH: {
             let a_lab = linear_to_oklab(a.rgb);
             let b_lab = linear_to_oklab(b.rgb);
             let a_lch = vec3(a_lab.x, length(a_lab.yz), atan2(a_lab.z, a_lab.y));
@@ -535,9 +623,7 @@ fn box_shadow(
 }
 
 fn gaussian(x: f32, sigma: f32) -> f32 {
-    let pi = 3.141592653589793;
-
-    return exp(-(x * x) / (2.0 * sigma * sigma)) / (sqrt(2.0 * pi) * sigma);
+    return exp(-(x * x) / (2.0 * sigma * sigma)) / (sqrt(2.0 * PI) * sigma);
 }
 
 fn rounded_box_shadow_x(
@@ -666,4 +752,16 @@ fn oklab_to_linear(lab: vec3<f32>) -> vec3<f32> {
         -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
         -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
     ), vec3(0.0), vec3(1.0));
+}
+
+fn mix_premultiplied(a: vec4<f32>, b: vec4<f32>, t: f32) -> vec4<f32> {
+    let a_pm = vec4<f32>(a.rgb * a.a, a.a);
+    let b_pm = vec4<f32>(b.rgb * b.a, b.a);
+    let m = mix(a_pm, b_pm, t);
+
+    return select(
+        vec4<f32>(0.0),
+        vec4<f32>(m.rgb / m.a, m.a),
+        m.a > 0.001
+    );
 }

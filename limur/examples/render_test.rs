@@ -247,6 +247,147 @@ impl Window<ExampleApplication, ()> for MainWindow {
                                         spread_radius: 5.,
                                     })
                                 });
+
+                                // Border ----------------------------------------------------------------
+                                // All sides, thin black
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::all(ui::BorderSide::new(
+                                        1.,
+                                        ui::ColorRgba::from_hex(0xff000000),
+                                    )))
+                                });
+                                // All sides, thick colored
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::all(ui::BorderSide::new(
+                                        4.,
+                                        ui::ColorRgba::from_hex(0xff0055FF),
+                                    )))
+                                });
+                                // Top only
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::top(ui::BorderSide::new(
+                                        3.,
+                                        ui::ColorRgba::from_hex(0xffFF3300),
+                                    )))
+                                });
+                                // Bottom only
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::bottom(ui::BorderSide::new(
+                                        3.,
+                                        ui::ColorRgba::from_hex(0xff00AA00),
+                                    )))
+                                });
+                                // Left only
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::left(ui::BorderSide::new(
+                                        3.,
+                                        ui::ColorRgba::from_hex(0xff8800FF),
+                                    )))
+                                });
+                                // Right only
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::right(ui::BorderSide::new(
+                                        3.,
+                                        ui::ColorRgba::from_hex(0xffFF8800),
+                                    )))
+                                });
+                                // Top + bottom
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::new(
+                                        Some(ui::BorderSide::new(
+                                            3.,
+                                            ui::ColorRgba::from_hex(0xffFF3300),
+                                        )),
+                                        None,
+                                        Some(ui::BorderSide::new(
+                                            3.,
+                                            ui::ColorRgba::from_hex(0xff0033FF),
+                                        )),
+                                        None,
+                                    ))
+                                });
+                                // Left + right
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::new(
+                                        None,
+                                        Some(ui::BorderSide::new(
+                                            3.,
+                                            ui::ColorRgba::from_hex(0xffFF8800),
+                                        )),
+                                        None,
+                                        Some(ui::BorderSide::new(
+                                            3.,
+                                            ui::ColorRgba::from_hex(0xff00AA88),
+                                        )),
+                                    ))
+                                });
+                                // Symmetric: different H/V widths and colors
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::symmetric(
+                                        ui::BorderSide::new(
+                                            4.,
+                                            ui::ColorRgba::from_hex(0xffAA0088),
+                                        ),
+                                        ui::BorderSide::new(
+                                            2.,
+                                            ui::ColorRgba::from_hex(0xff00AACC),
+                                        ),
+                                    ))
+                                });
+                                // All four sides with distinct widths and colors
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::new(
+                                        Some(ui::BorderSide::new(
+                                            2.,
+                                            ui::ColorRgba::from_hex(0xffFF0000),
+                                        )),
+                                        Some(ui::BorderSide::new(
+                                            4.,
+                                            ui::ColorRgba::from_hex(0xff00CC00),
+                                        )),
+                                        Some(ui::BorderSide::new(
+                                            6.,
+                                            ui::ColorRgba::from_hex(0xff0000FF),
+                                        )),
+                                        Some(ui::BorderSide::new(
+                                            8.,
+                                            ui::ColorRgba::from_hex(0xffFFFF00),
+                                        )),
+                                    ))
+                                });
+                                // Semi-transparent borders
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::all(ui::BorderSide::new(
+                                        4.,
+                                        ui::ColorRgba::from_hex(0x880000FF),
+                                    )))
+                                });
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::all(ui::BorderSide::new(
+                                        4.,
+                                        ui::ColorRgba::from_hex(0x44FFFFFF),
+                                    )))
+                                });
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box.border(ui::Border::new(
+                                        Some(ui::BorderSide::new(
+                                            4.,
+                                            ui::ColorRgba::from_hex(0xCCFF0000),
+                                        )),
+                                        Some(ui::BorderSide::new(
+                                            4.,
+                                            ui::ColorRgba::from_hex(0x8800FF00),
+                                        )),
+                                        Some(ui::BorderSide::new(
+                                            4.,
+                                            ui::ColorRgba::from_hex(0x440000FF),
+                                        )),
+                                        Some(ui::BorderSide::new(
+                                            4.,
+                                            ui::ColorRgba::from_hex(0x22FFFF00),
+                                        )),
+                                    ))
+                                });
                             });
 
                             ui::vstack().spacing(12.).build(ctx, |ctx| {
@@ -457,6 +598,169 @@ impl Window<ExampleApplication, ()> for MainWindow {
                                             ],
                                         ),
                                     ))
+                                });
+
+                                // Border + gradient -------------------------------------------------------
+                                // Thin uniform border over vertical linear gradient
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_linear_gradient(ui::LinearGradient::vertical((
+                                            ui::ColorRgba::from_hex(0xff3366FF),
+                                            ui::ColorRgba::from_hex(0xffFF6633),
+                                        )))
+                                        .border(ui::Border::all(ui::BorderSide::new(
+                                            2.,
+                                            ui::ColorRgba::from_hex(0xff000000),
+                                        )))
+                                });
+                                // Thick colored border over horizontal linear gradient
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_linear_gradient(ui::LinearGradient::horizontal((
+                                            ui::ColorRgba::from_hex(0xff22BBAA),
+                                            ui::ColorRgba::from_hex(0xffAA22BB),
+                                        )))
+                                        .border(ui::Border::all(ui::BorderSide::new(
+                                            5.,
+                                            ui::ColorRgba::from_hex(0xffFFFFFF),
+                                        )))
+                                });
+                                // Per-side colored borders over angled linear gradient (tests corner AA)
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_linear_gradient(ui::LinearGradient::angled(
+                                            std::f32::consts::FRAC_PI_4,
+                                            (
+                                                ui::ColorRgba::from_hex(0xffFFCC00),
+                                                ui::ColorRgba::from_hex(0xffFF3399),
+                                            ),
+                                        ))
+                                        .border(ui::Border::new(
+                                            Some(ui::BorderSide::new(
+                                                3.,
+                                                ui::ColorRgba::from_hex(0xffFF0000),
+                                            )),
+                                            Some(ui::BorderSide::new(
+                                                5.,
+                                                ui::ColorRgba::from_hex(0xff00CC00),
+                                            )),
+                                            Some(ui::BorderSide::new(
+                                                3.,
+                                                ui::ColorRgba::from_hex(0xff0000FF),
+                                            )),
+                                            Some(ui::BorderSide::new(
+                                                5.,
+                                                ui::ColorRgba::from_hex(0xffFFAA00),
+                                            )),
+                                        ))
+                                });
+                                // Top+bottom border over radial gradient
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_radial_gradient(ui::RadialGradient::circle(vec![
+                                            ui::ColorRgba::from_hex(0xffFFFFAA),
+                                            ui::ColorRgba::from_hex(0xff884400),
+                                        ]))
+                                        .border(ui::Border::new(
+                                            Some(ui::BorderSide::new(
+                                                4.,
+                                                ui::ColorRgba::from_hex(0xffFF3300),
+                                            )),
+                                            None,
+                                            Some(ui::BorderSide::new(
+                                                4.,
+                                                ui::ColorRgba::from_hex(0xff0033FF),
+                                            )),
+                                            None,
+                                        ))
+                                });
+                                // Thick border over sweep gradient (rainbow fill, white frame)
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_gradient(ui::Gradient::Sweep(
+                                            ui::SweepGradient::full(vec![
+                                                ui::ColorRgba::from_hex(0xffFF0000),
+                                                ui::ColorRgba::from_hex(0xffFFFF00),
+                                                ui::ColorRgba::from_hex(0xff00FF00),
+                                                ui::ColorRgba::from_hex(0xff00FFFF),
+                                                ui::ColorRgba::from_hex(0xff0000FF),
+                                                ui::ColorRgba::from_hex(0xffFF00FF),
+                                                ui::ColorRgba::from_hex(0xffFF0000),
+                                            ]),
+                                        ))
+                                        .border(ui::Border::all(ui::BorderSide::new(
+                                            6.,
+                                            ui::ColorRgba::from_hex(0xffFFFFFF),
+                                        )))
+                                });
+                                // Semi-transparent border over vertical gradient
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_linear_gradient(ui::LinearGradient::vertical((
+                                            ui::ColorRgba::from_hex(0xff3366FF),
+                                            ui::ColorRgba::from_hex(0xffFF6633),
+                                        )))
+                                        .border(ui::Border::all(ui::BorderSide::new(
+                                            4.,
+                                            ui::ColorRgba::from_hex(0x88000000),
+                                        )))
+                                });
+                                // Semi-transparent white border over horizontal gradient
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_linear_gradient(ui::LinearGradient::horizontal((
+                                            ui::ColorRgba::from_hex(0xff22BBAA),
+                                            ui::ColorRgba::from_hex(0xffAA22BB),
+                                        )))
+                                        .border(ui::Border::all(ui::BorderSide::new(
+                                            5.,
+                                            ui::ColorRgba::from_hex(0x66FFFFFF),
+                                        )))
+                                });
+                                // Per-side varying alpha over radial gradient
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_radial_gradient(ui::RadialGradient::circle(vec![
+                                            ui::ColorRgba::from_hex(0xffFFFFAA),
+                                            ui::ColorRgba::from_hex(0xff884400),
+                                        ]))
+                                        .border(ui::Border::new(
+                                            Some(ui::BorderSide::new(
+                                                4.,
+                                                ui::ColorRgba::from_hex(0xCCFF0000),
+                                            )),
+                                            Some(ui::BorderSide::new(
+                                                4.,
+                                                ui::ColorRgba::from_hex(0x8800FF00),
+                                            )),
+                                            Some(ui::BorderSide::new(
+                                                4.,
+                                                ui::ColorRgba::from_hex(0x440000FF),
+                                            )),
+                                            Some(ui::BorderSide::new(
+                                                4.,
+                                                ui::ColorRgba::from_hex(0x22000000),
+                                            )),
+                                        ))
+                                });
+                                // Semi-transparent border over sweep gradient
+                                decorated_box_row(ctx, |decorated_box| {
+                                    decorated_box
+                                        .add_gradient(ui::Gradient::Sweep(
+                                            ui::SweepGradient::full(vec![
+                                                ui::ColorRgba::from_hex(0xffFF0000),
+                                                ui::ColorRgba::from_hex(0xffFFFF00),
+                                                ui::ColorRgba::from_hex(0xff00FF00),
+                                                ui::ColorRgba::from_hex(0xff00FFFF),
+                                                ui::ColorRgba::from_hex(0xff0000FF),
+                                                ui::ColorRgba::from_hex(0xffFF00FF),
+                                                ui::ColorRgba::from_hex(0xffFF0000),
+                                            ]),
+                                        ))
+                                        .border(ui::Border::all(ui::BorderSide::new(
+                                            6.,
+                                            ui::ColorRgba::from_hex(0x88000000),
+                                        )))
                                 });
                             });
                         });
