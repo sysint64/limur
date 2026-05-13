@@ -1,7 +1,10 @@
 use glam::Mat4;
 use sumi::prelude::*;
 
-use crate::vector_resources::VectorResources;
+use crate::{
+    text::{TextAtlasBindGroup, TextResources},
+    vector_resources::VectorResources,
+};
 
 #[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub struct VectorInstanceId {
@@ -69,7 +72,8 @@ impl VectorInstance {
 
 pub struct VectorRenderer {
     render_pipeline: wgpu::RenderPipeline,
-    bind_group: VectorBindGroup,
+    pub(crate) bind_group: VectorBindGroup,
+    pub(crate) text_atlas_bind_group: TextAtlasBindGroup,
 }
 
 struct VectorBindGroup {
@@ -151,6 +155,7 @@ impl VectorRenderer {
     pub fn new(
         context: &sumi::GraphicsContext,
         resources: &VectorResources,
+        text_resources: &TextResources,
         target_format: wgpu::TextureFormat,
     ) -> Self {
         let shader = context
@@ -161,13 +166,17 @@ impl VectorRenderer {
             });
 
         let bind_group = VectorBindGroup::new(context, resources);
+        let text_atlas_bind_group = TextAtlasBindGroup::new(context, text_resources);
 
         let render_pipeline_layout =
             context
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Vector Render Pipeline Layout"),
-                    bind_group_layouts: &[Some(&bind_group.layout)],
+                    bind_group_layouts: &[
+                        Some(&bind_group.layout),
+                        Some(&text_atlas_bind_group.layout),
+                    ],
                     immediate_size: 0,
                 });
 
@@ -210,11 +219,20 @@ impl VectorRenderer {
         Self {
             render_pipeline,
             bind_group,
+            text_atlas_bind_group,
         }
     }
 
     pub fn rebuild(&mut self, context: &sumi::GraphicsContext, resources: &VectorResources) {
         self.bind_group.rebuild(context, resources);
+    }
+
+    pub fn rebuild_text_atlas(
+        &mut self,
+        context: &sumi::GraphicsContext,
+        resources: &TextResources,
+    ) {
+        self.text_atlas_bind_group.rebuild(context, resources);
     }
 
     #[inline]
@@ -223,5 +241,8 @@ impl VectorRenderer {
         context
             .render_pass()
             .set_bind_group(0, &self.bind_group.bind_group, &[]);
+        context
+            .render_pass()
+            .set_bind_group(1, &self.text_atlas_bind_group.bind_group, &[]);
     }
 }

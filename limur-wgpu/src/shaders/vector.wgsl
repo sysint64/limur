@@ -44,6 +44,9 @@ struct VectorData {
     box_shadow: vec4<f32>,
     gradient_info: vec4<u32>,
     gradient_params: vec4<f32>,
+    uv: vec2<f32>,
+    content_type: u32,
+    _pad3: u32,
 };
 
 struct GradientStop {
@@ -56,6 +59,15 @@ struct GradientStop {
 
 @group(0) @binding(0) var<storage, read> shape_data: array<VectorData>;
 @group(0) @binding(1) var<storage, read> gradient_stops: array<GradientStop>;
+
+@group(1) @binding(0)
+var color_atlas_texture: texture_2d<f32>;
+
+@group(1) @binding(1)
+var mask_atlas_texture: texture_2d<f32>;
+
+@group(1) @binding(2)
+var atlas_sampler: sampler;
 
 @vertex
 fn vs_main(
@@ -105,6 +117,42 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
         case 5u: {
             return oval_inner_shadow(data, p, half_size);
+        }
+        case 6u: {
+            let content_type = data.content_type & 0xffffu;
+            // Pixel offset of this fragment within the glyph rect
+            let pixel_offset = in.clip_position.xy - data.boundary.xy;
+            let atlas_pixel = data.uv + pixel_offset;
+
+            // Debug outline: 1px red border around the glyph quad
+            // let border = 1.0;
+            // let in_border = pixel_offset.x < border || pixel_offset.y < border
+            //     || pixel_offset.x >= data.boundary.z - border
+            //     || pixel_offset.y >= data.boundary.w - border;
+            // if in_border {
+            //     return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+            // }
+
+            switch content_type {
+                case 0u: {
+                    // Color glyph: sample RGBA directly from color atlas
+                    let dim = vec2<f32>(textureDimensions(color_atlas_texture));
+                    let uv = atlas_pixel / dim;
+
+                    return textureSampleLevel(color_atlas_texture, atlas_sampler, uv, 0.0);
+                }
+                case 1u: {
+                    // Mask glyph: use fill_color tinted by single-channel mask
+                    let dim = vec2<f32>(textureDimensions(mask_atlas_texture));
+                    let uv = atlas_pixel / dim;
+                    let mask = textureSampleLevel(mask_atlas_texture, atlas_sampler, uv, 0.0).r;
+
+                    return vec4<f32>(data.fill_color.rgb, data.fill_color.a * mask);
+                }
+                default: {
+                    return vec4<f32>(0.0);
+                }
+            }
         }
         default: {
             return vec4<f32>(0, 0, 0, 0);
@@ -549,6 +597,10 @@ fn rounded_rect_perimeter_pos(p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f3
 
 // Dash border for rounded rects: uses true arc-length perimeter position so dashes
 // have uniform pixel length through corners and there are no phase gaps.
+//
+// ep (edge position) is tracked alongside the color winner/runner-up so that inactive
+// sides (bw = 0, normalized distance = inf) never influence the dash phase. This fixes
+// the angled artifact that appears near corners when only one side has a border.
 fn add_dash_border_rounded_rect(
     data: VectorData,
     p: vec2<f32>,
@@ -559,6 +611,58 @@ fn add_dash_border_rounded_rect(
     dash_offset: f32,
 ) -> vec4<f32> {
     let bw = data.border_widths;
+
+    // Clamp radii (same as sdf_rounded_rect)
+    let size = half_size * 2.0;
+    let s = min(1.0, min(
+        min(size.x / max(data.border_radii.x + data.border_radii.y, 1e-5),
+            size.x / max(data.border_radii.z + data.border_radii.w, 1e-5)),
+        min(size.y / max(data.border_radii.x + data.border_radii.w, 1e-5),
+            size.y / max(data.border_radii.y + data.border_radii.z, 1e-5))
+    ));
+    let r = data.border_radii * s; // [tl, tr, br, bl]
+
+    // Cumulative perimeter offsets
+    let off_top    = 0.0;
+    let off_tr     = off_top    + (size.x - r.x - r.y);
+    let off_right  = off_tr     + PI * 0.5 * r.y;
+    let off_br     = off_right  + (size.y - r.y - r.z);
+    let off_bottom = off_br     + PI * 0.5 * r.z;
+    let off_bl     = off_bottom + (size.x - r.z - r.w);
+    let off_left   = off_bl     + PI * 0.5 * r.w;
+    let off_tl     = off_left   + (size.y - r.w - r.x);
+
+    // Corner centers
+    let cc_tr = vec2( half_size.x - r.y,  half_size.y - r.y);
+    let cc_br = vec2( half_size.x - r.z, -half_size.y + r.z);
+    let cc_bl = vec2(-half_size.x + r.w, -half_size.y + r.w);
+    let cc_tl = vec2(-half_size.x + r.x,  half_size.y - r.x);
+
+    // Perimeter positions per side.
+    // In corner zones both adjacent sides get the same arc value so the ep blend
+    // between winner/runner-up has no effect there (correct regardless of winner).
+    var ep_top    = off_top    + (p.x + half_size.x - r.x);
+    var ep_right  = off_right  + (half_size.y - r.y - p.y);
+    var ep_bottom = off_bottom + (half_size.x - r.z - p.x);
+    var ep_left   = off_left   + (p.y + half_size.y - r.w);
+
+    if r.y > 0.0 && p.x > cc_tr.x && p.y > cc_tr.y {
+        let arc = (PI * 0.5 - atan2((p - cc_tr).y, (p - cc_tr).x)) * r.y;
+        ep_top = off_tr + arc; ep_right = off_tr + arc;
+    }
+    if r.z > 0.0 && p.x > cc_br.x && p.y < cc_br.y {
+        let arc = (-atan2((p - cc_br).y, (p - cc_br).x)) * r.z;
+        ep_right = off_br + arc; ep_bottom = off_br + arc;
+    }
+    if r.w > 0.0 && p.x < cc_bl.x && p.y < cc_bl.y {
+        let d = p - cc_bl;
+        let arc = atan2(-d.x, -d.y) * r.w;
+        ep_bottom = off_bl + arc; ep_left = off_bl + arc;
+    }
+    if r.x > 0.0 && p.x < cc_tl.x && p.y > cc_tl.y {
+        let arc = (PI - atan2((p - cc_tl).y, (p - cc_tl).x)) * r.x;
+        ep_left = off_tl + arc; ep_top = off_tl + arc;
+    }
 
     let d_top    = half_size.y - p.y;
     let d_right  = half_size.x - p.x;
@@ -571,33 +675,20 @@ fn add_dash_border_rounded_rect(
     let n_bottom = select(inf, d_bottom / bw.w, bw.w > 0.0);
     let n_left   = select(inf, d_left   / bw.x, bw.x > 0.0);
 
-    var c0 = data.border_color_top;    var n0 = n_top;
-    var c1 = data.border_color_top;    var n1 = inf;
+    var c0 = data.border_color_top;  var n0 = n_top;  var ep0 = ep_top;
 
-    if n_right < n0  { c1 = c0; n1 = n0; c0 = data.border_color_right;  n0 = n_right;  }
-    else if n_right  < n1 { c1 = data.border_color_right;  n1 = n_right;  }
-    if n_bottom < n0 { c1 = c0; n1 = n0; c0 = data.border_color_bottom; n0 = n_bottom; }
-    else if n_bottom < n1 { c1 = data.border_color_bottom; n1 = n_bottom; }
-    if n_left < n0   { c1 = c0; n1 = n0; c0 = data.border_color_left;   n0 = n_left;   }
-    else if n_left   < n1 { c1 = data.border_color_left;   n1 = n_left;   }
+    if n_right  < n0 { c0=data.border_color_right;  n0=n_right;  ep0=ep_right;  }
+    if n_bottom < n0 { c0=data.border_color_bottom; n0=n_bottom; ep0=ep_bottom; }
+    if n_left   < n0 { c0=data.border_color_left;   n0=n_left;   ep0=ep_left;   }
 
-    let f = n0 - n1;
-    let fw_f = fwidth(f);
-    let blend = smoothstep(-fw_f, 0.0, f) * 0.5;
-    let border_color = mix_premultiplied(c0, c1, blend);
-
-    let edge_pos = rounded_rect_perimeter_pos(p, half_size, data.border_radii);
-
+    // CSS behaviour: each side is independent with a hard 90° cut at corners.
+    // No inter-side blending — the corner square simply belongs to whichever side wins.
     let period = dash_length + gap_length;
-    let phase = fract((edge_pos + dash_offset) / period) * period;
-    // Use length(fwidth(p)) as a stable ~1px estimate instead of fwidth(edge_pos).
-    // fwidth(edge_pos) is unreliable at zone boundaries (corner↔straight) and at the
-    // fract wrap because neighboring fragments may take different branches, giving the
-    // GPU incorrect cross-fragment derivatives.
+    let phase = fract((ep0 + dash_offset) / period) * period;
     let fw = length(fwidth(p));
     let dash_alpha = smoothstep(dash_length + fw, dash_length - fw, phase);
 
-    return vec4<f32>(border_color.rgb, border_color.a * dash_alpha);
+    return vec4<f32>(c0.rgb, c0.a * dash_alpha);
 }
 
 fn sample_gradient(start: u32, count: u32, t: f32, color_space: u32) -> vec4<f32> {

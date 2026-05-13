@@ -1749,9 +1749,12 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "cosmic-text 0.14.2",
+ "etagere",
  "glam",
  "limur",
  "log",
+ "lru",
+ "rustc-hash 2.1.1",
  "sumi",
  "wgpu 29.0.3",
  "winit",

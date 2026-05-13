@@ -1,4 +1,5 @@
 mod blit_renderer;
+mod text;
 mod vector_renderer;
 mod vector_resources;
 
@@ -12,6 +13,7 @@ use limur::{
 };
 use std::sync::Arc;
 use sumi::{InstancingGeometry, RenderInstances};
+use text::TextResources;
 use vector_renderer::{VectorInstance, VectorInstanceId, VectorRenderer};
 use vector_resources::{VectorData, VectorResources};
 use winit::window::Window;
@@ -32,6 +34,7 @@ struct Resources {
     plane: sumi::PlaneResources,
     vector_instances: sumi::BumpInstances<VectorInstanceId, VectorInstance>,
     vector: VectorResources,
+    text: TextResources,
 }
 
 struct Renderers {
@@ -144,7 +147,8 @@ impl WgpuRenderer {
         let mut resources = Resources {
             plane: sumi::PlaneResources::new(&mut context),
             vector: VectorResources::new(),
-            vector_instances: sumi::BumpInstances::new(128),
+            text: TextResources::new(&context, COMPOSITOR_FORMAT),
+            vector_instances: sumi::BumpInstances::new(8096),
         };
 
         let surface_format = context.surface_texture_format;
@@ -180,7 +184,12 @@ impl WgpuRenderer {
                 None,
                 !surface_format.is_srgb(),
             ),
-            vector: VectorRenderer::new(&context, &mut resources.vector, COMPOSITOR_FORMAT),
+            vector: VectorRenderer::new(
+                &context,
+                &resources.vector,
+                &resources.text,
+                COMPOSITOR_FORMAT,
+            ),
         };
 
         Self {
@@ -422,7 +431,28 @@ impl Renderer for WgpuRenderer {
                                 *shape,
                             ));
                         }
-                        RenderCommand::Text { .. } => {}
+                        RenderCommand::Text {
+                            boundary,
+                            x,
+                            y,
+                            text_id,
+                            tint_color,
+                        } => {
+                            let boundary = snap_rect(*boundary);
+
+                            VectorData::text(
+                                &context,
+                                fonts,
+                                text,
+                                &mut self.resources.text,
+                                &mut self.resources.vector,
+                                view,
+                                instances,
+                                *text_id,
+                                boundary,
+                                *tint_color,
+                            );
+                        }
                         RenderCommand::PushClip { rect, shape, .. } => {}
                         RenderCommand::PopClip => {}
                         RenderCommand::Svg { .. } => {}

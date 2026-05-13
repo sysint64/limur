@@ -1,12 +1,28 @@
+use glam::Vec2;
 use limur::{
-    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ColorRgba, Gradient, Rect, render::Fill,
+    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ColorRgb, ColorRgba, Gradient, Rect,
+    View,
+    render::Fill,
+    text::{FontResources, TextId},
+};
+
+use crate::{
+    snap_rect,
+    text::{
+        Bounds, ContentType, GetGlyphImageResult, GlyphBounds, GlyphMetadata, GlyphSystem,
+        prepare_glyph,
+    },
+};
+use crate::{
+    text::TextResources,
+    vector_renderer::{VectorInstance, VectorInstanceId},
 };
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct VectorData {
     // [x, y, w, h]
-    boundary: [f32; 4],
+    pub(crate) boundary: [f32; 4],
 
     // 0: rect
     // 1: oval
@@ -14,33 +30,39 @@ pub struct VectorData {
     // 3: rect inner box shadow
     // 4: oval outer box shadow
     // 5: oval inner box shadow
-    shape_type: u32,
+    // 6: glyph
+    pub(crate) shape_type: u32,
 
-    _pad0: [u32; 3],
+    pub(crate) _pad0: [u32; 3],
 
-    fill_color: [f32; 4],
-    border_color_left: [f32; 4],
-    border_color_top: [f32; 4],
-    border_color_right: [f32; 4],
-    border_color_bottom: [f32; 4],
+    pub(crate) fill_color: [f32; 4],
+    pub(crate) border_color_left: [f32; 4],
+    pub(crate) border_color_top: [f32; 4],
+    pub(crate) border_color_right: [f32; 4],
+    pub(crate) border_color_bottom: [f32; 4],
 
     // [left, top, right, bottom]
-    border_widths: [f32; 4],
+    pub(crate) border_widths: [f32; 4],
 
     // [top left, top right, bottom right, bottom left]
-    border_radii: [f32; 4],
+    pub(crate) border_radii: [f32; 4],
 
     // [offset_x, offset_y, blur, spread]
-    box_shadow: [f32; 4],
+    pub(crate) box_shadow: [f32; 4],
 
     // [type, start_index, stop_count, pad]
     // types: 0: none, 1: linear, 2: radial, 3: sweep
-    gradient_info: [u32; 4],
+    pub(crate) gradient_info: [u32; 4],
 
     // linear: [sx, sy, ex, ey]
     // radial: [cx, cy, r, _]
     // sweep: [cx, cy, start_angle, end_angle]
-    gradient_params: [f32; 4],
+    pub(crate) gradient_params: [f32; 4],
+
+    pub(crate) uv: [f32; 2],
+    pub(crate) content_type_with_srgb: [u16; 2],
+
+    pub(crate) _pad3: u32,
 }
 
 #[repr(C)]
@@ -52,6 +74,7 @@ pub struct GradientStop {
 }
 
 pub(crate) struct VectorResources {
+    pub(crate) swash_cache: cosmic_text::SwashCache,
     pub(crate) data: sumi::GpuVec<VectorData>,
     pub(crate) gradient_stops: sumi::GpuVec<GradientStop>,
 }
@@ -81,6 +104,7 @@ impl VectorResources {
                 128,
                 wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             ),
+            swash_cache: cosmic_text::SwashCache::new(),
         }
     }
 
@@ -154,7 +178,7 @@ impl VectorResources {
 }
 
 #[inline]
-fn to_color(color: ColorRgba) -> [f32; 4] {
+pub(crate) fn to_color(color: ColorRgba) -> [f32; 4] {
     // Compositor textures store linear light (Rgba16Float). Always linearize.
     [
         crate::srgb_to_linear(color.r as f64) as f32,
@@ -221,6 +245,7 @@ impl VectorData {
             box_shadow: [0.0; 4],
             gradient_info: gradient_params.gradient_info,
             gradient_params: gradient_params.gradient_params,
+            ..Default::default()
         }
     }
 
@@ -261,6 +286,7 @@ impl VectorData {
             ],
             gradient_info: [0; 4],
             gradient_params: [0.0; 4],
+            ..Default::default()
         }
     }
 
@@ -301,6 +327,135 @@ impl VectorData {
             ],
             gradient_info: [0; 4],
             gradient_params: [0.0; 4],
+            ..Default::default()
+        }
+    }
+
+    pub(crate) fn text(
+        context: &sumi::GraphicsContext,
+        fonts: &mut FontResources,
+        text: &mut limur::text::TextsResources,
+        text_resrouces: &mut TextResources,
+        vector_resrouces: &mut VectorResources,
+        view: &View,
+        instances: &mut sumi::BumpInstances<VectorInstanceId, VectorInstance>,
+        id: TextId,
+        boundary: Rect<f32>,
+        tint_color: Option<ColorRgba>,
+    ) {
+        let is_run_visible = |run: &cosmic_text::LayoutRun| {
+            let start_y_physical = (boundary.top() + (run.line_top)) as i32;
+            let end_y_physical = start_y_physical + (run.line_height) as i32;
+
+            start_y_physical <= boundary.bottom().round() as i32
+                && boundary.top().round() as i32 <= end_y_physical
+        };
+
+        let buffer = text.get(id).buffer();
+        let layout_runs = buffer
+            .layout_runs()
+            .skip_while(|run| !is_run_visible(run))
+            .take_while(is_run_visible);
+
+        for run in layout_runs {
+            for glyph in run.glyphs.iter() {
+                let physical_glyph = glyph.physical((boundary.left(), boundary.top()), 1.0);
+
+                let color = match glyph.color_opt {
+                    Some(color) => ColorRgba {
+                        r: color.r() as f32 / 255.0,
+                        g: color.g() as f32 / 255.0,
+                        b: color.b() as f32 / 255.0,
+                        a: color.a() as f32 / 255.0,
+                    },
+                    None => tint_color.unwrap_or(ColorRgba::from_hex(0xFF000000)),
+                };
+
+                let mut system = GlyphSystem {
+                    resources: text_resrouces,
+                    cache: &mut vector_resrouces.swash_cache,
+                    font_system: &mut fonts.font_system,
+                };
+
+                let bounds = GlyphBounds {
+                    x: Bounds {
+                        min: boundary.left().max(0.0).round() as i32,
+                        max: boundary
+                            .right()
+                            .min(view.physical_size.width as f32)
+                            .round() as i32,
+                    },
+                    y: Bounds {
+                        min: boundary.top().max(0.0).round() as i32,
+                        max: boundary
+                            .bottom()
+                            .min(view.physical_size.height as f32)
+                            .round() as i32,
+                    },
+                };
+
+                if let Ok(Some(glyph_to_render)) = prepare_glyph(
+                    &context,
+                    &mut system,
+                    GlyphMetadata {
+                        x: physical_glyph.x,
+                        y: physical_glyph.y,
+                        line_y: run.line_y,
+                        color,
+                        metadata: glyph.metadata,
+                        cache_key: physical_glyph.cache_key,
+                        scale_factor: 1.0,
+                    },
+                    bounds,
+                    |system| -> Option<GetGlyphImageResult> {
+                        let image = system
+                            .cache
+                            .get_image_uncached(system.font_system, physical_glyph.cache_key)?;
+
+                        let content_type = match image.content {
+                            cosmic_text::SwashContent::Color => ContentType::Color,
+                            cosmic_text::SwashContent::Mask => ContentType::Mask,
+                            cosmic_text::SwashContent::SubpixelMask => {
+                                // Not implemented yet, but don't panic if this happens.
+                                ContentType::Mask
+                            }
+                        };
+
+                        Some(GetGlyphImageResult {
+                            content_type,
+                            top: image.placement.top as i16,
+                            left: image.placement.left as i16,
+                            width: image.placement.width as u16,
+                            height: image.placement.height as u16,
+                            data: image.data,
+                        })
+                    },
+                ) {
+                    // Build the MVP from the glyph's own boundary so the quad
+                    // covers exactly the glyph rect. clip_position.xy will then
+                    // range over [glyph_x .. glyph_x+w] x [glyph_y .. glyph_y+h],
+                    // matching the boundary stored in glyph_to_render for UV math.
+                    let gx = glyph_to_render.boundary[0];
+                    let gy = glyph_to_render.boundary[1];
+                    let gw = glyph_to_render.boundary[2];
+                    let gh = glyph_to_render.boundary[3];
+
+                    let pos = Vec2::new(
+                        gx,
+                        context.view.size_unscaled.y - gy - gh,
+                    );
+
+                    let mvp = context.view.screen_camera_matrix
+                        * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
+                            position: pos,
+                            scaling: Vec2::new(gw, gh),
+                            rotation: 0.0,
+                        });
+
+                    instances.insert(VectorInstance::new(mvp));
+                    vector_resrouces.data.push(glyph_to_render);
+                }
+            }
         }
     }
 }

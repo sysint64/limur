@@ -12,3 +12,6 @@ winit = { workspace = true }
 wgpu = "29.0.3"
 glam = { workspace = true }
 log = { workspace = true }
+etagere = "0.3.0"
+lru = { version = "0.16.2", default-features = false }
+rustc-hash = "2.1.1"
