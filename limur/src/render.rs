@@ -3,7 +3,16 @@ use std::collections::HashMap;
 use smallvec::SmallVec;
 
 use crate::{
-    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ClipShape, ColorRgb, ColorRgba, DebugBoundary, Gradient, LayoutDirection, PhysicalSize, Rect, Vec2, View, WidgetType, assets::Assets, interaction::InteractionState, io::UserInput, layout::{LayoutItem, WidgetPlacement, layout}, rects_overlap, state::UiState, text::{FontResources, StringId, StringInterner, TextId, TextsResources}, widgets
+    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ClipShape, ColorRgb, ColorRgba,
+    DebugBoundary, Gradient, LayoutDirection, PhysicalSize, Rect, Vec2, View, WidgetType,
+    assets::Assets,
+    interaction::InteractionState,
+    io::UserInput,
+    layout::{LayoutItem, WidgetPlacement, layout},
+    rects_overlap,
+    state::UiState,
+    text::{FontResources, StringId, StringInterner, TextId, TextsResources},
+    widgets,
 };
 
 #[derive(Debug, Default)]
@@ -361,22 +370,21 @@ impl RenderCompositionLayer {
 
 pub fn create_composition_layers(render_commands: &[RenderCommand]) -> Vec<RenderCompositionLayer> {
     let mut layers = vec![RenderCompositionLayer::new()];
-    let mut compositing_rects = vec![];
+    let mut rendered_rects: Vec<Rect<f32>> = vec![];
     let mut clip_stack = vec![];
 
     for command in render_commands {
         match command {
-            RenderCommand::Text { boundary, .. }
-            | RenderCommand::BackdropFilter { boundary, .. } => {
-                if compositing_rects
+            RenderCommand::BackdropFilter { boundary, .. } => {
+                if rendered_rects
                     .iter()
                     .any(|it| rects_overlap(*it, *boundary))
                 {
                     close_composition_layer(&mut layers, &clip_stack);
-                    compositing_rects.clear();
+                    rendered_rects.clear();
                 }
 
-                compositing_rects.push(*boundary);
+                rendered_rects.push(*boundary);
                 layers.last_mut().unwrap().commands.push(command.clone());
             }
             RenderCommand::PushClip { .. } => {
@@ -387,18 +395,12 @@ pub fn create_composition_layers(render_commands: &[RenderCommand]) -> Vec<Rende
                 clip_stack.pop();
                 layers.last_mut().unwrap().commands.push(command.clone());
             }
-            RenderCommand::Shape { boundary, .. }
+            RenderCommand::Text { boundary, .. }
+            | RenderCommand::Shape { boundary, .. }
             | RenderCommand::Svg { boundary, .. }
             | RenderCommand::InnerBoxShadow { boundary, .. }
             | RenderCommand::OuterBoxShadow { boundary, .. } => {
-                if compositing_rects
-                    .iter()
-                    .any(|it| rects_overlap(*it, *boundary))
-                {
-                    close_composition_layer(&mut layers, &clip_stack);
-                    compositing_rects.clear();
-                }
-
+                rendered_rects.push(*boundary);
                 layers.last_mut().unwrap().commands.push(command.clone());
             }
         }
@@ -422,10 +424,6 @@ fn close_composition_layer(layers: &mut Vec<RenderCompositionLayer>, clip_stack:
 
     layers.push(new_layer);
 }
-
-// pub fn close_composition_layer(render_commands: &mut Vec<RenderCommand>, clip_stack: Vec<Rect>) {
-
-// }
 
 pub fn sort_render_commands(
     commands: &mut Vec<RenderCommandUnsorted>,
@@ -807,6 +805,8 @@ pub fn render(
     );
 
     state.render_state.composition_layers = create_composition_layers(&state.render_state.commands);
+
+    println!("Layers: {}", state.render_state.composition_layers.len());
 }
 
 fn render_debug_boundary(ctx: &mut RenderContext, placement: &WidgetPlacement) {
