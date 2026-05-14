@@ -848,12 +848,48 @@ impl Window<ExampleApplication, ()> for MainWindow {
             .build(ctx);
 
         ui::backdrop_filter(ui::ShaderId::FrostedGlass)
+            .param(0, ui::ShaderParam::Float(80.))
+            .param(
+                1,
+                ui::ShaderParam::Color(ui::ColorRgba::from_hex(0x00000000)),
+            )
+            .offset(600., 600.)
+            .width(300.)
+            .height(200.)
+            .clip(ui::Clip::Oval)
+            .build(ctx);
+
+        ui::backdrop_filter(ui::ShaderId::FrostedGlass)
             .param(0, ui::ShaderParam::Float(10.))
             .param(
                 1,
                 ui::ShaderParam::Color(ui::ColorRgba::from_hex(0xFF00FF00).with_opacity(0.5)),
             )
             .offset(400., 300.)
+            .width(300.)
+            .height(200.)
+            .clip(ui::Clip::Oval)
+            .build(ctx);
+
+        ui::backdrop_filter(ui::ShaderId::FrostedGlass)
+            .param(0, ui::ShaderParam::Float(10.))
+            .param(
+                1,
+                ui::ShaderParam::Color(ui::ColorRgba::from_hex(0xFF00FF00).with_opacity(0.5)),
+            )
+            .offset(400., 300.)
+            .width(300.)
+            .height(200.)
+            .clip(ui::Clip::Oval)
+            .build(ctx);
+
+        ui::backdrop_filter(ui::ShaderId::FrostedGlass)
+            .param(0, ui::ShaderParam::Float(15.))
+            .param(
+                1,
+                ui::ShaderParam::Color(ui::ColorRgba::from_hex(0xFFFFFFFF).with_opacity(0.5)),
+            )
+            .offset(700., 700.)
             .width(300.)
             .height(200.)
             .clip(ui::Clip::Oval)

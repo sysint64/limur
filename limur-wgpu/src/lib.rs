@@ -1,5 +1,6 @@
 mod backdrop_filter;
 mod blit_renderer;
+mod blur_renderer;
 mod text;
 mod vector_renderer;
 mod vector_resources;
@@ -9,6 +10,10 @@ use backdrop_filter::{
     BackdropFilterResources,
 };
 use blit_renderer::BlitRenderer;
+use blur_renderer::{
+    BlurBackdropGroup, BlurBackdropInstance, BlurBackdropInstanceId, BlurBackdropRenderer,
+    BlurBackdropResources,
+};
 use glam::Vec2;
 use limur::{
     ClipShape, ColorRgba, PhysicalSize, Rect, ShaderParam, View,
@@ -44,9 +49,11 @@ pub struct WgpuRenderer {
 struct Resources {
     backdrop_filter_instances:
         sumi::BumpInstances<BackdropFilterInstanceId, BackdropFilterInstance>,
+    blur_backdrop_instances: sumi::BumpInstances<BlurBackdropInstanceId, BlurBackdropInstance>,
     vector: VectorResources,
     text: TextResources,
     backdrop_filter: BackdropFilterResources,
+    blur_backdrop: BlurBackdropResources,
     globals_buffer: wgpu::Buffer,
     /// Index into shape_data of the first shape in the current vector batch.
     vector_batch_start: u32,
@@ -57,12 +64,14 @@ struct Renderers {
     surface_blit: BlitRenderer,
     vector: VectorRenderer,
     backdrop_filter: BackdropFilterRenderer,
+    blur_backdrop: BlurBackdropRenderer,
 }
 
 #[derive(Copy, Clone, PartialEq)]
 enum Pipeline {
     Vector,
     BackdropFilter,
+    BlurBackdrop,
 }
 
 struct Compositor {
@@ -177,7 +186,9 @@ impl WgpuRenderer {
             vector: VectorResources::new(),
             text: TextResources::new(&context, COMPOSITOR_FORMAT),
             backdrop_filter_instances: sumi::BumpInstances::new(8),
+            blur_backdrop_instances: sumi::BumpInstances::new(8),
             backdrop_filter: BackdropFilterResources::new(&context),
+            blur_backdrop: BlurBackdropResources::new(&context),
             globals_buffer,
             vector_batch_start: 0,
         };
@@ -223,6 +234,7 @@ impl WgpuRenderer {
                 COMPOSITOR_FORMAT,
             ),
             backdrop_filter: BackdropFilterRenderer::new(&context, COMPOSITOR_FORMAT),
+            blur_backdrop: BlurBackdropRenderer::new(&context, COMPOSITOR_FORMAT),
         };
 
         Self {
@@ -253,6 +265,7 @@ fn bind_pipeline(
     context: &sumi::GraphicsContext,
     render_pass: &mut wgpu::RenderPass,
     backdrop_filter_bind_group: &BackdropFilterGroup,
+    blur_backdrop_bind_group: &BlurBackdropGroup,
     pipeline: Pipeline,
 ) {
     match pipeline {
@@ -263,6 +276,11 @@ fn bind_pipeline(
             renderers
                 .backdrop_filter
                 .bind(context, render_pass, backdrop_filter_bind_group);
+        }
+        Pipeline::BlurBackdrop => {
+            renderers
+                .blur_backdrop
+                .bind(context, render_pass, blur_backdrop_bind_group);
         }
     }
 }
@@ -300,6 +318,16 @@ fn close_pipeline(
                 render_pass.draw(0..4, range);
             }
         }
+        Pipeline::BlurBackdrop => {
+            resources.blur_backdrop_instances.upload_all(&context);
+            resources
+                .blur_backdrop_instances
+                .bind(0, &context, render_pass);
+
+            for range in resources.blur_backdrop_instances.drain(&context) {
+                render_pass.draw(0..4, range);
+            }
+        }
     }
 }
 
@@ -309,6 +337,7 @@ fn maybe_switch_pipeline(
     context: &sumi::GraphicsContext,
     render_pass: &mut wgpu::RenderPass,
     backdrop_filter_bind_group: &BackdropFilterGroup,
+    blur_backdrop_bind_group: &BlurBackdropGroup,
     current_pipeline: Pipeline,
     new_pipeline: Pipeline,
 ) -> Pipeline {
@@ -319,6 +348,7 @@ fn maybe_switch_pipeline(
             context,
             render_pass,
             backdrop_filter_bind_group,
+            blur_backdrop_bind_group,
             new_pipeline,
         );
     }
@@ -397,6 +427,15 @@ impl Renderer for WgpuRenderer {
         let mut clip_stack: Vec<(Rect<f32>, ClipShape)> = Vec::new();
         let mut clip_depth: u32 = 0;
 
+        // Write current screen size into the shared uniform before rendering.
+        self.gapi.queue.write_buffer(
+            &self.resources.globals_buffer,
+            0,
+            bytemuck::bytes_of(&Globals {
+                screen_size: [width as f32, height as f32],
+            }),
+        );
+
         for layer in composition_layers {
             let mut encoder =
                 self.gapi
@@ -426,18 +465,16 @@ impl Renderer for WgpuRenderer {
 
                 let context = self.gapi.graphics_context(4);
 
-                // Write current screen size into the shared uniform before rendering.
-                context.queue.write_buffer(
-                    &self.resources.globals_buffer,
-                    0,
-                    bytemuck::bytes_of(&Globals {
-                        screen_size: [width as f32, height as f32],
-                    }),
-                );
-
                 let backdrop_filter_bind_group = BackdropFilterGroup::new(
                     &context,
                     &self.resources.backdrop_filter,
+                    &compositor.composite_view,
+                    &self.resources.globals_buffer,
+                );
+
+                let blur_backdrop_bind_group = BlurBackdropGroup::new(
+                    &context,
+                    &self.resources.blur_backdrop.sampler,
                     &compositor.composite_view,
                     &self.resources.globals_buffer,
                 );
@@ -448,7 +485,7 @@ impl Renderer for WgpuRenderer {
 
                 let mut current_pipeline =
                     if let Some(RenderCommand::BackdropFilter { .. }) = layer.commands.first() {
-                        Pipeline::BackdropFilter
+                        Pipeline::BlurBackdrop
                     } else {
                         Pipeline::Vector
                     };
@@ -458,6 +495,7 @@ impl Renderer for WgpuRenderer {
                     &context,
                     &mut render_pass,
                     &backdrop_filter_bind_group,
+                    &blur_backdrop_bind_group,
                     current_pipeline,
                 );
 
@@ -470,8 +508,9 @@ impl Renderer for WgpuRenderer {
                                 &context,
                                 &mut render_pass,
                                 &backdrop_filter_bind_group,
+                                &blur_backdrop_bind_group,
                                 current_pipeline,
-                                Pipeline::BackdropFilter,
+                                Pipeline::BlurBackdrop,
                             );
                         }
                         _ => {
@@ -481,6 +520,7 @@ impl Renderer for WgpuRenderer {
                                 &context,
                                 &mut render_pass,
                                 &backdrop_filter_bind_group,
+                                &blur_backdrop_bind_group,
                                 current_pipeline,
                                 Pipeline::Vector,
                             );
@@ -561,22 +601,32 @@ impl Renderer for WgpuRenderer {
                         RenderCommand::PopClip => {}
                         RenderCommand::Svg { .. } => {}
                         RenderCommand::BackdropFilter { boundary, shader } => {
+                            let mut blur_radius = 0.0f32;
                             let mut tint = [0.0f32; 4];
 
                             for (id, param) in &shader.params {
-                                if *id == 1 {
-                                    if let ShaderParam::Color(c) = param {
-                                        tint = [c.r * c.a, c.g * c.a, c.b * c.a, c.a];
+                                match id {
+                                    0 => {
+                                        if let ShaderParam::Float(r) = param {
+                                            blur_radius = *r;
+                                        }
                                     }
+                                    1 => {
+                                        if let ShaderParam::Color(c) = param {
+                                            tint = [c.r * c.a, c.g * c.a, c.b * c.a, c.a];
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
 
-                            self.resources
-                                .backdrop_filter_instances
-                                .insert(BackdropFilterInstance::new(
+                            self.resources.blur_backdrop_instances.insert(
+                                BlurBackdropInstance::new(
                                     [boundary.x, boundary.y, boundary.width, boundary.height],
                                     tint,
-                                ));
+                                    blur_radius,
+                                ),
+                            );
                         }
                     }
                 }
