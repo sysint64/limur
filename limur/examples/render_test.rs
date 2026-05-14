@@ -895,6 +895,44 @@ impl Window<ExampleApplication, ()> for MainWindow {
         //     .clip(ui::Clip::Oval)
         //     .build(ctx);
 
+        // Liquid glass — default refraction params, slight blur, subtle tint
+        ui::backdrop_filter(ui::ShaderId::LiquidGlass)
+            .param(0, ui::ShaderParam::Float(12.))   // blur_radius
+            .param(1, ui::ShaderParam::Color(        // tint
+                ui::ColorRgba::from_hex(0xFFFFFFFF).with_opacity(0.08),
+            ))
+            .param(2, ui::ShaderParam::Float(3.0))   // power_factor (squircle)
+            .param(3, ui::ShaderParam::Float(1.0))   // f_power
+            .param(4, ui::ShaderParam::Float(0.06))  // noise
+            .param(5, ui::ShaderParam::Float(0.25))  // glow_weight
+            .param(6, ui::ShaderParam::Float(0.7))   // a
+            .param(7, ui::ShaderParam::Float(2.3))   // b
+            .param(8, ui::ShaderParam::Float(5.2))   // c
+            .param(9, ui::ShaderParam::Float(6.9))   // d
+            .offset(970., 256.)
+            .width(280.)
+            .height(200.)
+            .build(ctx);
+
+        // Liquid glass — stronger refraction, no blur
+        ui::backdrop_filter(ui::ShaderId::LiquidGlass)
+            .param(0, ui::ShaderParam::Float(0.))    // no blur
+            .param(1, ui::ShaderParam::Color(        // tint
+                ui::ColorRgba::from_hex(0xFFFFFFFF).with_opacity(0.12),
+            ))
+            .param(2, ui::ShaderParam::Float(4.0))   // power_factor (more square)
+            .param(3, ui::ShaderParam::Float(2.0))   // f_power (stronger refraction)
+            .param(4, ui::ShaderParam::Float(0.04))  // noise
+            .param(5, ui::ShaderParam::Float(0.4))   // glow_weight
+            .param(6, ui::ShaderParam::Float(0.5))   // a
+            .param(7, ui::ShaderParam::Float(3.0))   // b
+            .param(8, ui::ShaderParam::Float(5.0))   // c
+            .param(9, ui::ShaderParam::Float(8.0))   // d
+            .offset(970., 490.)
+            .width(280.)
+            .height(200.)
+            .build(ctx);
+
         ui::profiler_overlay(ctx);
     }
 }

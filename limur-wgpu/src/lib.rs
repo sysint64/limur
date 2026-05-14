@@ -1,11 +1,13 @@
 mod blit_renderer;
 mod blur_renderer;
+mod liquid_glass_renderer;
 mod text;
 mod vector_renderer;
 mod vector_resources;
 
 use blit_renderer::BlitRenderer;
 use blur_renderer::{BlurInstance, BlurRenderer};
+use liquid_glass_renderer::{LiquidGlassInstance, LiquidGlassRenderer};
 use glam::Vec2;
 use limur::{
     ColorRgba, PhysicalSize, Rect, ShaderId, ShaderParam, View,
@@ -50,6 +52,7 @@ struct Renderers {
     surface_blit: BlitRenderer,
     vector: VectorRenderer,
     blur: BlurRenderer,
+    liquid_glass: LiquidGlassRenderer,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -213,6 +216,7 @@ impl WgpuRenderer {
                 COMPOSITOR_FORMAT,
             ),
             blur: BlurRenderer::new(context.device, COMPOSITOR_FORMAT),
+            liquid_glass: LiquidGlassRenderer::new(&context, COMPOSITOR_FORMAT),
         };
 
         Self {
@@ -420,6 +424,16 @@ impl Renderer for WgpuRenderer {
                 }
             }
 
+            // Create liquid glass bind group after blur pre-pass so composite is up-to-date.
+            let liquid_glass_bg = {
+                let compositor = self.compositor.as_ref().unwrap();
+                self.renderers.liquid_glass.create_bind_group(
+                    &self.gapi.device,
+                    &compositor.composite_view,
+                    &self.resources.globals_buffer,
+                )
+            };
+
             let mut encoder =
                 self.gapi
                     .device
@@ -549,7 +563,68 @@ impl Renderer for WgpuRenderer {
                         RenderCommand::PushClip { .. } => {}
                         RenderCommand::PopClip => {}
                         RenderCommand::Svg { .. } => {}
-                        RenderCommand::BackdropFilter { .. } => {}
+                        RenderCommand::BackdropFilter { boundary, shader } => {
+                            if shader.id == ShaderId::LiquidGlass {
+                                close_pipeline(
+                                    &mut self.resources,
+                                    &mut self.renderers,
+                                    &context,
+                                    &mut render_pass,
+                                    current_pipeline,
+                                );
+
+                                let mut power_factor = 3.0f32;
+                                let mut f_power      = 1.0f32;
+                                let mut noise        = 0.06f32;
+                                let mut glow_weight  = 0.25f32;
+                                let mut a = 0.7f32;
+                                let mut b = 2.3f32;
+                                let mut c = 5.2f32;
+                                let mut d = 6.9f32;
+                                let mut tint = [0.0f32; 4];
+
+                                for (id, param) in &shader.params {
+                                    match id {
+                                        1 => {
+                                            if let ShaderParam::Color(col) = param {
+                                                tint = [col.r * col.a, col.g * col.a, col.b * col.a, col.a];
+                                            }
+                                        }
+                                        2 => { if let ShaderParam::Float(v) = param { power_factor = *v; } }
+                                        3 => { if let ShaderParam::Float(v) = param { f_power = *v; } }
+                                        4 => { if let ShaderParam::Float(v) = param { noise = *v; } }
+                                        5 => { if let ShaderParam::Float(v) = param { glow_weight = *v; } }
+                                        6 => { if let ShaderParam::Float(v) = param { a = *v; } }
+                                        7 => { if let ShaderParam::Float(v) = param { b = *v; } }
+                                        8 => { if let ShaderParam::Float(v) = param { c = *v; } }
+                                        9 => { if let ShaderParam::Float(v) = param { d = *v; } }
+                                        _ => {}
+                                    }
+                                }
+
+                                let instance = LiquidGlassInstance::new(
+                                    [boundary.x, boundary.y, boundary.width, boundary.height],
+                                    power_factor, f_power, noise, glow_weight,
+                                    a, b, c, d,
+                                    tint,
+                                );
+
+                                self.renderers.liquid_glass.draw(
+                                    &self.gapi.device,
+                                    &mut render_pass,
+                                    &liquid_glass_bg,
+                                    &instance,
+                                );
+
+                                bind_pipeline(
+                                    &self.renderers,
+                                    &context,
+                                    &mut render_pass,
+                                    Pipeline::Vector,
+                                );
+                                current_pipeline = Pipeline::Vector;
+                            }
+                        }
                     }
                 }
 

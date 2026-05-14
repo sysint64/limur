@@ -69,6 +69,7 @@ impl RenderContext<'_, '_> {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ShaderId {
     FrostedGlass,
+    LiquidGlass,
 }
 
 #[derive(Debug, Clone)]
