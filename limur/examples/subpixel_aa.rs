@@ -277,7 +277,6 @@ fn hover_button(ctx: &mut ui::BuildContext, label: &str) {
                         offset: ui::Vec2::new(0., 5.),
                         blur_radius: 0.,
                         spread_radius: 5.,
-                        blur_style: ui::BoxShadowBlurStyle::Outer,
                     })
                     .build(ctx),
             )

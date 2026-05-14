@@ -139,8 +139,9 @@ impl Window<ExampleApplication, ()> for MainWindow {
             .scroll_direction(ui::ScrollDirection::Both)
             .fill_max_size()
             .build(ctx, |ctx| {
+                ui::layer().fill_max_size().build(ctx, |ctx| {
                 ui::vstack()
-                    // .fill_max_size()
+                    .fill_max_width()
                     .spacing(24.)
                     .padding(ui::EdgeInsets::all(32.))
                     .build(ctx, |ctx| {
@@ -391,23 +392,23 @@ impl Window<ExampleApplication, ()> for MainWindow {
                             });
 
                             ui::vstack().spacing(12.).build(ctx, |ctx| {
-                                ui::hstack().spacing(0.).fill_max_width().build(ctx, |ctx| {
-                                    let start: ui::ColorOkLab =
-                                        ui::ColorRgb::from_hex(0xFF0000).into();
-                                    let end: ui::ColorOkLab =
-                                        ui::ColorRgb::from_hex(0x00FFFF).into();
+                                    ui::hstack().spacing(0.).fill_max_width().build(ctx, |ctx| {
+                                        let start: ui::ColorOkLab =
+                                            ui::ColorRgb::from_hex(0xFF0000).into();
+                                        let end: ui::ColorOkLab =
+                                            ui::ColorRgb::from_hex(0x00FFFF).into();
 
-                                    for i in 0..100 {
-                                        let t = i as f64 / 100.0;
-                                        let color = start.lerp(end, t);
+                                        for i in 0..100 {
+                                            let t = i as f64 / 100.0;
+                                            let color = start.lerp(end, t);
 
-                                        ui::decorated_box()
-                                            .fill_max_width()
-                                            .height(48.)
-                                            .color(color)
-                                            .build(ctx)
-                                    }
-                                });
+                                            ui::decorated_box()
+                                                .fill_max_width()
+                                                .height(48.)
+                                                .color(color)
+                                                .build(ctx)
+                                        }
+                                    });
 
                                 // sRGB grey trap: red -> cyan are exact complements,
                                 // midpoint = (0.5, 0.5, 0.5) = pure grey in sRGB space
@@ -765,6 +766,13 @@ impl Window<ExampleApplication, ()> for MainWindow {
                             });
                         });
 
+                        section_label(ctx, "Text");
+
+                        ui::text("Hello world! 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z")
+                            .color(ui::ColorRgb::from_hex(0x000000))
+                            .font_size(24.0)
+                            .build(ctx);
+
                         section_label(
                             ctx,
                             "Text size comparison (subpixel AA matters most at small sizes)",
@@ -802,8 +810,19 @@ impl Window<ExampleApplication, ()> for MainWindow {
                                 hover_button(ctx, label);
                             }
                         });
+
+                        section_label(ctx, "Long Text");
+
+                        ui::text(include_str!("assets/latin_text.txt"))
+                            .fill_max_width()
+                            .color(ui::ColorRgb::from_hex(0x000000))
+                            .font_size(24.0)
+                            .build(ctx);
+
+                        // ui::decorated_box().color(ui::ColorRgb::from_hex(0x000000)).fill_max_width().height(48.).build(ctx);
                     });
             });
+        });
 
         if response.overflow_x {
             ctx.provide(response.clone(), |ctx| {
@@ -817,37 +836,37 @@ impl Window<ExampleApplication, ()> for MainWindow {
             });
         }
 
-        // ui::backdrop_filter(ui::ShaderId::FrostedGlass)
-        //     .param(0, ui::ShaderParam::Float(10.))
-        //     .param(
-        //         1,
-        //         ui::ShaderParam::Color(ui::ColorRgba::from_hex(0xFF0000FF).with_opacity(0.2)),
-        //     )
-        //     .offset(256., 256.)
-        //     .width(300.)
-        //     .height(200.)
-        //     .build(ctx);
+        ui::backdrop_filter(ui::ShaderId::FrostedGlass)
+            .param(0, ui::ShaderParam::Float(10.))
+            .param(
+                1,
+                ui::ShaderParam::Color(ui::ColorRgba::from_hex(0xFF0000FF).with_opacity(0.2)),
+            )
+            .offset(256., 256.)
+            .width(300.)
+            .height(200.)
+            .build(ctx);
 
-        // ui::backdrop_filter(ui::ShaderId::FrostedGlass)
-        //     .param(0, ui::ShaderParam::Float(10.))
-        //     .param(
-        //         1,
-        //         ui::ShaderParam::Color(ui::ColorRgba::from_hex(0xFF00FF00).with_opacity(0.5)),
-        //     )
-        //     .offset(400., 300.)
-        //     .width(300.)
-        //     .height(200.)
-        //     .clip(ui::Clip::Oval)
-        //     .build(ctx);
+        ui::backdrop_filter(ui::ShaderId::FrostedGlass)
+            .param(0, ui::ShaderParam::Float(10.))
+            .param(
+                1,
+                ui::ShaderParam::Color(ui::ColorRgba::from_hex(0xFF00FF00).with_opacity(0.5)),
+            )
+            .offset(400., 300.)
+            .width(300.)
+            .height(200.)
+            .clip(ui::Clip::Oval)
+            .build(ctx);
 
-        // ui::profiler_overlay(ctx);
+        ui::profiler_overlay(ctx);
     }
 }
 
 fn section_label(ctx: &mut ui::BuildContext, label: &str) {
     ui::text(label)
         .font_size(14.)
-        .color(ui::ColorRgba::from_hex(0x888888FF))
+        .color(ui::ColorRgba::from_hex(0xFF000000))
         .build(ctx);
 }
 

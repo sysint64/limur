@@ -1,252 +1,231 @@
+use glam::Mat4;
 use std::mem;
-use wgpu::util::DeviceExt;
 
-// ── Blit renderer ─────────────────────────────────────────────────────────────
-// Simple full-screen triangle blit: src_texture → render target.
-// Blend mode is set at construction time — create two instances for:
-//   * layer → composite  (premultiplied alpha-over)
-//   * composite → surface (replace / no blend)
-
-pub struct BlitRenderer {
-    pipeline: wgpu::RenderPipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
-    sampler: wgpu::Sampler,
+#[repr(C)]
+#[derive(Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct BackdropFilterInstance {
+    mvp_matrix: [[f32; 4]; 4], // locations 2-5, same layout as VectorInstance
+    tint: [f32; 4],            // location 6, premultiplied RGBA
 }
 
-impl BlitRenderer {
-    pub fn new(
-        device: &wgpu::Device,
-        target_format: wgpu::TextureFormat,
-        blend: Option<wgpu::BlendState>,
-    ) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Blit Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/blit.wgsl").into()),
-        });
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
+pub struct BackdropFilterInstanceId {
+    value: u32,
+}
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Blit Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Blit Pipeline Layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Blit Pipeline"),
-            layout: Some(&pipeline_layout),
-            cache: None,
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
-                    blend,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                cull_mode: None,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-        });
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Blit Sampler"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
-
+impl sumi::SlotId for BackdropFilterInstanceId {
+    fn from_index(index: usize) -> Self {
         Self {
-            pipeline,
-            bind_group_layout,
-            sampler,
+            value: index as u32,
         }
     }
 
-    pub fn blit(
-        &self,
-        device: &wgpu::Device,
-        encoder: &mut wgpu::CommandEncoder,
-        src_view: &wgpu::TextureView,
-        dst_view: &wgpu::TextureView,
-    ) {
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Blit Bind Group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(src_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-            ],
-        });
-
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Blit Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: dst_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-                depth_slice: None,
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.draw(0..3, 0..1);
+    fn index(&self) -> usize {
+        self.value as usize
     }
 }
 
-// ── Blur instance (48 bytes, 3 attributes at locations 0–2) ──────────────────
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct BlurInstance {
-    rect: [f32; 4],       // loc 0: x, y, w, h in pixels
-    tex_params: [f32; 4], // loc 1: [tex_w, tex_h, blur_radius, 0]
-    tint: [f32; 4],       // loc 2: RGBA premultiplied
-}
-
-impl BlurInstance {
-    pub fn new(rect: [f32; 4], tex_w: f32, tex_h: f32, blur_radius: f32, tint: [f32; 4]) -> Self {
+impl BackdropFilterInstance {
+    pub fn new(mvp: Mat4, tint: [f32; 4]) -> Self {
         Self {
-            rect,
-            tex_params: [tex_w, tex_h, blur_radius, 0.0],
+            mvp_matrix: mvp.to_cols_array_2d(),
             tint,
         }
     }
 
-    fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: 16,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: 32,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
+                // mvp_matrix col 0
+                wgpu::VertexAttribute { offset: 0,  shader_location: 2, format: wgpu::VertexFormat::Float32x4 },
+                // mvp_matrix col 1
+                wgpu::VertexAttribute { offset: 16, shader_location: 3, format: wgpu::VertexFormat::Float32x4 },
+                // mvp_matrix col 2
+                wgpu::VertexAttribute { offset: 32, shader_location: 4, format: wgpu::VertexFormat::Float32x4 },
+                // mvp_matrix col 3
+                wgpu::VertexAttribute { offset: 48, shader_location: 5, format: wgpu::VertexFormat::Float32x4 },
+                // tint
+                wgpu::VertexAttribute { offset: 64, shader_location: 6, format: wgpu::VertexFormat::Float32x4 },
             ],
         }
     }
 }
 
-// ── Backdrop filter renderer ──────────────────────────────────────────────────
-
 pub struct BackdropFilterRenderer {
-    h_pipeline: wgpu::RenderPipeline,
-    v_pipeline: wgpu::RenderPipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
-    sampler: wgpu::Sampler,
+    pipeline: wgpu::RenderPipeline,
+}
+
+pub struct BackdropFilterGroup {
+    layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
+}
+
+pub struct BackdropFilterResources {
+    pub(crate) sampler: wgpu::Sampler,
+}
+
+impl BackdropFilterResources {
+    pub fn new(context: &sumi::GraphicsContext) -> Self {
+        let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Backdrop Filter Sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            ..Default::default()
+        });
+
+        Self { sampler }
+    }
+}
+
+impl BackdropFilterGroup {
+    pub fn new(
+        context: &sumi::GraphicsContext,
+        resources: &BackdropFilterResources,
+        composite_view: &wgpu::TextureView,
+    ) -> Self {
+        let layout = context
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Backdrop Filter Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let bind_group = Self::create_bind_group(context, &layout, resources, composite_view);
+
+        Self { layout, bind_group }
+    }
+
+    fn create_bind_group(
+        context: &sumi::GraphicsContext,
+        layout: &wgpu::BindGroupLayout,
+        resources: &BackdropFilterResources,
+        composite_view: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Backdrop Filter Bind Group"),
+                layout: layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(composite_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&resources.sampler),
+                    },
+                ],
+            })
+    }
+
+    fn rebuild(
+        &mut self,
+        context: &sumi::GraphicsContext,
+        resources: &BackdropFilterResources,
+        composite_view: &wgpu::TextureView,
+    ) {
+        self.bind_group = Self::create_bind_group(context, &self.layout, resources, composite_view);
+    }
 }
 
 impl BackdropFilterRenderer {
-    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Blur Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/blur.wgsl").into()),
-        });
+    pub fn new(context: &sumi::GraphicsContext, format: wgpu::TextureFormat) -> Self {
+        let shader = context
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Backdrop Filter Shader"),
+                source: wgpu::ShaderSource::Wgsl(
+                    include_str!("shaders/backdrop_filter.wgsl").into(),
+                ),
+            });
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Blur Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+        let bind_group_layout =
+            context
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("Backdrop Filter Bind Group Layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Blur Pipeline Layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
+        let pipeline_layout =
+            context
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Backdrop Filter Pipeline Layout"),
+                    bind_group_layouts: &[Some(&bind_group_layout)],
+                    immediate_size: 0,
+                });
 
-        let make_pipeline = |label, entry_point| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
+        let pipeline = context
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Backdrop Filter Pipeline"),
                 layout: Some(&pipeline_layout),
                 cache: None,
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
-                    buffers: &[BlurInstance::desc()],
+                    buffers: &[sumi::TexturedVertex::desc(), BackdropFilterInstance::desc()],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some(entry_point),
+                    entry_point: Some("fs_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format,
-                        blend: None, // overwrite destination directly
+                        // Premultiplied alpha-over into the layer texture.
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                 }),
@@ -257,135 +236,57 @@ impl BackdropFilterRenderer {
                     ..Default::default()
                 },
                 depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
+                multisample: context.default_multisample(),
                 multiview_mask: None,
-            })
-        };
+            });
 
-        let h_pipeline = make_pipeline("Blur H Pipeline", "fs_horizontal");
-        let v_pipeline = make_pipeline("Blur V Pipeline", "fs_vertical");
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Blur Sampler"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            ..Default::default()
-        });
-
-        Self {
-            h_pipeline,
-            v_pipeline,
-            bind_group_layout,
-            sampler,
-        }
+        Self { pipeline }
     }
 
-    /// Two-pass separable Gaussian blur over the rect region.
-    ///
-    /// - H-pass: `composite` → `ping`   (reads full composite, writes rect region)
-    /// - V-pass: `ping` → `composite`   (reads ping rect region, writes composite)
-    ///
-    /// `ping` is cleared to transparent before the H-pass so the V-pass can safely
-    /// clamp to [0,1] without sampling garbage outside the rect region.
-    pub fn apply(
+    // /// Creates a bind group that samples `composite_view` as the backdrop.
+    // /// Call this before starting the render pass so the texture view lifetime is satisfied.
+    // pub fn make_bind_group(
+    //     &self,
+    //     device: &wgpu::Device,
+    //     composite_view: &wgpu::TextureView,
+    // ) -> wgpu::BindGroup {
+    //     device.create_bind_group(&wgpu::BindGroupDescriptor {
+    //         label: Some("Backdrop Filter Bind Group"),
+    //         layout: &self.bind_group_layout,
+    //         entries: &[
+    //             wgpu::BindGroupEntry {
+    //                 binding: 0,
+    //                 resource: wgpu::BindingResource::TextureView(composite_view),
+    //             },
+    //             wgpu::BindGroupEntry {
+    //                 binding: 1,
+    //                 resource: wgpu::BindingResource::Sampler(&self.sampler),
+    //             },
+    //         ],
+    //     })
+    // }
+
+    // /// Draws one backdrop filter rect within an already-open render pass.
+    // /// The pipeline is switched here; the caller should rebind the previous pipeline afterwards.
+    // pub fn apply_in_pass<'a>(
+    //     &'a self,
+    //     pass: &mut wgpu::RenderPass<'a>,
+    //     bind_group: &'a wgpu::BindGroup,
+    //     instance_buf: &'a wgpu::Buffer,
+    // ) {
+    //     pass.set_pipeline(&self.pipeline);
+    //     pass.set_bind_group(0, bind_group, &[]);
+    //     pass.set_vertex_buffer(0, instance_buf.slice(..));
+    //     pass.draw(0..4, 0..1);
+    // }
+
+    pub fn bind(
         &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        composite_view: &wgpu::TextureView,
-        ping_view: &wgpu::TextureView,
-        instance: &BlurInstance,
+        context: &sumi::GraphicsContext<'_>,
+        render_pass: &mut wgpu::RenderPass,
+        bind_group: &BackdropFilterGroup,
     ) {
-        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Blur Instance Buffer"),
-            contents: bytemuck::bytes_of(instance),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        // ── H-pass: composite → ping ─────────────────────────────────────────
-        {
-            let bind_group = self.make_bind_group(device, composite_view);
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Blur H Encoder"),
-            });
-            {
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Blur H Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: ping_view,
-                        resolve_target: None,
-                        // Clear ping so outside-rect pixels are transparent,
-                        // making V-pass sampling safe everywhere.
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                            store: wgpu::StoreOp::Store,
-                        },
-                        depth_slice: None,
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
-                pass.set_pipeline(&self.h_pipeline);
-                pass.set_bind_group(0, &bind_group, &[]);
-                pass.set_vertex_buffer(0, instance_buf.slice(..));
-                pass.draw(0..4, 0..1);
-            }
-            queue.submit([encoder.finish()]);
-        }
-
-        // ── V-pass: ping → composite ─────────────────────────────────────────
-        {
-            let bind_group = self.make_bind_group(device, ping_view);
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Blur V Encoder"),
-            });
-            {
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Blur V Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: composite_view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                        depth_slice: None,
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
-                pass.set_pipeline(&self.v_pipeline);
-                pass.set_bind_group(0, &bind_group, &[]);
-                pass.set_vertex_buffer(0, instance_buf.slice(..));
-                pass.draw(0..4, 0..1);
-            }
-            queue.submit([encoder.finish()]);
-        }
-    }
-
-    fn make_bind_group(
-        &self,
-        device: &wgpu::Device,
-        src_view: &wgpu::TextureView,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Blur Bind Group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(src_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-            ],
-        })
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &bind_group.bind_group, &[]);
     }
 }

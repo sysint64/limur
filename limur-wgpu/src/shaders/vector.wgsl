@@ -296,8 +296,8 @@ fn fill(data: VectorData, p: vec2<f32>, half_size: vec2<f32>, alpha: f32, inner_
 
     let inner_aa = 0.5 * fwidth(inner_dist);
     let border_fill_factor = 1.0 - smoothstep(-inner_aa, inner_aa, inner_dist);
-    // let border = add_border(data, p, half_size, inner_dist);
-    let border = add_dash_border_rounded_rect(data, p, half_size, inner_dist, 10.0, 5.0, 0.0);
+    let border = add_border(data, p, half_size, inner_dist);
+    // let border = add_dash_border_rounded_rect(data, p, half_size, inner_dist, 10.0, 5.0, 0.0);
 
     if gradient_type == 0u {
         let result_color = mix_premultiplied(border, fill_color, border_fill_factor);

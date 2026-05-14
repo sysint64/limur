@@ -7,6 +7,7 @@ use limur_desktop::{
     window_manager::{WindowDescriptor, WindowManager},
 };
 use limur_vello::VelloRenderer;
+use limur_wgpu::WgpuRenderer;
 use pollster::FutureExt;
 
 struct TodoApplication;
@@ -31,20 +32,22 @@ impl ApplicationDelegate<()> for TodoApplication {
                 width: 800,
                 height: 600,
                 resizable: true,
-                fill_color: ui::ColorRgb::from_hex(0x121212),
+                fill_color: Some(ui::ColorRgba::from_hex(0xFF121212)),
             },
         );
     }
 
     fn create_renderer(window: std::sync::Arc<winit::window::Window>) -> Box<dyn ui::Renderer> {
-        Box::new(
-            VelloRenderer::new(
-                window.clone(),
-                window.inner_size().width,
-                window.inner_size().height,
-            )
-            .block_on(),
-        )
+        Box::new(WgpuRenderer::new(window.clone()).block_on())
+
+        // Box::new(
+        //     VelloRenderer::new(
+        //         window.clone(),
+        //         window.inner_size().width,
+        //         window.inner_size().height,
+        //     )
+        //     .block_on(),
+        // )
     }
 }
 
@@ -140,8 +143,6 @@ impl Window<TodoApplication, ()> for MainWindow {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracy_client::Client::start();
-
     env_logger::Builder::new()
         .filter(None, log::LevelFilter::Info)
         .init();

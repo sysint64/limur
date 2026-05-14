@@ -219,7 +219,7 @@ pub fn text(text: &str) -> TextBuilder<'_> {
         vertical_align: AlignY::Top,
         font_size: 12.,
         line_height: 1.,
-        text_align: TextAlign::Left,
+        text_align: TextAlign::Auto,
     }
 }
 

@@ -97,7 +97,7 @@ impl VectorResources {
     pub(crate) fn new() -> Self {
         Self {
             data: sumi::GpuVec::new(
-                128,
+                8096,
                 wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             ),
             gradient_stops: sumi::GpuVec::new(
@@ -341,14 +341,16 @@ impl VectorData {
         instances: &mut sumi::BumpInstances<VectorInstanceId, VectorInstance>,
         id: TextId,
         boundary: Rect<f32>,
+        x: f32,
+        y: f32,
         tint_color: Option<ColorRgba>,
     ) {
         let is_run_visible = |run: &cosmic_text::LayoutRun| {
-            let start_y_physical = (boundary.top() + (run.line_top)) as i32;
-            let end_y_physical = start_y_physical + (run.line_height) as i32;
+            let start_y_physical = (y + run.line_top) as i32;
+            let end_y_physical = start_y_physical + run.line_height as i32;
 
-            start_y_physical <= boundary.bottom().round() as i32
-                && boundary.top().round() as i32 <= end_y_physical
+            start_y_physical <= boundary.bottom().ceil() as i32
+                && boundary.top().floor() as i32 <= end_y_physical
         };
 
         let buffer = text.get(id).buffer();
@@ -359,7 +361,8 @@ impl VectorData {
 
         for run in layout_runs {
             for glyph in run.glyphs.iter() {
-                let physical_glyph = glyph.physical((boundary.left(), boundary.top()), 1.0);
+                // x, y is the scroll-adjusted text render origin; boundary is clip-only.
+                let physical_glyph = glyph.physical((x, y), 1.0);
 
                 let color = match glyph.color_opt {
                     Some(color) => ColorRgba {
@@ -440,10 +443,7 @@ impl VectorData {
                     let gw = glyph_to_render.boundary[2];
                     let gh = glyph_to_render.boundary[3];
 
-                    let pos = Vec2::new(
-                        gx,
-                        context.view.size_unscaled.y - gy - gh,
-                    );
+                    let pos = Vec2::new(gx, context.view.size_unscaled.y - gy - gh);
 
                     let mvp = context.view.screen_camera_matrix
                         * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {

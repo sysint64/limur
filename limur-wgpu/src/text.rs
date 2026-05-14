@@ -374,12 +374,8 @@ pub struct TextResources {
 
 impl TextResources {
     /// Creates a new [`TextAtlas`].
-    pub fn new(
-        context: &sumi::GraphicsContext,
-        // cache: &Cache,
-        format: wgpu::TextureFormat,
-    ) -> Self {
-        Self::with_color_mode(context, /*cache,*/ format, ColorMode::Accurate)
+    pub fn new(context: &sumi::GraphicsContext, format: wgpu::TextureFormat) -> Self {
+        Self::with_color_mode(context, format, ColorMode::Accurate)
     }
 
     /// Creates a new [`TextAtlas`] with the given [`ColorMode`].

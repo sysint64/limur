@@ -236,13 +236,9 @@ impl VectorRenderer {
     }
 
     #[inline]
-    pub fn bind(&self, context: &sumi::GraphicsContext<'_, '_>) {
-        context.render_pass().set_pipeline(&self.render_pipeline);
-        context
-            .render_pass()
-            .set_bind_group(0, &self.bind_group.bind_group, &[]);
-        context
-            .render_pass()
-            .set_bind_group(1, &self.text_atlas_bind_group.bind_group, &[]);
+    pub fn bind(&self, context: &sumi::GraphicsContext<'_>, render_pass: &mut wgpu::RenderPass) {
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
+        render_pass.set_bind_group(1, &self.text_atlas_bind_group.bind_group, &[]);
     }
 }

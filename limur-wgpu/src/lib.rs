@@ -1,12 +1,17 @@
+mod backdrop_filter;
 mod blit_renderer;
 mod text;
 mod vector_renderer;
 mod vector_resources;
 
+use backdrop_filter::{
+    BackdropFilterGroup, BackdropFilterInstance, BackdropFilterInstanceId, BackdropFilterRenderer,
+    BackdropFilterResources,
+};
 use blit_renderer::BlitRenderer;
 use glam::Vec2;
 use limur::{
-    ClipShape, ColorRgba, PhysicalSize, Rect, View,
+    ClipShape, ColorRgba, PhysicalSize, Rect, ShaderParam, View,
     assets::Assets,
     render::{RenderCommand, RenderCompositionLayer, Renderer},
     text::{FontResources, TextsResources},
@@ -33,14 +38,24 @@ pub struct WgpuRenderer {
 struct Resources {
     plane: sumi::PlaneResources,
     vector_instances: sumi::BumpInstances<VectorInstanceId, VectorInstance>,
+    backdrop_filter_instances:
+        sumi::BumpInstances<BackdropFilterInstanceId, BackdropFilterInstance>,
     vector: VectorResources,
     text: TextResources,
+    backdrop_filter: BackdropFilterResources,
 }
 
 struct Renderers {
     layer_blit: BlitRenderer,
     surface_blit: BlitRenderer,
     vector: VectorRenderer,
+    backdrop_filter: BackdropFilterRenderer,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+enum Pipeline {
+    Vector,
+    BackdropFilter,
 }
 
 struct Compositor {
@@ -142,13 +157,15 @@ impl WgpuRenderer {
         gapi.set_scale_factor(window.scale_factor());
         gapi.set_view_size(view_size);
 
-        let mut context = gapi.graphics_context(4);
+        let context = gapi.graphics_context(4);
 
         let mut resources = Resources {
-            plane: sumi::PlaneResources::new(&mut context),
+            plane: sumi::PlaneResources::new(&context),
             vector: VectorResources::new(),
             text: TextResources::new(&context, COMPOSITOR_FORMAT),
-            vector_instances: sumi::BumpInstances::new(8096),
+            vector_instances: sumi::BumpInstances::new(128),
+            backdrop_filter_instances: sumi::BumpInstances::new(8),
+            backdrop_filter: BackdropFilterResources::new(&context),
         };
 
         let surface_format = context.surface_texture_format;
@@ -190,6 +207,7 @@ impl WgpuRenderer {
                 &resources.text,
                 COMPOSITOR_FORMAT,
             ),
+            backdrop_filter: BackdropFilterRenderer::new(&context, COMPOSITOR_FORMAT),
         };
 
         Self {
@@ -213,6 +231,88 @@ impl WgpuRenderer {
             self.compositor = Some(Compositor::new(&self.gapi.device, width, height));
         }
     }
+}
+
+fn bind_pipeline(
+    renderers: &Renderers,
+    context: &sumi::GraphicsContext,
+    render_pass: &mut wgpu::RenderPass,
+    backdrop_filter_bind_group: &BackdropFilterGroup,
+    pipeline: Pipeline,
+) {
+    match pipeline {
+        Pipeline::Vector => {
+            renderers.vector.bind(&context, render_pass);
+        }
+        Pipeline::BackdropFilter => {
+            renderers
+                .backdrop_filter
+                .bind(context, render_pass, backdrop_filter_bind_group);
+        }
+    }
+}
+
+fn close_pipeline(
+    resources: &mut Resources,
+    renderers: &mut Renderers,
+    context: &sumi::GraphicsContext,
+    render_pass: &mut wgpu::RenderPass,
+    current_pipeline: Pipeline,
+) {
+    match current_pipeline {
+        Pipeline::Vector => {
+            if resources.vector.take_buffer_resized() {
+                renderers.vector.rebuild(&context, &resources.vector);
+            }
+
+            resources.vector.flush(&context);
+            resources.vector_instances.upload_all(&context);
+
+            renderers.vector.bind(&context, render_pass);
+            resources.vector_instances.bind(1, &context, render_pass);
+
+            for range in resources.vector_instances.drain(&context) {
+                resources
+                    .plane
+                    .render_instances(&context, render_pass, range);
+            }
+        }
+        Pipeline::BackdropFilter => {
+            resources.backdrop_filter_instances.upload_all(&context);
+            resources
+                .backdrop_filter_instances
+                .bind(1, &context, render_pass);
+
+            for range in resources.backdrop_filter_instances.drain(&context) {
+                resources
+                    .plane
+                    .render_instances(&context, render_pass, range);
+            }
+        }
+    }
+}
+
+fn maybe_switch_pipeline(
+    resources: &mut Resources,
+    renderers: &mut Renderers,
+    context: &sumi::GraphicsContext,
+    render_pass: &mut wgpu::RenderPass,
+    backdrop_filter_bind_group: &BackdropFilterGroup,
+    current_pipeline: Pipeline,
+    new_pipeline: Pipeline,
+) -> Pipeline {
+    if current_pipeline != new_pipeline {
+        close_pipeline(resources, renderers, context, render_pass, current_pipeline);
+        bind_pipeline(
+            renderers,
+            context,
+            render_pass,
+            backdrop_filter_bind_group,
+            new_pipeline,
+        );
+    }
+
+    new_pipeline
 }
 
 impl Renderer for WgpuRenderer {
@@ -313,17 +413,61 @@ impl Renderer for WgpuRenderer {
                     multiview_mask: None,
                 });
 
-                let mut context = self.gapi.render_pass(&mut render_pass, 4);
+                let context = self.gapi.graphics_context(4);
+
+                let backdrop_filter_bind_group = BackdropFilterGroup::new(
+                    &context,
+                    &self.resources.backdrop_filter,
+                    &compositor.composite_view,
+                );
 
                 self.resources.vector.data.clear();
                 self.resources.vector.gradient_stops.clear();
                 self.resources.vector_instances.clear();
 
-                self.renderers.vector.bind(&context);
+                let mut current_pipeline =
+                    if let Some(RenderCommand::BackdropFilter { .. }) = layer.commands.first() {
+                        Pipeline::BackdropFilter
+                    } else {
+                        Pipeline::Vector
+                    };
 
-                let instances = &mut self.resources.vector_instances;
+                bind_pipeline(
+                    &self.renderers,
+                    &context,
+                    &mut render_pass,
+                    &backdrop_filter_bind_group,
+                    current_pipeline,
+                );
 
                 for command in &layer.commands {
+                    match command {
+                        RenderCommand::BackdropFilter { .. } => {
+                            current_pipeline = maybe_switch_pipeline(
+                                &mut self.resources,
+                                &mut self.renderers,
+                                &context,
+                                &mut render_pass,
+                                &backdrop_filter_bind_group,
+                                current_pipeline,
+                                Pipeline::BackdropFilter,
+                            );
+                        }
+                        _ => {
+                            current_pipeline = maybe_switch_pipeline(
+                                &mut self.resources,
+                                &mut self.renderers,
+                                &context,
+                                &mut render_pass,
+                                &backdrop_filter_bind_group,
+                                current_pipeline,
+                                Pipeline::Vector,
+                            );
+                        }
+                    }
+
+                    let instances = &mut self.resources.vector_instances;
+
                     match command {
                         RenderCommand::Shape {
                             boundary,
@@ -450,31 +594,50 @@ impl Renderer for WgpuRenderer {
                                 instances,
                                 *text_id,
                                 boundary,
+                                *x,
+                                *y,
                                 *tint_color,
                             );
                         }
                         RenderCommand::PushClip { rect, shape, .. } => {}
                         RenderCommand::PopClip => {}
                         RenderCommand::Svg { .. } => {}
-                        RenderCommand::BackdropFilter { boundary, shader } => {}
+                        RenderCommand::BackdropFilter { boundary, shader } => {
+                            let mut tint = [0.0f32; 4];
+
+                            for (id, param) in &shader.params {
+                                if *id == 1 {
+                                    if let ShaderParam::Color(c) = param {
+                                        tint = [c.r * c.a, c.g * c.a, c.b * c.a, c.a];
+                                    }
+                                }
+                            }
+
+                            let pos = Vec2::new(
+                                boundary.x,
+                                context.view.size_unscaled.y - boundary.y - boundary.height,
+                            );
+                            let mvp = context.view.screen_camera_matrix
+                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
+                                    position: pos,
+                                    scaling: Vec2::new(boundary.width, boundary.height),
+                                    rotation: 0.0,
+                                });
+
+                            self.resources
+                                .backdrop_filter_instances
+                                .insert(BackdropFilterInstance::new(mvp, tint));
+                        }
                     }
                 }
 
-                if self.resources.vector.take_buffer_resized() {
-                    self.renderers
-                        .vector
-                        .rebuild(&context, &self.resources.vector);
-                }
-
-                self.renderers.vector.bind(&context);
-                instances.bind(1, &context);
-
-                for range in instances.drain(&context) {
-                    self.resources.plane.render_instances(&mut context, range);
-                }
-
-                self.resources.vector.flush(&context);
-                self.resources.vector_instances.upload_all(&context);
+                close_pipeline(
+                    &mut self.resources,
+                    &mut self.renderers,
+                    &context,
+                    &mut render_pass,
+                    current_pipeline,
+                );
             }
 
             let compositor = self.compositor.as_ref().unwrap();
@@ -525,10 +688,10 @@ impl Renderer for WgpuRenderer {
 }
 
 fn snap_rect(rect: Rect<f32>) -> Rect<f32> {
-    let x = rect.x.round();
-    let y = rect.y.round();
-    let right = (rect.x + rect.width).round();
-    let bottom = (rect.y + rect.height).round();
+    let x = rect.x.floor();
+    let y = rect.y.floor();
+    let right = (rect.x + rect.width).ceil();
+    let bottom = (rect.y + rect.height).ceil();
 
     Rect {
         x,
