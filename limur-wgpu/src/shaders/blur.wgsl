@@ -89,16 +89,12 @@ fn fs_horizontal(in: VertexOutput) -> @location(0) vec4<f32> {
     let texel_x = 1.0 / tex_w;
     let sigma   = f32(radius) * 0.5;
 
-    // Rect UV bounds in X — clamp horizontal samples to this range.
-    let uv_x0 = in.rect.x / tex_w;
-    let uv_x1 = (in.rect.x + in.rect.z) / tex_w;
-
     var color        = vec4(0.0);
     var total_weight = 0.0;
 
     for (var dx = -radius; dx <= radius; dx += 1) {
         let w = gaussian_weight(f32(dx), sigma);
-        let s = vec2(clamp(in.uv.x + f32(dx) * texel_x, uv_x0, uv_x1), in.uv.y);
+        let s = vec2(in.uv.x + f32(dx) * texel_x, in.uv.y);
         color        += textureSample(src_texture, src_sampler, s) * w;
         total_weight += w;
     }
@@ -125,16 +121,12 @@ fn fs_vertical(in: VertexOutput) -> @location(0) vec4<f32> {
     let texel_y = 1.0 / tex_h;
     let sigma   = f32(radius) * 0.5;
 
-    // Rect UV bounds in Y — clamp vertical samples to this range.
-    let uv_y0 = in.rect.y / tex_h;
-    let uv_y1 = (in.rect.y + in.rect.w) / tex_h;
-
     var color        = vec4(0.0);
     var total_weight = 0.0;
 
     for (var dy = -radius; dy <= radius; dy += 1) {
         let w = gaussian_weight(f32(dy), sigma);
-        let s = vec2(in.uv.x, clamp(in.uv.y + f32(dy) * texel_y, uv_y0, uv_y1));
+        let s = vec2(in.uv.x, in.uv.y + f32(dy) * texel_y);
         color        += textureSample(src_texture, src_sampler, s) * w;
         total_weight += w;
     }

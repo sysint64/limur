@@ -66,7 +66,7 @@ impl RenderContext<'_, '_> {
 }
 
 // TODO(sysint64): Make it possible to use arbitrary shaders
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ShaderId {
     FrostedGlass,
 }
