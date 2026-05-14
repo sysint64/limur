@@ -10,23 +10,16 @@ const COLOR_SPACE_OK_LCH: u32 = 2u;
 const TWO_PI: f32 = 6.28318530717958647692;
 const PI: f32 = 3.14159265358979323846;
 
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) tex_coords: vec2<f32>,
-};
-
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) coord: vec2<f32>,
-    @location(1) @interpolate(flat) instance_id: u32,
+    @location(0) @interpolate(flat) instance_id: u32,
 };
 
-struct InstanceInput {
-    @location(2) mvp_matrix_0: vec4<f32>,
-    @location(3) mvp_matrix_1: vec4<f32>,
-    @location(4) mvp_matrix_2: vec4<f32>,
-    @location(5) mvp_matrix_3: vec4<f32>,
-};
+struct Globals {
+    screen_size: vec2<f32>,
+}
+
+@group(0) @binding(2) var<uniform> globals: Globals;
 
 struct VectorData {
     boundary: vec4<f32>,
@@ -71,21 +64,56 @@ var atlas_sampler: sampler;
 
 @vertex
 fn vs_main(
-    model: VertexInput,
-    instance: InstanceInput,
+    @builtin(vertex_index) vertex_index: u32,
     @builtin(instance_index) instance_idx: u32,
 ) -> VertexOutput {
-    let mvp_matrix = mat4x4<f32>(
-        instance.mvp_matrix_0,
-        instance.mvp_matrix_1,
-        instance.mvp_matrix_2,
-        instance.mvp_matrix_3,
-    );
+    let data = shape_data[instance_idx];
+    let boundary = data.boundary; // [left, top, width, height] in top-left pixel space
+
+    // Compute the drawn quad bounds based on shape type.
+    // Shapes and inner shadows expand 1px for anti-aliasing.
+    // Outer shadows expand by blur/spread radius and shift by shadow offset.
+    // Glyphs use the boundary exactly.
+    var draw: vec4<f32>;
+    switch data.shape_type {
+        case 2u, 4u: {
+            // Outer box shadow: expand by blur-based radius and offset.
+            let blur   = data.box_shadow.z;
+            let spread = data.box_shadow.w;
+            let expand = 3.0 * blur + spread + 2.0;
+            let offset = data.box_shadow.xy;
+            draw = vec4(
+                boundary.x - expand + offset.x,
+                boundary.y - expand + offset.y,
+                boundary.z + 2.0 * expand,
+                boundary.w + 2.0 * expand,
+            );
+        }
+        case 6u: {
+          draw = boundary;
+        }
+        default: {
+            // Rect, oval, inner shadow: expand 1px for AA.
+            draw = vec4(
+                boundary.x - 1.0,
+                boundary.y - 1.0,
+                boundary.z + 2.0,
+                boundary.w + 2.0,
+            );
+        }
+    }
+
+    // Derive corner factor from vertex_index: (0,0) TL, (1,0) TR, (0,1) BL, (1,1) BR.
+    let corner = vec2<f32>(f32(vertex_index & 1u), f32((vertex_index >> 1u) & 1u));
+    let px = draw.xy + corner * draw.zw;
 
     var out: VertexOutput;
-
-    out.clip_position = mvp_matrix * vec4<f32>(model.position, 1.0);
-    out.coord = model.position.xy;
+    out.clip_position = vec4<f32>(
+        px.x / globals.screen_size.x * 2.0 - 1.0,
+        1.0 - px.y / globals.screen_size.y * 2.0,
+        0.0,
+        1.0,
+    );
     out.instance_id = instance_idx;
 
     return out;

@@ -1,74 +1,7 @@
-use glam::Mat4;
-use sumi::prelude::*;
-
 use crate::{
     text::{TextAtlasBindGroup, TextResources},
     vector_resources::VectorResources,
 };
-
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
-pub struct VectorInstanceId {
-    value: u32,
-}
-
-impl sumi::SlotId for VectorInstanceId {
-    fn from_index(index: usize) -> Self {
-        Self {
-            value: index as u32,
-        }
-    }
-
-    fn index(&self) -> usize {
-        self.value as usize
-    }
-}
-
-#[repr(C)]
-#[derive(Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct VectorInstance {
-    mvp_matrix: [[f32; 4]; 4],
-}
-
-impl VectorInstance {
-    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                // mvp_matrix col 0
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                // mvp_matrix col 1
-                wgpu::VertexAttribute {
-                    offset: 16,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                // mvp_matrix col 2
-                wgpu::VertexAttribute {
-                    offset: 32,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                // mvp_matrix col 3
-                wgpu::VertexAttribute {
-                    offset: 48,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-            ],
-        }
-    }
-
-    pub(crate) fn new(mvp: Mat4) -> Self {
-        Self {
-            mvp_matrix: mvp.to_cols_array_2d(),
-        }
-    }
-}
 
 pub struct VectorRenderer {
     render_pipeline: wgpu::RenderPipeline,
@@ -82,7 +15,11 @@ struct VectorBindGroup {
 }
 
 impl VectorBindGroup {
-    pub fn new(context: &sumi::GraphicsContext, resources: &VectorResources) -> Self {
+    pub fn new(
+        context: &sumi::GraphicsContext,
+        resources: &VectorResources,
+        globals_buffer: &wgpu::Buffer,
+    ) -> Self {
         let layout = context
             .device
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -90,7 +27,7 @@ impl VectorBindGroup {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
@@ -108,10 +45,20 @@ impl VectorBindGroup {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
-        let bind_group = Self::create_bind_group(context, &layout, resources);
+        let bind_group = Self::create_bind_group(context, &layout, resources, globals_buffer);
 
         Self { layout, bind_group }
     }
@@ -120,6 +67,7 @@ impl VectorBindGroup {
         context: &sumi::GraphicsContext,
         layout: &wgpu::BindGroupLayout,
         resources: &VectorResources,
+        globals_buffer: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
         context
             .device
@@ -142,12 +90,24 @@ impl VectorBindGroup {
                                 .as_entire_buffer_binding(),
                         ),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Buffer(
+                            globals_buffer.as_entire_buffer_binding(),
+                        ),
+                    },
                 ],
             })
     }
 
-    fn rebuild(&mut self, context: &sumi::GraphicsContext, resources: &VectorResources) {
-        self.bind_group = Self::create_bind_group(context, &self.layout, resources);
+    fn rebuild(
+        &mut self,
+        context: &sumi::GraphicsContext,
+        resources: &VectorResources,
+        globals_buffer: &wgpu::Buffer,
+    ) {
+        self.bind_group =
+            Self::create_bind_group(context, &self.layout, resources, globals_buffer);
     }
 }
 
@@ -156,6 +116,7 @@ impl VectorRenderer {
         context: &sumi::GraphicsContext,
         resources: &VectorResources,
         text_resources: &TextResources,
+        globals_buffer: &wgpu::Buffer,
         target_format: wgpu::TextureFormat,
     ) -> Self {
         let shader = context
@@ -165,7 +126,7 @@ impl VectorRenderer {
                 source: wgpu::ShaderSource::Wgsl(include_str!("shaders/vector.wgsl").into()),
             });
 
-        let bind_group = VectorBindGroup::new(context, resources);
+        let bind_group = VectorBindGroup::new(context, resources, globals_buffer);
         let text_atlas_bind_group = TextAtlasBindGroup::new(context, text_resources);
 
         let render_pipeline_layout =
@@ -190,7 +151,7 @@ impl VectorRenderer {
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: Some("vs_main"),
-                        buffers: &[sumi::TexturedVertex::desc(), VectorInstance::desc()],
+                        buffers: &[],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     },
                     fragment: Some(wgpu::FragmentState {
@@ -210,7 +171,11 @@ impl VectorRenderer {
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
                     }),
-                    primitive: sumi::PlaneResources::primitive(),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleStrip,
+                        cull_mode: None,
+                        ..Default::default()
+                    },
                     depth_stencil: context.default_depth_stencil(),
                     multisample: context.default_multisample(),
                     multiview_mask: context.default_multiview_mask(),
@@ -223,8 +188,13 @@ impl VectorRenderer {
         }
     }
 
-    pub fn rebuild(&mut self, context: &sumi::GraphicsContext, resources: &VectorResources) {
-        self.bind_group.rebuild(context, resources);
+    pub fn rebuild(
+        &mut self,
+        context: &sumi::GraphicsContext,
+        resources: &VectorResources,
+        globals_buffer: &wgpu::Buffer,
+    ) {
+        self.bind_group.rebuild(context, resources, globals_buffer);
     }
 
     pub fn rebuild_text_atlas(

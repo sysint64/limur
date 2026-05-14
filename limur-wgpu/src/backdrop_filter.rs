@@ -1,11 +1,10 @@
-use glam::Mat4;
 use std::mem;
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct BackdropFilterInstance {
-    mvp_matrix: [[f32; 4]; 4], // locations 2-5, same layout as VectorInstance
-    tint: [f32; 4],            // location 6, premultiplied RGBA
+    boundary: [f32; 4], // [left, top, width, height] in top-left pixel space
+    tint: [f32; 4],     // premultiplied RGBA
 }
 
 #[derive(Default, Debug, Copy, Clone, PartialEq)]
@@ -26,11 +25,8 @@ impl sumi::SlotId for BackdropFilterInstanceId {
 }
 
 impl BackdropFilterInstance {
-    pub fn new(mvp: Mat4, tint: [f32; 4]) -> Self {
-        Self {
-            mvp_matrix: mvp.to_cols_array_2d(),
-            tint,
-        }
+    pub fn new(boundary: [f32; 4], tint: [f32; 4]) -> Self {
+        Self { boundary, tint }
     }
 
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
@@ -38,16 +34,18 @@ impl BackdropFilterInstance {
             array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &[
-                // mvp_matrix col 0
-                wgpu::VertexAttribute { offset: 0,  shader_location: 2, format: wgpu::VertexFormat::Float32x4 },
-                // mvp_matrix col 1
-                wgpu::VertexAttribute { offset: 16, shader_location: 3, format: wgpu::VertexFormat::Float32x4 },
-                // mvp_matrix col 2
-                wgpu::VertexAttribute { offset: 32, shader_location: 4, format: wgpu::VertexFormat::Float32x4 },
-                // mvp_matrix col 3
-                wgpu::VertexAttribute { offset: 48, shader_location: 5, format: wgpu::VertexFormat::Float32x4 },
+                // boundary: [left, top, width, height]
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
                 // tint
-                wgpu::VertexAttribute { offset: 64, shader_location: 6, format: wgpu::VertexFormat::Float32x4 },
+                wgpu::VertexAttribute {
+                    offset: 16,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
             ],
         }
     }
@@ -86,6 +84,7 @@ impl BackdropFilterGroup {
         context: &sumi::GraphicsContext,
         resources: &BackdropFilterResources,
         composite_view: &wgpu::TextureView,
+        globals_buffer: &wgpu::Buffer,
     ) -> Self {
         let layout = context
             .device
@@ -108,10 +107,21 @@ impl BackdropFilterGroup {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
-        let bind_group = Self::create_bind_group(context, &layout, resources, composite_view);
+        let bind_group =
+            Self::create_bind_group(context, &layout, resources, composite_view, globals_buffer);
 
         Self { layout, bind_group }
     }
@@ -121,6 +131,7 @@ impl BackdropFilterGroup {
         layout: &wgpu::BindGroupLayout,
         resources: &BackdropFilterResources,
         composite_view: &wgpu::TextureView,
+        globals_buffer: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
         context
             .device
@@ -136,17 +147,14 @@ impl BackdropFilterGroup {
                         binding: 1,
                         resource: wgpu::BindingResource::Sampler(&resources.sampler),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Buffer(
+                            globals_buffer.as_entire_buffer_binding(),
+                        ),
+                    },
                 ],
             })
-    }
-
-    fn rebuild(
-        &mut self,
-        context: &sumi::GraphicsContext,
-        resources: &BackdropFilterResources,
-        composite_view: &wgpu::TextureView,
-    ) {
-        self.bind_group = Self::create_bind_group(context, &self.layout, resources, composite_view);
     }
 }
 
@@ -183,6 +191,16 @@ impl BackdropFilterRenderer {
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
                         },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
                     ],
                 });
 
@@ -204,7 +222,7 @@ impl BackdropFilterRenderer {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
-                    buffers: &[sumi::TexturedVertex::desc(), BackdropFilterInstance::desc()],
+                    buffers: &[BackdropFilterInstance::desc()],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -242,43 +260,6 @@ impl BackdropFilterRenderer {
 
         Self { pipeline }
     }
-
-    // /// Creates a bind group that samples `composite_view` as the backdrop.
-    // /// Call this before starting the render pass so the texture view lifetime is satisfied.
-    // pub fn make_bind_group(
-    //     &self,
-    //     device: &wgpu::Device,
-    //     composite_view: &wgpu::TextureView,
-    // ) -> wgpu::BindGroup {
-    //     device.create_bind_group(&wgpu::BindGroupDescriptor {
-    //         label: Some("Backdrop Filter Bind Group"),
-    //         layout: &self.bind_group_layout,
-    //         entries: &[
-    //             wgpu::BindGroupEntry {
-    //                 binding: 0,
-    //                 resource: wgpu::BindingResource::TextureView(composite_view),
-    //             },
-    //             wgpu::BindGroupEntry {
-    //                 binding: 1,
-    //                 resource: wgpu::BindingResource::Sampler(&self.sampler),
-    //             },
-    //         ],
-    //     })
-    // }
-
-    // /// Draws one backdrop filter rect within an already-open render pass.
-    // /// The pipeline is switched here; the caller should rebind the previous pipeline afterwards.
-    // pub fn apply_in_pass<'a>(
-    //     &'a self,
-    //     pass: &mut wgpu::RenderPass<'a>,
-    //     bind_group: &'a wgpu::BindGroup,
-    //     instance_buf: &'a wgpu::Buffer,
-    // ) {
-    //     pass.set_pipeline(&self.pipeline);
-    //     pass.set_bind_group(0, bind_group, &[]);
-    //     pass.set_vertex_buffer(0, instance_buf.slice(..));
-    //     pass.draw(0..4, 0..1);
-    // }
 
     pub fn bind(
         &self,

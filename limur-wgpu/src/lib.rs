@@ -17,9 +17,9 @@ use limur::{
     text::{FontResources, TextsResources},
 };
 use std::sync::Arc;
-use sumi::{InstancingGeometry, RenderInstances};
+use sumi::RenderInstances;
 use text::TextResources;
-use vector_renderer::{VectorInstance, VectorInstanceId, VectorRenderer};
+use vector_renderer::VectorRenderer;
 use vector_resources::{VectorData, VectorResources};
 use winit::window::Window;
 
@@ -27,6 +27,12 @@ use winit::window::Window;
 /// happens in linear light space, regardless of the final surface format.
 /// Rgba16Float is universally supported on desktop, iOS, and Android.
 const COMPOSITOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct Globals {
+    screen_size: [f32; 2],
+}
 
 pub struct WgpuRenderer {
     gapi: sumi::Graphics,
@@ -36,13 +42,14 @@ pub struct WgpuRenderer {
 }
 
 struct Resources {
-    plane: sumi::PlaneResources,
-    vector_instances: sumi::BumpInstances<VectorInstanceId, VectorInstance>,
     backdrop_filter_instances:
         sumi::BumpInstances<BackdropFilterInstanceId, BackdropFilterInstance>,
     vector: VectorResources,
     text: TextResources,
     backdrop_filter: BackdropFilterResources,
+    globals_buffer: wgpu::Buffer,
+    /// Index into shape_data of the first shape in the current vector batch.
+    vector_batch_start: u32,
 }
 
 struct Renderers {
@@ -159,13 +166,20 @@ impl WgpuRenderer {
 
         let context = gapi.graphics_context(4);
 
+        let globals_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Screen Size Uniform"),
+            size: 8, // vec2<f32>
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let mut resources = Resources {
-            plane: sumi::PlaneResources::new(&context),
             vector: VectorResources::new(),
             text: TextResources::new(&context, COMPOSITOR_FORMAT),
-            vector_instances: sumi::BumpInstances::new(128),
             backdrop_filter_instances: sumi::BumpInstances::new(8),
             backdrop_filter: BackdropFilterResources::new(&context),
+            globals_buffer,
+            vector_batch_start: 0,
         };
 
         let surface_format = context.surface_texture_format;
@@ -205,6 +219,7 @@ impl WgpuRenderer {
                 &context,
                 &resources.vector,
                 &resources.text,
+                &resources.globals_buffer,
                 COMPOSITOR_FORMAT,
             ),
             backdrop_filter: BackdropFilterRenderer::new(&context, COMPOSITOR_FORMAT),
@@ -262,31 +277,27 @@ fn close_pipeline(
     match current_pipeline {
         Pipeline::Vector => {
             if resources.vector.take_buffer_resized() {
-                renderers.vector.rebuild(&context, &resources.vector);
+                renderers
+                    .vector
+                    .rebuild(&context, &resources.vector, &resources.globals_buffer);
             }
 
             resources.vector.flush(&context);
-            resources.vector_instances.upload_all(&context);
-
             renderers.vector.bind(&context, render_pass);
-            resources.vector_instances.bind(1, &context, render_pass);
 
-            for range in resources.vector_instances.drain(&context) {
-                resources
-                    .plane
-                    .render_instances(&context, render_pass, range);
-            }
+            let end = resources.vector.data.len() as u32;
+            let range = resources.vector_batch_start..end;
+            resources.vector_batch_start = end;
+            render_pass.draw(0..4, range);
         }
         Pipeline::BackdropFilter => {
             resources.backdrop_filter_instances.upload_all(&context);
             resources
                 .backdrop_filter_instances
-                .bind(1, &context, render_pass);
+                .bind(0, &context, render_pass);
 
             for range in resources.backdrop_filter_instances.drain(&context) {
-                resources
-                    .plane
-                    .render_instances(&context, render_pass, range);
+                render_pass.draw(0..4, range);
             }
         }
     }
@@ -327,8 +338,8 @@ impl Renderer for WgpuRenderer {
     ) {
         self.ensure_compositor();
 
-        let width = self.gapi.config.width;
-        let height = self.gapi.config.height;
+        let width = view.physical_size.width;
+        let height = view.physical_size.height;
 
         let (optimal, output) = match self.gapi.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => (true, surface_texture),
@@ -415,15 +426,25 @@ impl Renderer for WgpuRenderer {
 
                 let context = self.gapi.graphics_context(4);
 
+                // Write current screen size into the shared uniform before rendering.
+                context.queue.write_buffer(
+                    &self.resources.globals_buffer,
+                    0,
+                    bytemuck::bytes_of(&Globals {
+                        screen_size: [width as f32, height as f32],
+                    }),
+                );
+
                 let backdrop_filter_bind_group = BackdropFilterGroup::new(
                     &context,
                     &self.resources.backdrop_filter,
                     &compositor.composite_view,
+                    &self.resources.globals_buffer,
                 );
 
                 self.resources.vector.data.clear();
                 self.resources.vector.gradient_stops.clear();
-                self.resources.vector_instances.clear();
+                self.resources.vector_batch_start = 0;
 
                 let mut current_pipeline =
                     if let Some(RenderCommand::BackdropFilter { .. }) = layer.commands.first() {
@@ -466,8 +487,6 @@ impl Renderer for WgpuRenderer {
                         }
                     }
 
-                    let instances = &mut self.resources.vector_instances;
-
                     match command {
                         RenderCommand::Shape {
                             boundary,
@@ -477,25 +496,8 @@ impl Renderer for WgpuRenderer {
                             shape,
                         } => {
                             let boundary = snap_rect(*boundary);
-
-                            let pos = Vec2::new(
-                                boundary.x,
-                                context.view.size_unscaled.y - boundary.y - boundary.height,
-                            );
-
-                            let mvp = context.view.screen_camera_matrix
-                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                                    position: pos - Vec2::new(1.0, 1.0),
-                                    scaling: Vec2::new(boundary.width, boundary.height)
-                                        + Vec2::new(2.0, 2.0),
-                                    rotation: 0.0,
-                                });
-
-                            instances.insert(VectorInstance::new(mvp));
-
                             let gradient_params =
                                 self.resources.vector.maybe_add_gradient(fill.as_ref());
-
                             self.resources.vector.data.push(VectorData::shape(
                                 boundary,
                                 fill.as_ref(),
@@ -512,29 +514,6 @@ impl Renderer for WgpuRenderer {
                             shape,
                         } => {
                             let boundary = snap_rect(*boundary);
-
-                            let pos = Vec2::new(
-                                boundary.x,
-                                context.view.size_unscaled.y - boundary.y - boundary.height,
-                            );
-                            let size = Vec2::new(boundary.width, boundary.height);
-                            let expand =
-                                3.0 * box_shadow.blur_radius + box_shadow.spread_radius + 2.0;
-
-                            let mvp = context.view.screen_camera_matrix
-                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                                    position: pos
-                                        - Vec2::new(expand, expand)
-                                        - Vec2::new(
-                                            -box_shadow.offset.x as f32,
-                                            box_shadow.offset.y as f32,
-                                        ),
-                                    scaling: size + Vec2::new(expand * 2.0, expand * 2.0),
-                                    rotation: 0.0,
-                                });
-
-                            instances.insert(VectorInstance::new(mvp));
-
                             self.resources.vector.data.push(VectorData::shadow(
                                 boundary,
                                 *box_shadow,
@@ -549,25 +528,6 @@ impl Renderer for WgpuRenderer {
                             shape,
                         } => {
                             let boundary = snap_rect(*boundary);
-
-                            let pos = Vec2::new(
-                                boundary.x,
-                                context.view.size_unscaled.y - boundary.y - boundary.height,
-                            );
-                            let size = Vec2::new(boundary.width, boundary.height);
-
-                            let mvp = context.view.screen_camera_matrix
-                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                                    // position: pos,
-                                    // scaling: size,
-                                    position: pos - Vec2::new(1.0, 1.0),
-                                    scaling: Vec2::new(boundary.width, boundary.height)
-                                        + Vec2::new(2.0, 2.0),
-                                    rotation: 0.0,
-                                });
-
-                            instances.insert(VectorInstance::new(mvp));
-
                             self.resources.vector.data.push(VectorData::inner_shadow(
                                 boundary,
                                 *box_shadow,
@@ -583,7 +543,6 @@ impl Renderer for WgpuRenderer {
                             tint_color,
                         } => {
                             let boundary = snap_rect(*boundary);
-
                             VectorData::text(
                                 &context,
                                 fonts,
@@ -591,7 +550,6 @@ impl Renderer for WgpuRenderer {
                                 &mut self.resources.text,
                                 &mut self.resources.vector,
                                 view,
-                                instances,
                                 *text_id,
                                 boundary,
                                 *x,
@@ -613,20 +571,12 @@ impl Renderer for WgpuRenderer {
                                 }
                             }
 
-                            let pos = Vec2::new(
-                                boundary.x,
-                                context.view.size_unscaled.y - boundary.y - boundary.height,
-                            );
-                            let mvp = context.view.screen_camera_matrix
-                                * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                                    position: pos,
-                                    scaling: Vec2::new(boundary.width, boundary.height),
-                                    rotation: 0.0,
-                                });
-
                             self.resources
                                 .backdrop_filter_instances
-                                .insert(BackdropFilterInstance::new(mvp, tint));
+                                .insert(BackdropFilterInstance::new(
+                                    [boundary.x, boundary.y, boundary.width, boundary.height],
+                                    tint,
+                                ));
                         }
                     }
                 }

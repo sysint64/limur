@@ -1,24 +1,20 @@
 // Backdrop filter: samples the composite texture (everything behind this layer)
 // and applies a tint over the rect region.
 //
-// Uses the same plane geometry + instancing pattern as the vector renderer.
-// Slot 0: TexturedVertex (locations 0-1)
-// Slot 1: BackdropFilterInstance (locations 2-6)
+// No vertex buffer — corner is derived analytically from vertex_index.
+// Slot 0: BackdropFilterInstance (locations 0-1)
 
 @group(0) @binding(0) var composite_tex: texture_2d<f32>;
 @group(0) @binding(1) var composite_sampler: sampler;
-
-struct Vertex {
-    @location(0) position: vec3<f32>,
-    @location(1) uv: vec2<f32>,
+struct Globals {
+    screen_size: vec2<f32>,
 }
 
+@group(0) @binding(2) var<uniform> globals: Globals;
+
 struct Instance {
-    @location(2) mvp_col0: vec4<f32>,
-    @location(3) mvp_col1: vec4<f32>,
-    @location(4) mvp_col2: vec4<f32>,
-    @location(5) mvp_col3: vec4<f32>,
-    @location(6) tint: vec4<f32>,
+    @location(0) boundary: vec4<f32>, // [left, top, width, height] in top-left pixel space
+    @location(1) tint: vec4<f32>,
 }
 
 struct VertexOutput {
@@ -28,13 +24,20 @@ struct VertexOutput {
 }
 
 @vertex
-fn vs_main(v: Vertex, inst: Instance) -> VertexOutput {
-    let mvp = mat4x4(inst.mvp_col0, inst.mvp_col1, inst.mvp_col2, inst.mvp_col3);
-    let clip = mvp * vec4(v.position, 1.0);
+fn vs_main(@builtin(vertex_index) vertex_index: u32, inst: Instance) -> VertexOutput {
+    // Derive corner factor from vertex_index: (0,0) TL, (1,0) TR, (0,1) BL, (1,1) BR.
+    let corner = vec2<f32>(f32(vertex_index & 1u), f32((vertex_index >> 1u) & 1u));
+    let px = inst.boundary.xy + corner * inst.boundary.zw;
+    let clip = vec4<f32>(
+        px.x / globals.screen_size.x * 2.0 - 1.0,
+        1.0 - px.y / globals.screen_size.y * 2.0,
+        0.0,
+        1.0,
+    );
 
     // Derive UV into the composite texture from NDC clip position.
     // Clip Y is up (+1 = top); texture Y is down (0 = top) → flip.
-    let uv = vec2((clip.x + 1.0) * 0.5, (1.0 - clip.y) * 0.5);
+    let uv = vec2<f32>((clip.x + 1.0) * 0.5, (1.0 - clip.y) * 0.5);
 
     var out: VertexOutput;
     out.clip_position = clip;

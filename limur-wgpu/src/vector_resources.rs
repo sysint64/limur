@@ -1,21 +1,12 @@
-use glam::Vec2;
 use limur::{
-    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ColorRgb, ColorRgba, Gradient, Rect,
-    View,
+    Border, BorderRadius, BorderSide, BoxShadow, BoxShape, ColorRgba, Gradient, Rect, View,
     render::Fill,
     text::{FontResources, TextId},
 };
 
-use crate::{
-    snap_rect,
-    text::{
-        Bounds, ContentType, GetGlyphImageResult, GlyphBounds, GlyphMetadata, GlyphSystem,
-        prepare_glyph,
-    },
-};
-use crate::{
-    text::TextResources,
-    vector_renderer::{VectorInstance, VectorInstanceId},
+use crate::text::{
+    Bounds, ContentType, GetGlyphImageResult, GlyphBounds, GlyphMetadata, GlyphSystem,
+    TextResources, prepare_glyph,
 };
 
 #[repr(C)]
@@ -338,7 +329,6 @@ impl VectorData {
         text_resrouces: &mut TextResources,
         vector_resrouces: &mut VectorResources,
         view: &View,
-        instances: &mut sumi::BumpInstances<VectorInstanceId, VectorInstance>,
         id: TextId,
         boundary: Rect<f32>,
         x: f32,
@@ -434,25 +424,6 @@ impl VectorData {
                         })
                     },
                 ) {
-                    // Build the MVP from the glyph's own boundary so the quad
-                    // covers exactly the glyph rect. clip_position.xy will then
-                    // range over [glyph_x .. glyph_x+w] x [glyph_y .. glyph_y+h],
-                    // matching the boundary stored in glyph_to_render for UV math.
-                    let gx = glyph_to_render.boundary[0];
-                    let gy = glyph_to_render.boundary[1];
-                    let gw = glyph_to_render.boundary[2];
-                    let gh = glyph_to_render.boundary[3];
-
-                    let pos = Vec2::new(gx, context.view.size_unscaled.y - gy - gh);
-
-                    let mvp = context.view.screen_camera_matrix
-                        * sumi::transforms_create_2d_model_matrix(&sumi::Transforms2D {
-                            position: pos,
-                            scaling: Vec2::new(gw, gh),
-                            rotation: 0.0,
-                        });
-
-                    instances.insert(VectorInstance::new(mvp));
                     vector_resrouces.data.push(glyph_to_render);
                 }
             }
