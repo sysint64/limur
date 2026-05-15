@@ -21,7 +21,7 @@ tokio = { version = "1", features = ["rt", "sync", "time"], optional = true }
 puffin = "0.19.1"
 bumpalo = { workspace = true }
 smallvec = { workspace = true }
-rustc-hash = "2.1"
+rustc-hash = { workspace = true }
 slab = "0.4.11"
 bitvec = "1.0.1"
 limur-derive = { version = "0.0.1", path = "../limur-derive" }
@@ -45,6 +45,8 @@ limur-widgets = { path = "../limur-widgets" }
 limur-desktop = { path = "../limur-desktop" }
 limur-derive = { path = "../limur-derive" }
 limur-vello = { path = "../limur-vello" }
+limur-wgpu = { path = "../limur-wgpu" }
+limur-tiny-skia = { path = "../limur-tiny-skia" }
 log = { workspace = true }
 env_logger = "0.10"
 winit = { workspace = true }

@@ -10,7 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 
 use crate::{
-    LayoutDirection, Rect, ShortcutsRegistry, View, WidgetId, WidgetRef,
+    LayoutDirection, Rect, ShortcutsRegistry, View, WidgetId, WidgetRef, backdrop_filter,
     editable_text::{self, OsEvent},
     hstack,
     interaction::InteractionState,
@@ -89,6 +89,7 @@ pub(crate) struct WidgetsStates {
     pub(crate) layers_last_accessed: FxHashMap<WidgetId, u64>,
 
     pub(crate) decorated_box: TypedWidgetStates<decorated_box::State>,
+    pub(crate) backdrop_filter: TypedWidgetStates<backdrop_filter::State>,
     pub(crate) scroll_area: TypedWidgetStates<scroll_area::State>,
     pub(crate) text: TypedWidgetStates<text::State>,
     pub(crate) vstack: TypedWidgetStates<vstack::State>,
@@ -644,6 +645,7 @@ impl WidgetsStates {
 
     pub fn next_frame(&mut self) {
         self.decorated_box.current_frame += 1;
+        self.backdrop_filter.current_frame += 1;
         self.svg.current_frame += 1;
         self.gesture_detector.current_frame += 1;
         self.custom.current_frame += 1;
@@ -656,6 +658,7 @@ impl WidgetsStates {
         // let _g = profiler::scope();
 
         self.decorated_box.sweep(&is_retainer_alive);
+        self.backdrop_filter.sweep(&is_retainer_alive);
         self.svg.sweep(&is_retainer_alive);
         self.gesture_detector.sweep(&is_retainer_alive);
         self.custom.sweep(&is_retainer_alive);
@@ -677,6 +680,7 @@ impl WidgetsStates {
 
     pub(crate) fn set_current_layer(&mut self, layer_id: Option<WidgetId>) {
         self.decorated_box.current_layer = layer_id;
+        self.backdrop_filter.current_layer = layer_id;
         self.svg.current_layer = layer_id;
         self.gesture_detector.current_layer = layer_id;
         self.custom.current_layer = layer_id;

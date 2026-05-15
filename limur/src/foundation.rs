@@ -956,9 +956,9 @@ impl ColorRgb {
 
     /// Source: https://bottosson.github.io/posts/oklab/
     pub fn to_oklab(&self) -> ColorOkLab {
-        let r = self.r as f64;
-        let g = self.g as f64;
-        let b = self.b as f64;
+        let r = srgb_to_linear(self.r) as f64;
+        let g = srgb_to_linear(self.g) as f64;
+        let b = srgb_to_linear(self.b) as f64;
 
         let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
         let m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
@@ -992,7 +992,7 @@ impl ColorRgba {
         ColorRgba { r, g, b, a }
     }
 
-    pub fn to_rgb(&self) -> ColorRgb {
+    pub fn rgb(&self) -> ColorRgb {
         ColorRgb {
             r: self.r,
             g: self.g,
@@ -1044,9 +1044,15 @@ impl ColorOkLab {
         let s = s * s * s;
 
         ColorRgb {
-            r: (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s) as f32,
-            g: (-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s) as f32,
-            b: (-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s) as f32,
+            r: linear_to_srgb(
+                (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s).clamp(0.0, 1.0) as f32,
+            ),
+            g: linear_to_srgb(
+                (-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s).clamp(0.0, 1.0) as f32,
+            ),
+            b: linear_to_srgb(
+                (-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s).clamp(0.0, 1.0) as f32,
+            ),
         }
     }
 }
@@ -1540,6 +1546,7 @@ fn even_stops_from_iter(iter: impl Iterator<Item = ColorRgba>, count: usize) -> 
 
     stops
 }
+
 impl RadialGradient {
     /// Creates a simple radial gradient from center
     pub fn circle(colors: Vec<ColorRgba>) -> Self {
@@ -1610,7 +1617,27 @@ impl From<ColorRgb> for ColorRgba {
     }
 }
 
+impl From<ColorRgb> for ColorOkLab {
+    fn from(value: ColorRgb) -> Self {
+        value.to_oklab()
+    }
+}
+
+impl From<ColorRgba> for ColorOkLab {
+    fn from(value: ColorRgba) -> Self {
+        value.rgb().to_oklab()
+    }
+}
+
 impl From<ColorOkLab> for ColorRgba {
+    fn from(value: ColorOkLab) -> Self {
+        let rgb = value.to_rgb();
+
+        rgb.into()
+    }
+}
+
+impl From<ColorOkLab> for ColorRgb {
     fn from(value: ColorOkLab) -> Self {
         let rgb = value.to_rgb();
 
@@ -1640,8 +1667,51 @@ impl From<ColorRgba> for cosmic_text::Color {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BoxShape {
     Rect,
     Oval,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct BoxShadow {
+    pub color: ColorRgba,
+    pub offset: Vec2,
+    pub blur_radius: f32,
+    pub spread_radius: f32,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Copy)]
+pub struct LinearRgba {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
+
+impl LinearRgba {
+    pub fn to_srgb(&self) -> ColorRgba {
+        ColorRgba {
+            r: linear_to_srgb(self.r),
+            g: linear_to_srgb(self.g),
+            b: linear_to_srgb(self.b),
+            a: self.a,
+        }
+    }
+}
+
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(c: f32) -> f32 {
+    if c <= 0.0031308 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
 }

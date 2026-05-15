@@ -1,0 +1,16 @@
+[package]
+name = "limur-wgpu"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+limur = { version = "0.0.1", path = "../limur" }
+bytemuck = { version = "1.25.0", features = ["derive"] }
+cosmic-text = { workspace = true }
+winit = { workspace = true }
+wgpu = "29.0.3"
+glam = { workspace = true }
+log = { workspace = true }
+etagere = "0.3.0"
+lru = { version = "0.16.2", default-features = false }
+rustc-hash = { workspace = true }

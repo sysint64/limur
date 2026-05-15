@@ -6,6 +6,7 @@ members = [
     "limur-derive",
     "limur-tiny-skia",
     "limur-vello",
+    "limur-wgpu",
     "limur-widgets",
 ]
 
@@ -25,6 +26,7 @@ bumpalo = { version = "3.19", features = ["collections", "boxed"] }
 smallvec = "1.15.1"
 strum = "0.27"
 strum_macros = "0.27"
+rustc-hash = "2.1"
 
 [patch.crates-io]
 cosmic-text = { git = "https://github.com/tech-paws/cosmic-text.git", branch = "tech_paws" }

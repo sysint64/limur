@@ -213,7 +213,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
     winit::application::ApplicationHandler<ApplicationEvent> for Application<'_, T, Event>
 {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
         self.window_manager
             .with_event_loop(event_loop, |window_manager| {
                 self.app
@@ -331,12 +331,17 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 window.ui_state.user_input.mouse_wheel_delta_x = 0.;
                 window.ui_state.user_input.mouse_wheel_delta_y = 0.;
                 window.ui_state.user_input.mouse_left_click_count = 0;
+
+                window
+                    .renderer
+                    .on_resized(window.ui_state.view.physical_size.clone());
             }
             winit::event::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 window.ui_state.view.scale_factor = scale_factor;
                 window
                     .texts
                     .update_view(&window.ui_state.view, &mut self.fonts);
+                window.renderer.on_scale_factor_update(scale_factor);
 
                 self.window_manager.request_redraw(window_id);
             }
@@ -363,7 +368,7 @@ impl<T: ApplicationDelegate<Event>, Event: 'static>
                 window.winit_window.pre_present_notify();
                 window.renderer.process_commands(
                     &window.ui_state.view,
-                    &window.ui_state.render_state,
+                    &window.ui_state.render_state.composition_layers(),
                     window.fill_color,
                     &mut self.fonts,
                     &mut window.texts,

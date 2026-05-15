@@ -1,11 +1,11 @@
+use cosmic_text::{Buffer, FontSystem};
 use limur::{
     Border, BorderRadius, BorderSide, ClipShape, ColorRgb, ColorRgba, Gradient, Rect, View,
     assets::Assets,
     profiler,
-    render::{Fill, RenderCommand, RenderState, Renderer},
+    render::{Fill, RenderCommand, RenderCompositionLayer, RenderState, Renderer},
     text::{FontResources, TextsResources},
 };
-use cosmic_text::{Buffer, FontSystem};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{collections::HashMap, sync::Arc};
 use vello::{
@@ -418,8 +418,8 @@ impl Renderer for VelloRenderer {
     fn process_commands(
         &mut self,
         view: &View,
-        state: &RenderState,
-        fill_color: ColorRgb,
+        composition_layers: &[RenderCompositionLayer],
+        fill_color: Option<ColorRgba>,
         fonts: &mut FontResources,
         text: &mut TextsResources,
         assets: &Assets,
@@ -432,155 +432,170 @@ impl Renderer for VelloRenderer {
         self.resize(width, height);
         self.begin_frame();
 
-        for command in state.commands() {
-            match command {
-                RenderCommand::Rect {
-                    boundary,
-                    fill,
-                    border_radius,
-                    border,
-                    ..
-                } => {
-                    self.draw_rect(
-                        *boundary,
-                        fill.as_ref(),
-                        border_radius.as_ref(),
-                        border.as_ref(),
-                    );
-                }
-                RenderCommand::Oval {
-                    boundary,
-                    fill,
-                    border,
-                    ..
-                } => {
-                    self.draw_oval(*boundary, fill.as_ref(), border.as_ref());
-                }
-                RenderCommand::Text {
-                    x,
-                    y,
-                    text_id,
-                    tint_color,
-                    ..
-                } => {
-                    let color = tint_color
-                        .map(|c| convert_rgba_color(&c))
-                        .unwrap_or_else(|| Color::from_rgba8(0, 0, 0, 255));
+        for layer in composition_layers {
+            for command in &layer.commands {
+                match command {
+                    RenderCommand::Shape {
+                        shape,
+                        boundary,
+                        fill,
+                        border_radius,
+                        border,
+                        ..
+                    } => match shape {
+                        limur::BoxShape::Rect => self.draw_rect(
+                            *boundary,
+                            fill.as_ref(),
+                            border_radius.as_ref(),
+                            border.as_ref(),
+                        ),
+                        limur::BoxShape::Oval => self.draw_oval(
+                            *boundary,
+                            fill.as_ref(),
+                            border
+                                .map(|it| {
+                                    it.top
+                                        .or(it.bottom)
+                                        .or(it.left)
+                                        .or(it.right)
+                                        .unwrap_or(BorderSide::default())
+                                })
+                                .as_ref(),
+                        ),
+                    },
+                    RenderCommand::Text {
+                        x,
+                        y,
+                        text_id,
+                        tint_color,
+                        ..
+                    } => {
+                        let color = tint_color
+                            .map(|c| convert_rgba_color(&c))
+                            .unwrap_or_else(|| Color::from_rgba8(0, 0, 0, 255));
 
-                    text.get_mut(*text_id).with_buffer_mut(|buffer| {
-                        let brush = Brush::Solid(color);
+                        text.get_mut(*text_id).with_buffer_mut(|buffer| {
+                            let brush = Brush::Solid(color);
 
-                        for run in buffer.layout_runs() {
-                            let line_y = y + run.line_y.round();
+                            for run in buffer.layout_runs() {
+                                let line_y = y + run.line_y.round();
 
-                            // Group by font
-                            let mut font_glyphs: HashMap<
-                                cosmic_text::fontdb::ID,
-                                Vec<(Glyph, f32)>,
-                            > = HashMap::new();
+                                // Group by font
+                                let mut font_glyphs: HashMap<
+                                    cosmic_text::fontdb::ID,
+                                    Vec<(Glyph, f32)>,
+                                > = HashMap::new();
 
-                            for glyph in run.glyphs.iter() {
-                                let physical = glyph.physical((*x, line_y), 1.0);
-                                let font_size = f32::from_bits(physical.cache_key.font_size_bits);
+                                for glyph in run.glyphs.iter() {
+                                    let physical = glyph.physical((*x, line_y), 1.0);
+                                    let font_size =
+                                        f32::from_bits(physical.cache_key.font_size_bits);
 
-                                // Use raw floating-point positions for smooth subpixel rendering
-                                // This prevents jiggling with justified text during resize
-                                let vello_glyph = Glyph {
-                                    id: physical.cache_key.glyph_id as u32,
-                                    x: x + glyph.x + glyph.x_offset,
-                                    y: glyph.y - glyph.y_offset + line_y,
-                                };
+                                    // Use raw floating-point positions for smooth subpixel rendering
+                                    // This prevents jiggling with justified text during resize
+                                    let vello_glyph = Glyph {
+                                        id: physical.cache_key.glyph_id as u32,
+                                        x: x + glyph.x + glyph.x_offset,
+                                        y: glyph.y - glyph.y_offset + line_y,
+                                    };
 
-                                font_glyphs
-                                    .entry(glyph.font_id)
-                                    .or_default()
-                                    .push((vello_glyph, font_size));
-                            }
+                                    font_glyphs
+                                        .entry(glyph.font_id)
+                                        .or_default()
+                                        .push((vello_glyph, font_size));
+                                }
 
-                            // Render glyphs for each font
-                            for (font_id, glyphs) in font_glyphs {
-                                if let Some(vello_font) = self
-                                    .font_cache
-                                    .get_or_insert(font_id, &mut fonts.font_system)
-                                {
-                                    let font_size = glyphs
-                                        .first()
-                                        .map(|(_, s)| *s)
-                                        .unwrap_or((12.0 * view.scale_factor) as f32);
-                                    let glyph_iter = glyphs.into_iter().map(|(g, _)| g);
+                                // Render glyphs for each font
+                                for (font_id, glyphs) in font_glyphs {
+                                    if let Some(vello_font) = self
+                                        .font_cache
+                                        .get_or_insert(font_id, &mut fonts.font_system)
+                                    {
+                                        let font_size = glyphs
+                                            .first()
+                                            .map(|(_, s)| *s)
+                                            .unwrap_or((12.0 * view.scale_factor) as f32);
+                                        let glyph_iter = glyphs.into_iter().map(|(g, _)| g);
 
-                                    self.scene
-                                        .draw_glyphs(vello_font)
-                                        .font_size(font_size)
-                                        .brush(&brush)
-                                        .draw(StyleRef::Fill(peniko::Fill::NonZero), glyph_iter);
+                                        self.scene
+                                            .draw_glyphs(vello_font)
+                                            .font_size(font_size)
+                                            .brush(&brush)
+                                            .draw(
+                                                StyleRef::Fill(peniko::Fill::NonZero),
+                                                glyph_iter,
+                                            );
+                                    }
                                 }
                             }
+                        });
+                    }
+                    RenderCommand::PushClip { rect, shape, .. } => match shape {
+                        ClipShape::Rect => {
+                            self.scene.push_clip_layer(
+                                Affine::IDENTITY,
+                                &vello::kurbo::Rect::new(
+                                    rect.x as f64,
+                                    rect.y as f64,
+                                    (rect.x + rect.width) as f64,
+                                    (rect.y + rect.height) as f64,
+                                ),
+                            );
                         }
-                    });
-                }
-                RenderCommand::PushClip { rect, shape, .. } => match shape {
-                    ClipShape::Rect => {
-                        self.scene.push_clip_layer(
+                        ClipShape::RoundedRect { border_radius } => self.scene.push_clip_layer(
                             Affine::IDENTITY,
-                            &vello::kurbo::Rect::new(
+                            &vello::kurbo::RoundedRect::new(
                                 rect.x as f64,
                                 rect.y as f64,
                                 (rect.x + rect.width) as f64,
                                 (rect.y + rect.height) as f64,
+                                RoundedRectRadii {
+                                    top_left: border_radius.top_left as f64,
+                                    top_right: border_radius.top_right as f64,
+                                    bottom_right: border_radius.bottom_right as f64,
+                                    bottom_left: border_radius.bottom_left as f64,
+                                },
                             ),
-                        );
-                    }
-                    ClipShape::RoundedRect { border_radius } => self.scene.push_clip_layer(
-                        Affine::IDENTITY,
-                        &vello::kurbo::RoundedRect::new(
-                            rect.x as f64,
-                            rect.y as f64,
-                            (rect.x + rect.width) as f64,
-                            (rect.y + rect.height) as f64,
-                            RoundedRectRadii {
-                                top_left: border_radius.top_left as f64,
-                                top_right: border_radius.top_right as f64,
-                                bottom_right: border_radius.bottom_right as f64,
-                                bottom_left: border_radius.bottom_left as f64,
-                            },
                         ),
-                    ),
-                    ClipShape::Oval => {
-                        let center = vello::kurbo::Point::new(
-                            (rect.x + rect.width / 2.0) as f64,
-                            (rect.y + rect.height / 2.0) as f64,
-                        );
-                        let radii = vello::kurbo::Vec2::new(
-                            (rect.width / 2.0) as f64,
-                            (rect.height / 2.0) as f64,
-                        );
+                        ClipShape::Oval => {
+                            let center = vello::kurbo::Point::new(
+                                (rect.x + rect.width / 2.0) as f64,
+                                (rect.y + rect.height / 2.0) as f64,
+                            );
+                            let radii = vello::kurbo::Vec2::new(
+                                (rect.width / 2.0) as f64,
+                                (rect.height / 2.0) as f64,
+                            );
 
-                        self.scene.push_clip_layer(
-                            Affine::IDENTITY,
-                            &vello::kurbo::Ellipse::new(center, radii, 0.0),
-                        );
+                            self.scene.push_clip_layer(
+                                Affine::IDENTITY,
+                                &vello::kurbo::Ellipse::new(center, radii, 0.0),
+                            );
+                        }
+                    },
+                    RenderCommand::PopClip => {
+                        self.scene.pop_layer();
                     }
-                },
-                RenderCommand::PopClip => {
-                    self.scene.pop_layer();
-                }
-                RenderCommand::Svg {
-                    boundary,
-                    asset_id,
-                    tint_color,
-                    ..
-                } => {
-                    if let Some(tree) = assets.get_svg_tree(asset_id) {
-                        self.draw_svg(tree, *boundary, *tint_color);
-                    } else {
-                        log::warn!("SVG with ID = {} not found", asset_id);
+                    RenderCommand::Svg {
+                        boundary,
+                        asset_id,
+                        tint_color,
+                        ..
+                    } => {
+                        if let Some(tree) = assets.get_svg_tree(asset_id) {
+                            self.draw_svg(tree, *boundary, *tint_color);
+                        } else {
+                            log::warn!("SVG with ID = {} not found", asset_id);
+                        }
                     }
+                    RenderCommand::OuterBoxShadow { .. } => {}
+                    RenderCommand::InnerBoxShadow { .. } => {}
+                    RenderCommand::BackdropFilter { .. } => {}
                 }
             }
         }
 
-        self.end_frame(&fill_color);
+        self.end_frame(&fill_color.unwrap_or(ColorRgba::from_hex(0xFF000000)).rgb());
     }
 }
 

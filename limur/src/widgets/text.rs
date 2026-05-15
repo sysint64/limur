@@ -167,6 +167,13 @@ impl<'a> TextBuilder<'a> {
 
             let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
 
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::BeginOffset {
+                    offset_x: self.frame.offset_x,
+                    offset_y: self.frame.offset_y,
+                });
+            }
+
             context.push_layout_command(LayoutCommand::Leaf {
                 widget_ref,
                 backgrounds,
@@ -183,6 +190,10 @@ impl<'a> TextBuilder<'a> {
                 },
                 clip: self.frame.clip,
             });
+
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::EndOffset);
+            }
 
             context.accessed_this_frame(id);
 
@@ -219,7 +230,7 @@ pub fn text(text: &str) -> TextBuilder<'_> {
         vertical_align: AlignY::Top,
         font_size: 12.,
         line_height: 1.,
-        text_align: TextAlign::Left,
+        text_align: TextAlign::Auto,
     }
 }
 
@@ -241,6 +252,7 @@ pub fn render(ctx: &mut RenderContext, placement: &WidgetPlacement, state: &Stat
     ctx.push_command(
         placement.zindex,
         RenderCommand::Text {
+            boundary: placement.rect.px(ctx),
             x: text_position.x,
             y: text_position.y,
             text_id: state.text_id,
