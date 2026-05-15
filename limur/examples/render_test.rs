@@ -833,11 +833,13 @@ impl Window<ExampleApplication, ()> for MainWindow {
 
                         section_label(ctx, "Long Text");
 
-                        ui::text(include_str!("assets/latin_text.txt"))
-                            .fill_max_width()
-                            .color(ui::ColorRgb::from_hex(0x000000))
-                            .font_size(24.0)
-                            .build(ctx);
+                        for _ in 0..10 {
+                            ui::text(include_str!("assets/arabic_text.txt"))
+                                .fill_max_width()
+                                .color(ui::ColorRgb::from_hex(0x000000))
+                                .font_size(24.0)
+                                .build(ctx);
+                        }
 
                         // ui::decorated_box().color(ui::ColorRgb::from_hex(0x000000)).fill_max_width().height(48.).build(ctx);
                     });
