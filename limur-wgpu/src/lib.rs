@@ -21,6 +21,7 @@ pub struct WgpuRenderer {
 
     // Index into shape_data of the first shape in the current vector batch.
     vector_batch_start: u32,
+    dual_source_blending_support: bool,
 
     resources: Resources,
     renderers: Renderers,
@@ -48,6 +49,10 @@ impl WgpuRenderer {
         }
 
         let (adapter, device, queue) = request_device(&instance, &surface).await;
+
+        let dual_source_blending_support = adapter
+            .features()
+            .contains(wgpu::Features::DUAL_SOURCE_BLENDING);
 
         let size = window.inner_size();
         let view_size = Vec2::new(size.width as f32, size.height as f32);
@@ -99,6 +104,7 @@ impl WgpuRenderer {
             device,
             queue,
             config,
+            dual_source_blending_support,
             vector_batch_start: 0,
             resources: Resources { globals_buffer },
             renderers: Renderers {},
@@ -163,6 +169,7 @@ pub struct GraphicsContext<'a> {
     pub view_size: Vec2,
     pub scale_factor: f32,
     pub sample_count: u32,
+    pub dual_source_blending_support: bool,
 }
 
 impl Renderer for WgpuRenderer {
