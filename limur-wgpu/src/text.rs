@@ -10,7 +10,10 @@ use limur::ColorRgba;
 use lru::LruCache;
 use rustc_hash::FxHasher;
 
-use crate::GraphicsContext;
+use crate::{
+    GraphicsContext,
+    vector_resources::{VectorData, to_shader_color},
+};
 
 type Hasher = BuildHasherDefault<FxHasher>;
 
@@ -582,4 +585,209 @@ impl Error for RenderError {}
 enum TextColorConversion {
     None = 0,
     ConvertToLinear = 1,
+}
+
+pub(crate) fn prepare_glyph(
+    context: &GraphicsContext,
+    system: &mut GlyphSystem,
+    metadata: GlyphMetadata,
+    bounds: GlyphBounds,
+    get_glyph_image: impl FnOnce(&mut GlyphSystem) -> Option<GetGlyphImageResult>,
+) -> Result<Option<VectorData>, PrepareError> {
+    let details = if let Some(details) = system
+        .resources
+        .mask_atlas
+        .glyph_cache
+        .get(&metadata.cache_key)
+    {
+        system
+            .resources
+            .mask_atlas
+            .glyphs_in_use
+            .insert(metadata.cache_key);
+        details
+    } else if let Some(details) = system
+        .resources
+        .color_atlas
+        .glyph_cache
+        .get(&metadata.cache_key)
+    {
+        system
+            .resources
+            .color_atlas
+            .glyphs_in_use
+            .insert(metadata.cache_key);
+        details
+    } else if let Some(details) = system
+        .resources
+        .subpixel_atlas
+        .glyph_cache
+        .get(&metadata.cache_key)
+    {
+        system
+            .resources
+            .subpixel_atlas
+            .glyphs_in_use
+            .insert(metadata.cache_key);
+        details
+    } else {
+        let Some(image) = get_glyph_image(system) else {
+            return Ok(None);
+        };
+
+        let should_rasterize = image.width > 0 && image.height > 0;
+
+        let (gpu_cache, atlas_id, inner) = if should_rasterize {
+            let mut inner = system.resources.inner_for_content_mut(image.content_type);
+
+            // Find a position in the packer
+            let allocation = loop {
+                match inner.try_allocate(image.width as usize, image.height as usize) {
+                    Some(a) => break a,
+                    None => {
+                        if !system.resources.grow(
+                            context,
+                            system.font_system,
+                            system.cache,
+                            image.content_type,
+                            metadata.scale_factor,
+                        ) {
+                            return Err(PrepareError::AtlasFull);
+                        }
+
+                        inner = system.resources.inner_for_content_mut(image.content_type);
+                    }
+                }
+            };
+            let atlas_min = allocation.rectangle.min;
+
+            context.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &inner.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: atlas_min.x as u32,
+                        y: atlas_min.y as u32,
+                        z: 0,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &image.data,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(image.width as u32 * inner.num_channels() as u32),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d {
+                    width: image.width as u32,
+                    height: image.height as u32,
+                    depth_or_array_layers: 1,
+                },
+            );
+
+            (
+                GpuCacheStatus::InAtlas {
+                    x: atlas_min.x as u16,
+                    y: atlas_min.y as u16,
+                    content_type: image.content_type,
+                },
+                Some(allocation.id),
+                inner,
+            )
+        } else {
+            let inner = &mut system.resources.color_atlas;
+
+            (GpuCacheStatus::SkipRasterization, None, inner)
+        };
+
+        inner.glyphs_in_use.insert(metadata.cache_key);
+        // Insert the glyph into the cache and return the details reference
+        inner
+            .glyph_cache
+            .get_or_insert(metadata.cache_key, || GlyphDetails {
+                width: image.width,
+                height: image.height,
+                gpu_cache,
+                atlas_id,
+                top: image.top,
+                left: image.left,
+            })
+    };
+
+    let mut x = metadata.x + details.left as i32;
+    let mut y =
+        (metadata.line_y * metadata.scale_factor).round() as i32 + metadata.y - details.top as i32;
+
+    let (mut atlas_x, mut atlas_y, content_type) = match details.gpu_cache {
+        GpuCacheStatus::InAtlas { x, y, content_type } => (x, y, content_type),
+        GpuCacheStatus::SkipRasterization => return Ok(None),
+    };
+
+    let mut width = details.width as i32;
+    let mut height = details.height as i32;
+
+    // Starts beyond right edge or ends beyond left edge
+    let max_x = x + width;
+    if x > bounds.x.max || max_x < bounds.x.min {
+        return Ok(None);
+    }
+
+    // Starts beyond bottom edge or ends beyond top edge
+    let max_y = y + height;
+    if y > bounds.y.max || max_y < bounds.y.min {
+        return Ok(None);
+    }
+
+    // Clip left ege
+    if x < bounds.x.min {
+        let right_shift = bounds.x.min - x;
+
+        x = bounds.x.min;
+        width = max_x - bounds.x.min;
+        atlas_x += right_shift as u16;
+    }
+
+    // Clip right edge
+    if x + width > bounds.x.max {
+        width = bounds.x.max - x;
+    }
+
+    // Clip top edge
+    if y < bounds.y.min {
+        let bottom_shift = bounds.y.min - y;
+
+        y = bounds.y.min;
+        height = max_y - bounds.y.min;
+        atlas_y += bottom_shift as u16;
+    }
+
+    // Clip bottom edge
+    if y + height > bounds.y.max {
+        height = bounds.y.max - y;
+    }
+
+    Ok(Some(VectorData {
+        boundary: [x as f32, y as f32, width as f32, height as f32],
+        shape_type: 6,
+        _pad0: [0; 3],
+        fill_color: to_shader_color(metadata.color),
+        border_color_left: [0.0; 4],
+        border_color_top: [0.0; 4],
+        border_color_right: [0.0; 4],
+        border_color_bottom: [0.0; 4],
+        border_widths: [0.0; 4],
+        border_radii: [0.0; 4],
+        box_shadow: [0.0; 4],
+        gradient_info: [0; 4],
+        gradient_params: [0.0; 4],
+        text_content_type_with_srgb: [
+            content_type as u16,
+            match system.resources.color_mode {
+                ColorMode::Accurate => TextColorConversion::ConvertToLinear,
+                ColorMode::Web => TextColorConversion::None,
+            } as u16,
+        ],
+        text_uv: [atlas_x as f32, atlas_y as f32],
+        _pad3: 0,
+    }))
 }

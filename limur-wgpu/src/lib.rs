@@ -1,3 +1,8 @@
+mod gpu_vec;
+mod text;
+mod vector_renderer;
+mod vector_resources;
+
 use std::sync::Arc;
 
 use glam::Vec2;
