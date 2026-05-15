@@ -372,18 +372,12 @@ impl VectorData {
 
                 let bounds = GlyphBounds {
                     x: Bounds {
-                        min: boundary.left().max(0.0).round() as i32,
-                        max: boundary
-                            .right()
-                            .min(view.physical_size.width as f32)
-                            .round() as i32,
+                        min: boundary.left().max(0.0) as i32,
+                        max: boundary.right().min(view.physical_size.width as f32) as i32,
                     },
                     y: Bounds {
-                        min: boundary.top().max(0.0).round() as i32,
-                        max: boundary
-                            .bottom()
-                            .min(view.physical_size.height as f32)
-                            .round() as i32,
+                        min: boundary.top().max(0.0) as i32,
+                        max: boundary.bottom().min(view.physical_size.height as f32) as i32,
                     },
                 };
 
@@ -408,10 +402,7 @@ impl VectorData {
                         let content_type = match image.content {
                             cosmic_text::SwashContent::Color => ContentType::Color,
                             cosmic_text::SwashContent::Mask => ContentType::Mask,
-                            cosmic_text::SwashContent::SubpixelMask => {
-                                // Not implemented yet, but don't panic if this happens.
-                                ContentType::Mask
-                            }
+                            cosmic_text::SwashContent::SubpixelMask => ContentType::SubpixelMask,
                         };
 
                         Some(GetGlyphImageResult {

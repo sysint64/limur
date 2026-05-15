@@ -9,6 +9,7 @@ use limur_desktop::{
     window_manager::{WindowDescriptor, WindowManager},
 };
 use limur_vello::VelloRenderer;
+use limur_wgpu::WgpuRenderer;
 use pollster::FutureExt;
 
 struct ShortcutsApplication;
@@ -90,76 +91,76 @@ impl ApplicationDelegate<()> for ShortcutsApplication {
         );
 
         // Test text editing MacOS shortcuts
-        shortcuts_registry
-            .scope(ui::ShortcutScopes::TextEditing)
-            .add_repeat(
-                ui::TextEditingShortcut::Delete,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Delete),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::Backspace,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Backspace),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MoveNext,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowRight),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MovePrev,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowLeft),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MoveUp,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowUp),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MoveDown,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowDown),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::NextLine,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Enter),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::MoveStart,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Home),
-            )
-            .add(
-                ui::TextEditingShortcut::MoveEnd,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::End),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::BufferStart,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::Home).with_super(),
-            )
-            .add(
-                ui::TextEditingShortcut::BufferEnd,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::End).with_super(),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::PageUp,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::PageUp),
-            )
-            .add_repeat(
-                ui::TextEditingShortcut::PageDown,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::PageDown),
-            )
-            .add(
-                ui::TextEditingShortcut::SelectAll,
-                ui::KeyBinding::new(ui::keyboard::KeyCode::KeyA).with_super(),
-            )
-            .add_modifier(
-                ui::TextInputModifier::Select,
-                ui::keyboard::KeyModifiers::shift(),
-            )
-            .add_modifier(
-                ui::TextInputModifier::Word,
-                ui::keyboard::KeyModifiers::super_key(),
-            )
-            .add_modifier(
-                ui::TextInputModifier::Paragraph,
-                ui::keyboard::KeyModifiers::super_key(),
-            );
+        // shortcuts_registry
+        //     .scope(ui::ShortcutScopes::TextEditing)
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::Delete,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::Delete),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::Backspace,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::Backspace),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::MoveNext,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowRight),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::MovePrev,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowLeft),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::MoveUp,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowUp),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::MoveDown,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::ArrowDown),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::NextLine,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::Enter),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::MoveStart,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::Home),
+        //     )
+        //     .add(
+        //         ui::TextEditingShortcut::MoveEnd,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::End),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::BufferStart,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::Home).with_super(),
+        //     )
+        //     .add(
+        //         ui::TextEditingShortcut::BufferEnd,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::End).with_super(),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::PageUp,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::PageUp),
+        //     )
+        //     .add_repeat(
+        //         ui::TextEditingShortcut::PageDown,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::PageDown),
+        //     )
+        //     .add(
+        //         ui::TextEditingShortcut::SelectAll,
+        //         ui::KeyBinding::new(ui::keyboard::KeyCode::KeyA).with_super(),
+        //     )
+        //     .add_modifier(
+        //         ui::TextInputModifier::Select,
+        //         ui::keyboard::KeyModifiers::shift(),
+        //     )
+        //     .add_modifier(
+        //         ui::TextInputModifier::Word,
+        //         ui::keyboard::KeyModifiers::super_key(),
+        //     )
+        //     .add_modifier(
+        //         ui::TextInputModifier::Paragraph,
+        //         ui::keyboard::KeyModifiers::super_key(),
+        //     );
 
         window_manager.spawn_window(
             MainWindow {
@@ -171,19 +172,20 @@ impl ApplicationDelegate<()> for ShortcutsApplication {
                 width: 1200,
                 height: 800,
                 resizable: true,
-                fill_color: ui::ColorRgb::from_hex(0x121212),
+                fill_color: Some(ui::ColorRgba::from_hex(0x00121212)),
             },
         );
     }
 
     fn create_renderer(window: std::sync::Arc<winit::window::Window>) -> Box<dyn ui::Renderer> {
         Box::new(
-            VelloRenderer::new(
-                window.clone(),
-                window.inner_size().width,
-                window.inner_size().height,
-            )
-            .block_on(),
+            WgpuRenderer::new(window.clone()).block_on(),
+            // VelloRenderer::new(
+            //     window.clone(),
+            //     window.inner_size().width,
+            //     window.inner_size().height,
+            // )
+            // .block_on(),
         )
     }
 }
@@ -195,7 +197,7 @@ impl MainWindow {
         }
 
         let mut color = ui::Tween::new(ui::ColorRgba::from_hex(0xFFFF0000))
-            .curve(ui::curves::f32::ease_out_back)
+            .curve(ui::curves::ease_out_back)
             .duration(Duration::from_secs(2));
 
         color.tween_to(ui::ColorRgba::from_hex(0xFF00FF00));
@@ -296,23 +298,23 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                             .build(ctx);
 
                         ui::shortcut_scope(TestScopes::S1).build(ctx, |ctx| {
-                            if ctx.is_shortcut_up(TestShortcuts::S1Bind1) {
+                            if ctx.is_shortcut(TestShortcuts::S1Bind1) {
                                 self.push_shortcut("S1 / BIND3 (KeyA)");
                             }
-                            if ctx.is_shortcut_up(TestShortcuts::S1Bind2) {
+                            if ctx.is_shortcut(TestShortcuts::S1Bind2) {
                                 self.push_shortcut("S1 / BIND2 (KeyG)");
                             }
-                            if ctx.is_shortcut_up(TestShortcuts::S1Chord1) {
+                            if ctx.is_shortcut(TestShortcuts::S1Chord1) {
                                 self.push_shortcut("S1 / Chord K+C triggered");
                             }
 
                             ui::shortcut_scope(TestScopes::S2)
                                 .active(true)
                                 .build(ctx, |ctx| {
-                                    if ctx.is_shortcut_up(TestShortcuts::S2Bind1) {
+                                    if ctx.is_shortcut(TestShortcuts::S2Bind1) {
                                         self.push_shortcut("S2 / BIND1 (KeyA) - shadowed S1");
                                     }
-                                    if ctx.is_shortcut_up(TestShortcuts::S1Bind2) {
+                                    if ctx.is_shortcut(TestShortcuts::S1Bind2) {
                                         self.push_shortcut("S2 / BIND2 (KeyG) - from S1");
                                     }
                                 });
@@ -320,12 +322,12 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                             ui::shortcut_scope(TestScopes::S2)
                                 .active(false)
                                 .build(ctx, |ctx| {
-                                    if ctx.is_shortcut_up(TestShortcuts::S2Bind1) {
+                                    if ctx.is_shortcut(TestShortcuts::S2Bind1) {
                                         self.push_shortcut(
                                             "Inactive S2 / BIND1 (KeyA) - should not be triggered",
                                         );
                                     }
-                                    if ctx.is_shortcut_up(TestShortcuts::S1Bind2) {
+                                    if ctx.is_shortcut(TestShortcuts::S1Bind2) {
                                         self.push_shortcut("Inactive S2 / BIND2 (KeyG) - from S1");
                                     }
                                 });
@@ -333,10 +335,10 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                             ui::shortcut_scope(TestScopes::S3)
                                 .active(true)
                                 .build(ctx, |ctx| {
-                                    if ctx.is_shortcut_up(TestShortcuts::S3Bind1) {
+                                    if ctx.is_shortcut(TestShortcuts::S3Bind1) {
                                         self.push_shortcut("S3 / BIND1 (KeyA) - shadowed S1");
                                     }
-                                    if ctx.is_shortcut_up(TestShortcuts::S1Bind2) {
+                                    if ctx.is_shortcut(TestShortcuts::S1Bind2) {
                                         self.push_shortcut("S3 / BIND2 (KeyG) - from S1");
                                     }
                                 });
@@ -373,22 +375,22 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                             .build(ctx);
 
                         ui::shortcut_scope(TestScopes::S4).build(ctx, |ctx| {
-                            if ctx.is_shortcut_up(TestShortcuts::S4Bind1) {
+                            if ctx.is_shortcut(TestShortcuts::S4Bind1) {
                                 self.push_shortcut("S4 / BIND1 (KeyB)");
                             }
 
                             ui::shortcut_scope(TestScopes::S5).build(ctx, |ctx| {
-                                if ctx.is_shortcut_up(TestShortcuts::S5Bind1) {
+                                if ctx.is_shortcut(TestShortcuts::S5Bind1) {
                                     self.push_shortcut("S5 / BIND1 (KeyE)");
                                 }
 
                                 ui::shortcut_scope(TestScopes::S6).build(ctx, |ctx| {
-                                    if ctx.is_shortcut_up(TestShortcuts::S6Bind1) {
+                                    if ctx.is_shortcut(TestShortcuts::S6Bind1) {
                                         self.push_shortcut(
                                             "S6 / BIND1 (KeyC) - shadowed S5's KeyE",
                                         );
                                     }
-                                    if ctx.is_shortcut_up(TestShortcuts::S6Bind2) {
+                                    if ctx.is_shortcut(TestShortcuts::S6Bind2) {
                                         self.push_shortcut(
                                             "S6 / BIND2 (KeyE) - shadowed S5's BIND1",
                                         );
@@ -397,7 +399,7 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                             });
 
                             ui::shortcut_scope(TestScopes::S7).build(ctx, |ctx| {
-                                if ctx.is_shortcut_up(TestShortcuts::S7Bind1) {
+                                if ctx.is_shortcut(TestShortcuts::S7Bind1) {
                                     self.push_shortcut("S7 / BIND1 (KeyD)");
                                 }
                             });
@@ -424,12 +426,12 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                             .build(ctx);
 
                         ui::shortcut_scope(TestScopes::S8).build(ctx, |ctx| {
-                            if ctx.is_shortcut_up(TestShortcuts::S8Bind1) {
+                            if ctx.is_shortcut(TestShortcuts::S8Bind1) {
                                 self.push_shortcut("S8 / BIND1 (KeyF)");
                             }
                         });
 
-                        if ctx.is_shortcut_up(TestShortcuts::RootBind1) {
+                        if ctx.is_shortcut(TestShortcuts::RootBind1) {
                             self.push_shortcut("ROOT / BIND1 (KeyZ) - global fallback");
                         }
                     });
@@ -466,16 +468,16 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                                 .color(ui::ColorRgba::from_hex(0xFFAAFFFF))
                                 .build(ctx);
 
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::MoveNext) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::MoveNext) {
                                 self.push_shortcut("MoveNext (→)");
                             }
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::MovePrev) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::MovePrev) {
                                 self.push_shortcut("MovePrev (←)");
                             }
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::MoveUp) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::MoveUp) {
                                 self.push_shortcut("MoveUp (↑)");
                             }
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::MoveDown) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::MoveDown) {
                                 self.push_shortcut("MoveDown (↓)");
                             }
 
@@ -494,10 +496,10 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                                 .color(ui::ColorRgba::from_hex(0xFFAAFFFF))
                                 .build(ctx);
 
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::MoveStart) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::MoveStart) {
                                 self.push_shortcut("MoveStart (Home)");
                             }
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::MoveEnd) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::MoveEnd) {
                                 self.push_shortcut("MoveEnd (End)");
                             }
 
@@ -516,10 +518,10 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                                 .color(ui::ColorRgba::from_hex(0xFFAAFFFF))
                                 .build(ctx);
 
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::BufferStart) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::BufferStart) {
                                 self.push_shortcut("BufferStart (⌘+Home)");
                             }
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::BufferEnd) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::BufferEnd) {
                                 self.push_shortcut("BufferEnd (⌘+End)");
                             }
 
@@ -542,10 +544,10 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                                 .color(ui::ColorRgba::from_hex(0xFFAAFFFF))
                                 .build(ctx);
 
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::PageUp) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::PageUp) {
                                 self.push_shortcut("PageUp");
                             }
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::PageDown) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::PageDown) {
                                 self.push_shortcut("PageDown");
                             }
 
@@ -564,13 +566,13 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                                 .color(ui::ColorRgba::from_hex(0xFFAAFFFF))
                                 .build(ctx);
 
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::Delete) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::Delete) {
                                 self.push_shortcut("Delete");
                             }
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::Backspace) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::Backspace) {
                                 self.push_shortcut("Backspace");
                             }
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::NextLine) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::NextLine) {
                                 self.push_shortcut("NextLine (Enter)");
                             }
 
@@ -589,7 +591,7 @@ impl Window<ShortcutsApplication, ()> for MainWindow {
                                 .color(ui::ColorRgba::from_hex(0xFFAAFFFF))
                                 .build(ctx);
 
-                            if ctx.is_shortcut_up(ui::TextEditingShortcut::SelectAll) {
+                            if ctx.is_shortcut(ui::TextEditingShortcut::SelectAll) {
                                 self.push_shortcut("SelectAll (⌘+A)");
                             }
 
@@ -656,8 +658,6 @@ fn divider(ctx: &mut ui::BuildContext) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracy_client::Client::start();
-
     env_logger::Builder::new()
         .filter(None, log::LevelFilter::Info)
         .init();

@@ -162,8 +162,12 @@ impl VectorRenderer {
                             format: target_format,
                             blend: Some(wgpu::BlendState {
                                 color: wgpu::BlendComponent {
-                                    src_factor: wgpu::BlendFactor::SrcAlpha,
-                                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                    // Dual-source blending: src0 is premultiplied color,
+                                    // src1 is per-channel coverage (uniform alpha for shapes,
+                                    // RGB mask for subpixel glyphs).
+                                    // out.rgb = src0.rgb + dst.rgb * (1 - src1.rgb)
+                                    src_factor: wgpu::BlendFactor::One,
+                                    dst_factor: wgpu::BlendFactor::OneMinusSrc1,
                                     operation: wgpu::BlendOperation::Add,
                                 },
                                 alpha: wgpu::BlendComponent::OVER,

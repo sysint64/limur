@@ -30,6 +30,7 @@ pub(crate) struct InnerAtlas {
 pub(crate) enum Kind {
     Mask,
     Color { srgb: bool },
+    SubpixelMask,
 }
 
 pub(crate) struct GlyphDetails {
@@ -57,6 +58,8 @@ pub enum ContentType {
     Color,
     /// Each pixel contains a single 8 bit channel
     Mask,
+    /// Each pixel contains 3 bytes of RGB subpixel coverage (stored as RGBA in atlas, A=255)
+    SubpixelMask,
 }
 
 impl InnerAtlas {
@@ -234,6 +237,7 @@ impl Kind {
         match self {
             Kind::Mask => 1,
             Kind::Color { .. } => 4,
+            Kind::SubpixelMask => 4,
         }
     }
 
@@ -247,6 +251,7 @@ impl Kind {
                     wgpu::TextureFormat::Rgba8Unorm
                 }
             }
+            Kind::SubpixelMask => wgpu::TextureFormat::Rgba8Unorm,
         }
     }
 
@@ -254,6 +259,7 @@ impl Kind {
         match self {
             Self::Mask => ContentType::Mask,
             Self::Color { .. } => ContentType::Color,
+            Self::SubpixelMask => ContentType::SubpixelMask,
         }
     }
 }
@@ -318,6 +324,16 @@ impl TextAtlasBindGroup {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
                 ],
                 label: Some("glyphon atlas bind group layout"),
             });
@@ -353,6 +369,12 @@ impl TextAtlasBindGroup {
                         binding: 2,
                         resource: wgpu::BindingResource::Sampler(&resources.sampler),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(
+                            &resources.subpixel_atlas.texture_view,
+                        ),
+                    },
                 ],
                 label: Some("text atlas bind group"),
             })
@@ -367,6 +389,7 @@ impl TextAtlasBindGroup {
 pub struct TextResources {
     pub(crate) color_atlas: InnerAtlas,
     pub(crate) mask_atlas: InnerAtlas,
+    pub(crate) subpixel_atlas: InnerAtlas,
     pub(crate) format: wgpu::TextureFormat,
     pub(crate) color_mode: ColorMode,
     pub(crate) sampler: wgpu::Sampler,
@@ -395,6 +418,7 @@ impl TextResources {
             },
         );
         let mask_atlas = InnerAtlas::new(context, Kind::Mask);
+        let subpixel_atlas = InnerAtlas::new(context, Kind::SubpixelMask);
 
         let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("text atlas sampler"),
@@ -409,6 +433,7 @@ impl TextResources {
         Self {
             color_atlas,
             mask_atlas,
+            subpixel_atlas,
             format,
             sampler,
             color_mode,
@@ -418,6 +443,7 @@ impl TextResources {
     pub fn trim(&mut self) {
         self.mask_atlas.trim();
         self.color_atlas.trim();
+        self.subpixel_atlas.trim();
     }
 
     pub(crate) fn grow(
@@ -435,6 +461,9 @@ impl TextResources {
             ContentType::Color => self
                 .color_atlas
                 .grow(context, font_system, cache, scale_factor),
+            ContentType::SubpixelMask => self
+                .subpixel_atlas
+                .grow(context, font_system, cache, scale_factor),
         };
 
         if did_grow {
@@ -448,6 +477,7 @@ impl TextResources {
         match content_type {
             ContentType::Color => &mut self.color_atlas,
             ContentType::Mask => &mut self.mask_atlas,
+            ContentType::SubpixelMask => &mut self.subpixel_atlas,
         }
     }
 
@@ -582,6 +612,18 @@ pub(crate) fn prepare_glyph(
         system
             .resources
             .color_atlas
+            .glyphs_in_use
+            .insert(metadata.cache_key);
+        details
+    } else if let Some(details) = system
+        .resources
+        .subpixel_atlas
+        .glyph_cache
+        .get(&metadata.cache_key)
+    {
+        system
+            .resources
+            .subpixel_atlas
             .glyphs_in_use
             .insert(metadata.cache_key);
         details

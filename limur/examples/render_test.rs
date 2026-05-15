@@ -21,7 +21,7 @@ impl ApplicationDelegate<()> for ExampleApplication {
         Self: std::marker::Sized,
     {
         window_manager.spawn_window(
-            MainWindow,
+            MainWindow::new(),
             WindowDescriptor {
                 title: "Sub-pixel font rendering".to_string(),
                 name: Some("limur-example".to_string()),
@@ -54,7 +54,23 @@ impl ApplicationDelegate<()> for ExampleApplication {
     }
 }
 
-pub struct MainWindow;
+pub struct MainWindow {
+    last_lg_x: f64,
+    last_lg_y: f64,
+    lg_x: f64,
+    lg_y: f64,
+}
+
+impl MainWindow {
+    fn new() -> Self {
+        Self {
+            last_lg_x: 200.,
+            last_lg_y: 200.,
+            lg_x: 200.,
+            lg_y: 200.,
+        }
+    }
+}
 
 fn decorated_box_row<F>(ctx: &mut ui::BuildContext, builder: F)
 where
@@ -135,8 +151,12 @@ where
 
 impl Window<ExampleApplication, ()> for MainWindow {
     fn build(&mut self, _: &mut ExampleApplication, ctx: &mut ui::BuildContext) {
+        let lg_x = self.lg_x;
+        let lg_y = self.lg_y;
+
         let response = ui::scroll_area()
             .scroll_direction(ui::ScrollDirection::Both)
+            .background(ui::decoration().color(ui::ColorRgb::from_hex(0xFFFFFF)).build(ctx))
             .fill_max_size()
             .build(ctx, |ctx| {
                 ui::layer().fill_max_size().build(ctx, |ctx| {
@@ -895,43 +915,58 @@ impl Window<ExampleApplication, ()> for MainWindow {
         //     .clip(ui::Clip::Oval)
         //     .build(ctx);
 
-        // Liquid glass — default refraction params, slight blur, subtle tint
-        ui::backdrop_filter(ui::ShaderId::LiquidGlass)
-            .param(0, ui::ShaderParam::Float(12.))   // blur_radius
-            .param(1, ui::ShaderParam::Color(        // tint
-                ui::ColorRgba::from_hex(0xFFFFFFFF).with_opacity(0.08),
-            ))
-            .param(2, ui::ShaderParam::Float(3.0))   // power_factor (squircle)
-            .param(3, ui::ShaderParam::Float(1.0))   // f_power
-            .param(4, ui::ShaderParam::Float(0.06))  // noise
-            .param(5, ui::ShaderParam::Float(0.25))  // glow_weight
-            .param(6, ui::ShaderParam::Float(0.7))   // a
-            .param(7, ui::ShaderParam::Float(2.3))   // b
-            .param(8, ui::ShaderParam::Float(5.2))   // c
-            .param(9, ui::ShaderParam::Float(6.9))   // d
-            .offset(970., 256.)
-            .width(280.)
-            .height(200.)
-            .build(ctx);
+        // Liquid glass — draggable floating panel
 
-        // Liquid glass — stronger refraction, no blur
-        ui::backdrop_filter(ui::ShaderId::LiquidGlass)
-            .param(0, ui::ShaderParam::Float(0.))    // no blur
-            .param(1, ui::ShaderParam::Color(        // tint
-                ui::ColorRgba::from_hex(0xFFFFFFFF).with_opacity(0.12),
-            ))
-            .param(2, ui::ShaderParam::Float(4.0))   // power_factor (more square)
-            .param(3, ui::ShaderParam::Float(2.0))   // f_power (stronger refraction)
-            .param(4, ui::ShaderParam::Float(0.04))  // noise
-            .param(5, ui::ShaderParam::Float(0.4))   // glow_weight
-            .param(6, ui::ShaderParam::Float(0.5))   // a
-            .param(7, ui::ShaderParam::Float(3.0))   // b
-            .param(8, ui::ShaderParam::Float(5.0))   // c
-            .param(9, ui::ShaderParam::Float(8.0))   // d
-            .offset(970., 490.)
-            .width(280.)
-            .height(200.)
-            .build(ctx);
+        let drag = ui::gesture_detector().dragable(true).build(ctx, |ctx| {
+            ui::zstack()
+                .offset(lg_x, lg_y)
+                .align_x(ui::AlignX::Center)
+                .align_y(ui::AlignY::Center)
+                .build(ctx, |ctx| {
+                    ui::backdrop_filter(ui::ShaderId::LiquidGlass)
+                        .param(0, ui::ShaderParam::Float(18.))
+                        .param(
+                            1,
+                            ui::ShaderParam::Color(
+                                ui::ColorRgba::from_hex(0xFFFFFFFF).with_opacity(0.10),
+                            ),
+                        )
+                        .param(2, ui::ShaderParam::Float(2.5)) // power_factor (squircle)
+                        .param(3, ui::ShaderParam::Float(1.5)) // f_power
+                        .param(4, ui::ShaderParam::Float(0.05)) // noise
+                        .param(5, ui::ShaderParam::Float(0.35)) // glow_weight
+                        .param(6, ui::ShaderParam::Float(0.6)) // a
+                        .param(7, ui::ShaderParam::Float(2.8)) // b
+                        .param(8, ui::ShaderParam::Float(5.0)) // c
+                        .param(9, ui::ShaderParam::Float(7.5)) // d
+                        .width(300.)
+                        .height(200.)
+                        .build(ctx);
+
+                    ui::vstack().build(ctx, |ctx| {
+                        ui::text("✦  Liquid Glass")
+                            .font_size(20.)
+                            .color(ui::ColorRgb::from_hex(0x000000))
+                            .build(ctx);
+
+                        ui::text("drag me")
+                            .font_size(13.)
+                            .color(ui::ColorRgb::from_hex(0x000000))
+                            .build(ctx);
+                    });
+                });
+        });
+
+        match drag.drag_state {
+            ui::DragState::Update => {
+                self.lg_x = self.last_lg_x + drag.drag_x - drag.drag_start_x;
+                self.lg_y = self.last_lg_y + drag.drag_y - drag.drag_start_y;
+            }
+            _ => {
+                self.last_lg_x = self.lg_x;
+                self.last_lg_y = self.lg_y;
+            }
+        }
 
         ui::profiler_overlay(ctx);
     }

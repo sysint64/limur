@@ -609,7 +609,6 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.14.2"
-source = "git+https://github.com/tech-paws/cosmic-text.git?branch=tech_paws#06670a3ea2dd437cdd4d1a9dbfe8fb0db930f7ed"
 dependencies = [
  "bitflags 2.10.0",
  "fontdb 0.16.2",

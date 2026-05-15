@@ -167,6 +167,13 @@ impl<'a> TextBuilder<'a> {
 
             let (backgrounds, foregrounds) = context.resolve_decorators(&mut self.frame);
 
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::BeginOffset {
+                    offset_x: self.frame.offset_x,
+                    offset_y: self.frame.offset_y,
+                });
+            }
+
             context.push_layout_command(LayoutCommand::Leaf {
                 widget_ref,
                 backgrounds,
@@ -183,6 +190,10 @@ impl<'a> TextBuilder<'a> {
                 },
                 clip: self.frame.clip,
             });
+
+            if self.frame.offset_x != 0. || self.frame.offset_y != 0. {
+                context.push_layout_command(LayoutCommand::EndOffset);
+            }
 
             context.accessed_this_frame(id);
 

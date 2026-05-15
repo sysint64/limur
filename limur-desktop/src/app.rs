@@ -139,7 +139,7 @@ fn build<'a, T: ApplicationDelegate<Event>, Event: 'static>(
         );
     }
 
-    let mut should_redraw = true;
+    let mut should_redraw = false;
 
     {
         // let _g = profiler::scope_named("Handle interaction");

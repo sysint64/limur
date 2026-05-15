@@ -1,3 +1,5 @@
+enable dual_source_blending;
+
 // mix in sRGB space (browser/Photoshop default)
 const COLOR_SPACE_SRGB: u32 = 0u;
 
@@ -62,6 +64,14 @@ var mask_atlas_texture: texture_2d<f32>;
 @group(1) @binding(2)
 var atlas_sampler: sampler;
 
+@group(1) @binding(3)
+var subpixel_atlas_texture: texture_2d<f32>;
+
+struct FragOutput {
+    @location(0) @blend_src(0) color: vec4<f32>,
+    @location(0) @blend_src(1) factor: vec4<f32>,
+}
+
 @vertex
 fn vs_main(
     @builtin(vertex_index) vertex_index: u32,
@@ -119,8 +129,12 @@ fn vs_main(
     return out;
 }
 
+fn premul_out(c: vec4<f32>) -> FragOutput {
+    return FragOutput(vec4(c.rgb * c.a, c.a), vec4(c.a));
+}
+
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(in: VertexOutput) -> FragOutput {
     let data = shape_data[in.instance_id];
     let size = data.boundary.zw;
     let screen_position = data.boundary.xy;
@@ -129,22 +143,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     switch data.shape_type {
         case 0u: {
-            return rect(data, p, half_size);
+            return premul_out(rect(data, p, half_size));
         }
         case 1u: {
-            return oval(data, p, half_size);
+            return premul_out(oval(data, p, half_size));
         }
         case 2u: {
-            return rect_outer_shadow(data, p, half_size);
+            return premul_out(rect_outer_shadow(data, p, half_size));
         }
         case 3u: {
-            return rect_inner_shadow(data, p, half_size);
+            return premul_out(rect_inner_shadow(data, p, half_size));
         }
         case 4u: {
-            return oval_outer_shadow(data, p, half_size);
+            return premul_out(oval_outer_shadow(data, p, half_size));
         }
         case 5u: {
-            return oval_inner_shadow(data, p, half_size);
+            return premul_out(oval_inner_shadow(data, p, half_size));
         }
         case 6u: {
             let content_type = data.content_type & 0xffffu;
@@ -158,7 +172,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             //     || pixel_offset.x >= data.boundary.z - border
             //     || pixel_offset.y >= data.boundary.w - border;
             // if in_border {
-            //     return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+            //     return premul_out(vec4<f32>(1.0, 0.0, 0.0, 1.0));
             // }
 
             switch content_type {
@@ -166,24 +180,34 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                     // Color glyph: sample RGBA directly from color atlas
                     let dim = vec2<f32>(textureDimensions(color_atlas_texture));
                     let uv = atlas_pixel / dim;
-
-                    return textureSampleLevel(color_atlas_texture, atlas_sampler, uv, 0.0);
+                    return premul_out(textureSampleLevel(color_atlas_texture, atlas_sampler, uv, 0.0));
                 }
                 case 1u: {
                     // Mask glyph: use fill_color tinted by single-channel mask
                     let dim = vec2<f32>(textureDimensions(mask_atlas_texture));
                     let uv = atlas_pixel / dim;
                     let mask = textureSampleLevel(mask_atlas_texture, atlas_sampler, uv, 0.0).r;
-
-                    return vec4<f32>(data.fill_color.rgb, data.fill_color.a * mask);
+                    return premul_out(vec4<f32>(data.fill_color.rgb, data.fill_color.a * mask));
+                }
+                case 2u: {
+                    // Subpixel mask glyph: per-channel RGB coverage for LCD AA
+                    let dim = vec2<f32>(textureDimensions(subpixel_atlas_texture));
+                    let uv = atlas_pixel / dim;
+                    let mask = textureSampleLevel(subpixel_atlas_texture, atlas_sampler, uv, 0.0).rgb;
+                    let premult = data.fill_color.rgb * mask * data.fill_color.a;
+                    let max_mask = max(mask.r, max(mask.g, mask.b)) * data.fill_color.a;
+                    return FragOutput(
+                        vec4(premult, max_mask),
+                        vec4(mask * data.fill_color.a, max_mask),
+                    );
                 }
                 default: {
-                    return vec4<f32>(0.0);
+                    return FragOutput(vec4(0.0), vec4(0.0));
                 }
             }
         }
         default: {
-            return vec4<f32>(0, 0, 0, 0);
+            return FragOutput(vec4(0.0), vec4(0.0));
         }
     }
 }

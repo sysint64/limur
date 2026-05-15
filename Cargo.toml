@@ -28,4 +28,5 @@ strum = "0.27"
 strum_macros = "0.27"
 
 [patch.crates-io]
-cosmic-text = { git = "https://github.com/tech-paws/cosmic-text.git", branch = "tech_paws" }
+# cosmic-text = { git = "https://github.com/tech-paws/cosmic-text.git", branch = "tech_paws" }
+cosmic-text = { path = "../cosmic-text" }
