@@ -7,6 +7,7 @@ use limur_desktop::{
 };
 use limur_tiny_skia::TinySkiaRenderer;
 use limur_vello::VelloRenderer;
+use limur_wgpu::WgpuRenderer;
 // use limur_wgpu::WgpuRenderer;
 use pollster::FutureExt;
 
@@ -34,7 +35,7 @@ impl ApplicationDelegate<()> for ExampleApplication {
     }
 
     fn create_renderer(window: std::sync::Arc<winit::window::Window>) -> Box<dyn ui::Renderer> {
-        let vello = true;
+        let vello = false;
         let tiny_skia = false;
 
         if tiny_skia {
@@ -49,8 +50,7 @@ impl ApplicationDelegate<()> for ExampleApplication {
                 .block_on(),
             )
         } else {
-            // Box::new(WgpuRenderer::new(window.clone()).block_on())
-            todo!();
+            Box::new(WgpuRenderer::new(window.clone()).block_on())
         }
     }
 }
