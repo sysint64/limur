@@ -13,6 +13,7 @@ impl BlitRenderer {
         target_format: wgpu::TextureFormat,
         blend: Option<wgpu::BlendState>,
         encode_srgb: bool,
+        sample_count: u32,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blit Shader"),
@@ -83,7 +84,10 @@ impl BlitRenderer {
                 ..Default::default()
             },
             depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                ..Default::default()
+            },
             multiview_mask: None,
         });
 

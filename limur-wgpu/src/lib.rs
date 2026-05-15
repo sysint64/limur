@@ -49,6 +49,8 @@ struct Resources {
 
 struct Renderers {
     layer_blit: BlitRenderer,
+    copy_blit: BlitRenderer,
+    msaa_copy_blit: BlitRenderer,
     surface_blit: BlitRenderer,
     vector: VectorRenderer,
     blur: BlurRenderer,
@@ -200,6 +202,23 @@ impl WgpuRenderer {
                 COMPOSITOR_FORMAT,
                 Some(alpha_over),
                 false,
+                1,
+            ),
+            // layer -> composite (backdrop layers): straight copy, layer already pre-composited.
+            copy_blit: BlitRenderer::new(
+                context.device,
+                COMPOSITOR_FORMAT,
+                None,
+                false,
+                1,
+            ),
+            // composite -> MSAA init: populate MSAA samples with composite background.
+            msaa_copy_blit: BlitRenderer::new(
+                context.device,
+                COMPOSITOR_FORMAT,
+                None,
+                false,
+                4,
             ),
             // composite -> surface: encode sRGB if the surface is not an sRGB format.
             surface_blit: BlitRenderer::new(
@@ -207,6 +226,7 @@ impl WgpuRenderer {
                 surface_format,
                 None,
                 !surface_format.is_srgb(),
+                1,
             ),
             vector: VectorRenderer::new(
                 &context,
@@ -375,6 +395,11 @@ impl Renderer for WgpuRenderer {
         );
 
         for layer in composition_layers {
+            let has_backdrop = layer
+                .commands
+                .iter()
+                .any(|cmd| matches!(cmd, RenderCommand::BackdropFilter { .. }));
+
             // Pre-pass: run blur on the composite texture before the layer render pass.
             for cmd in &layer.commands {
                 if let RenderCommand::BackdropFilter { boundary, shader } = cmd {
@@ -537,15 +562,35 @@ impl Renderer for WgpuRenderer {
                         label: Some("Layer Encoder"),
                     });
 
+            if has_backdrop {
+                // Pre-populate the MSAA samples with the current composite content so that
+                // subpixel AA text fragments have the correct background in `dst` when they
+                // blend. Without this, `dst` is transparent (0,0,0,0) and the per-channel
+                // LCD blend formula produces no visible anti-aliasing.
+                let compositor = self.compositor.as_ref().unwrap();
+                self.renderers.msaa_copy_blit.blit(
+                    &self.gapi.device,
+                    &mut encoder,
+                    &compositor.composite_view,
+                    &compositor.msaa_view,
+                );
+            }
+
             {
                 let compositor = self.compositor.as_ref().unwrap();
+                let layer_load_op = if has_backdrop {
+                    // MSAA was pre-populated above; load it so blending sees the background.
+                    wgpu::LoadOp::Load
+                } else {
+                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                };
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Layer Pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &compositor.msaa_view,
                         resolve_target: Some(&compositor.layer_view),
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            load: layer_load_op,
                             store: wgpu::StoreOp::Discard,
                         },
                         depth_slice: None,
@@ -675,12 +720,23 @@ impl Renderer for WgpuRenderer {
             }
 
             let compositor = self.compositor.as_ref().unwrap();
-            self.renderers.layer_blit.blit(
-                &self.gapi.device,
-                &mut encoder,
-                &compositor.layer_view,
-                &compositor.composite_view,
-            );
+            if has_backdrop {
+                // layer_view now contains the composite background + layer content already
+                // blended together; replace composite with this result directly.
+                self.renderers.copy_blit.blit(
+                    &self.gapi.device,
+                    &mut encoder,
+                    &compositor.layer_view,
+                    &compositor.composite_view,
+                );
+            } else {
+                self.renderers.layer_blit.blit(
+                    &self.gapi.device,
+                    &mut encoder,
+                    &compositor.layer_view,
+                    &compositor.composite_view,
+                );
+            }
 
             self.gapi.queue.submit([encoder.finish()]);
         }

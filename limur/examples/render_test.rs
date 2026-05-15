@@ -156,7 +156,7 @@ impl Window<ExampleApplication, ()> for MainWindow {
 
         let response = ui::scroll_area()
             .scroll_direction(ui::ScrollDirection::Both)
-            .background(ui::decoration().color(ui::ColorRgb::from_hex(0xFFFFFF)).build(ctx))
+            .background(ui::decoration().color(ui::ColorRgb::from_hex(0xCCCCCC)).build(ctx))
             .fill_max_size()
             .build(ctx, |ctx| {
                 ui::layer().fill_max_size().build(ctx, |ctx| {
